@@ -1,0 +1,170 @@
+<Window x:Class="AccessProbe.TaskDashboardWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+ Title="学习任务聚合 · 全部平台任务" Width="1360" Height="930" MinWidth="1180" MinHeight="800"
+ WindowStartupLocation="CenterScreen" Background="#F3F6FB" FontFamily="Microsoft YaHei UI" FontSize="13">
+ <Window.Resources>
+  <Style TargetType="Button">
+   <Setter Property="Padding" Value="14,8"/><Setter Property="Margin" Value="0,0,8,0"/>
+   <Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#CFD8E6"/>
+   <Setter Property="Foreground" Value="#22334D"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="Template">
+    <Setter.Value><ControlTemplate TargetType="Button">
+     <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+      BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
+      <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+     </Border>
+     <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.8"/></Trigger>
+      <Trigger Property="IsEnabled" Value="False"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.42"/></Trigger>
+     </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value>
+   </Setter>
+  </Style>
+  <Style TargetType="ComboBox"><Setter Property="MinHeight" Value="34"/><Setter Property="Margin" Value="0,0,10,0"/><Setter Property="Padding" Value="7,5"/></Style>
+  <Style TargetType="DataGrid">
+   <Setter Property="BorderThickness" Value="0"/><Setter Property="Background" Value="White"/>
+   <Setter Property="GridLinesVisibility" Value="Horizontal"/><Setter Property="HorizontalGridLinesBrush" Value="#EEF1F6"/>
+   <Setter Property="RowHeight" Value="46"/><Setter Property="ColumnHeaderHeight" Value="42"/>
+   <Setter Property="RowHeaderWidth" Value="0"/><Setter Property="AlternatingRowBackground" Value="#FAFBFD"/>
+  </Style>
+  <Style TargetType="DataGridColumnHeader">
+   <Setter Property="Background" Value="#EFF3F9"/><Setter Property="Foreground" Value="#51627B"/>
+   <Setter Property="Padding" Value="10,8"/><Setter Property="BorderThickness" Value="0"/><Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style TargetType="DataGridCell"><Setter Property="Padding" Value="10,8"/><Setter Property="BorderThickness" Value="0"/></Style>
+ </Window.Resources>
+ <DockPanel Margin="24">
+  <StackPanel DockPanel.Dock="Top">
+   <DockPanel Margin="0,0,0,8">
+    <StackPanel>
+     <TextBlock Text="学习任务聚合" FontSize="26" FontWeight="SemiBold" Foreground="#172B49"/>
+     <TextBlock Text="集中看任务，及时提醒，一键回到原平台" Foreground="#62728A" Margin="0,4,0,0"/>
+    </StackPanel>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+     <Button x:Name="SyncButton" Content="同步所有平台" Click="SyncNow" ToolTip="刷新学习通和已连接的雨课堂、长江雨课堂、中国大学 MOOC，合并显示全部任务" Background="#245AC3" Foreground="White" BorderBrush="#245AC3"/>
+     <Button Content="连接学习通" Click="OpenConnection"/>
+     <Button x:Name="RainConnectionButton" Content="连接雨课堂" Click="OpenRainConnection"/>
+     <Button x:Name="ChangjiangConnectionButton" Content="连接长江雨课堂" Click="OpenChangjiangConnection"/>
+     <Button x:Name="MoocConnectionButton" Content="连接 MOOC" Click="OpenMoocConnection" ToolTip="连接中国大学 MOOC，登录后自动采集"/>
+     <Button Content="设置与平台" Click="OpenSettings"/>
+    </StackPanel>
+   </DockPanel>
+   <Expander x:Name="PlatformSyncExpander" IsExpanded="False" HorizontalContentAlignment="Stretch" Margin="0,0,0,10">
+    <Expander.Header>
+     <DockPanel>
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="14,0,0,0">
+       <Button x:Name="StopSyncButton" Content="停止" Click="StopSync" Visibility="Collapsed" Padding="10,4"/>
+       <Button Content="同步详情" Click="ShowSyncDetails" Padding="10,4" Margin="0"/>
+      </StackPanel>
+      <TextBlock x:Name="SyncOverviewText" Text="平台连接与同步" Foreground="#62728A" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"/>
+     </DockPanel>
+    </Expander.Header>
+    <ScrollViewer MaxHeight="96" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+     <StackPanel>
+     <Border x:Name="SyncBanner" Background="#EAF1FC" CornerRadius="6" Padding="12,10" Margin="0,0,0,8">
+      <TextBlock x:Name="SyncStatusText" Text="学习通将在后台检查课程与任务；首次连接时完成一次官方登录。" Foreground="#245AC3" TextWrapping="Wrap"/>
+     </Border>
+     <Grid>
+      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+      <Border x:Name="RainSyncBanner" Grid.Column="0" Background="#EAF1FC" CornerRadius="6" Padding="12,10" Margin="0,0,8,0">
+       <TextBlock x:Name="RainSyncStatusText" Text="雨课堂尚未连接；完成一次官方登录后自动采集。" Foreground="#245AC3" TextWrapping="Wrap"/>
+      </Border>
+      <Border x:Name="ChangjiangSyncBanner" Grid.Column="1" Background="#EAF1FC" CornerRadius="6" Padding="12,10">
+       <TextBlock x:Name="ChangjiangSyncStatusText" Text="长江雨课堂尚未连接；完成一次官方登录后自动采集。" Foreground="#245AC3" TextWrapping="Wrap"/>
+      </Border>
+     </Grid>
+     <Border x:Name="MoocSyncBanner" Background="#EAF1FC" CornerRadius="6" Padding="12,10" Margin="0,8,0,0">
+      <TextBlock x:Name="MoocSyncStatusText" Text="中国大学 MOOC 尚未连接；完成一次官方登录后自动采集。" Foreground="#245AC3" TextWrapping="Wrap"/>
+     </Border>
+     </StackPanel>
+    </ScrollViewer>
+   </Expander>
+   <DockPanel Margin="0,0,0,10">
+    <Button x:Name="ShowAllTasksButton" DockPanel.Dock="Right" Content="查看全部任务" Click="ViewAllTasks" Padding="14,8" Margin="10,0,8,0" Background="#245AC3" Foreground="White" BorderBrush="#245AC3"/>
+    <Button x:Name="ChooseRecordingCoursesButton" DockPanel.Dock="Right" Content="选择记录课程" Click="ChooseRecordingCourses" Padding="14,8" ToolTip="按平台勾选需要采集和提醒的课程"/>
+    <StackPanel>
+     <TextBlock x:Name="AggregationTitleText" Text="统一任务清单" FontSize="20" FontWeight="SemiBold" Foreground="#172B49"/>
+     <TextBlock x:Name="AggregationSummaryText" Text="学习通、雨课堂、长江雨课堂和中国大学 MOOC 的任务汇总显示在下方" Foreground="#62728A" TextWrapping="Wrap" Margin="0,4,0,0"/>
+    </StackPanel>
+   </DockPanel>
+   <UniformGrid Columns="4" Margin="0,0,0,10">
+    <Button x:Name="ActiveTasksButton" Click="FilterActive" Background="White" ToolTip="查看全部平台的待办及状态待核对任务"><StackPanel><TextBlock x:Name="ActiveCountText" Text="0" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="待办 / 被打回 / 待核对"/></StackPanel></Button>
+    <Button x:Name="OverdueTasksButton" Click="FilterOverdue" Background="White" ToolTip="查看全部平台的逾期任务"><StackPanel><TextBlock x:Name="OverdueCountText" Text="0" FontSize="24" FontWeight="SemiBold" Foreground="#C33D3D"/><TextBlock Text="已逾期"/></StackPanel></Button>
+    <Button x:Name="SoonTasksButton" Click="FilterSoon" Background="White" ToolTip="查看全部平台 24 小时内到期的任务"><StackPanel><TextBlock x:Name="SoonCountText" Text="0" FontSize="24" FontWeight="SemiBold" Foreground="#AF700F"/><TextBlock Text="24 小时内到期"/></StackPanel></Button>
+    <Button x:Name="CompletedTasksButton" Click="FilterCompleted" Background="White" ToolTip="查看全部平台已完成或已提交的任务"><StackPanel><TextBlock x:Name="CompleteCountText" Text="0" FontSize="24" FontWeight="SemiBold" Foreground="#25865A"/><TextBlock Text="已完成 / 已提交"/></StackPanel></Button>
+   </UniformGrid>
+   <DockPanel Margin="0,0,0,8">
+    <Button DockPanel.Dock="Right" Content="＋ 新增任务" Click="AddTask" Background="#245AC3" Foreground="White" BorderBrush="#245AC3"/>
+    <StackPanel Orientation="Horizontal">
+     <TextBox x:Name="SearchBox" Width="230" Height="34" Padding="9,6" Margin="0,0,12,0" TextChanged="FilterChanged" ToolTip="搜索任务、课程、平台或备注" AutomationProperties.Name="搜索任务"/>
+     <ComboBox x:Name="StateFilter" Width="160" SelectionChanged="FilterChanged" AutomationProperties.Name="任务状态筛选"/>
+     <ComboBox x:Name="PlatformFilter" Width="150" SelectionChanged="FilterChanged" ToolTip="可选：仅查看某个平台；默认汇总全部平台" AutomationProperties.Name="平台筛选"/>
+     <ComboBox x:Name="SortFilter" Width="125" SelectionChanged="FilterChanged" AutomationProperties.Name="排序"/>
+    </StackPanel>
+   </DockPanel>
+   <TextBlock x:Name="FilterCountText" Margin="0,0,0,6" Foreground="#62728A" TextWrapping="Wrap"/>
+   <WrapPanel Margin="0,0,0,8">
+    <Button x:Name="GoButton" Content="做题 / 提交 ↗" Click="GoTask"/>
+    <Button x:Name="EditButton" Content="编辑" Click="EditTask"/>
+    <Button x:Name="CompleteButton" Content="标记完成" Click="CompleteTask"/>
+    <Button x:Name="ReturnButton" Content="标记被打回" Click="ReturnTask"/>
+    <Button x:Name="IgnoreButton" Content="忽略" Click="IgnoreTask"/>
+    <Button x:Name="RestoreButton" Content="恢复未完成" Click="RestoreTask"/>
+    <Button x:Name="ExtensionButton" Content="复制延期申请" Click="CopyExtension"/>
+    <Button x:Name="DeleteButton" Content="删除" Click="DeleteTask" Foreground="#B43B3B"/>
+   </WrapPanel>
+  </StackPanel>
+  <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+   <Expander x:Name="SelectedDetailsExpander" Header="所选任务详情 · 采集时间、进度、原文时间与备注" IsExpanded="False" HorizontalContentAlignment="Stretch" Foreground="#53657F">
+    <Border Background="White" CornerRadius="7" Padding="10" Margin="0,6,0,0">
+     <ScrollViewer MaxHeight="46" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <TextBlock x:Name="SelectedDetails" Text="选中任务可查看采集时间、平台状态、原文时间和备注。" TextWrapping="Wrap" Foreground="#53657F"/>
+     </ScrollViewer>
+    </Border>
+   </Expander>
+   <TextBlock x:Name="ResultText" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="#225B44"/>
+   <DockPanel Margin="0,8,0,0">
+    <TextBlock x:Name="RuntimeText" Text="本地数据库加载中…" Foreground="#62728A" TextWrapping="Wrap"/>
+    <Button DockPanel.Dock="Right" Content="退出程序" Click="ExitApplication" Padding="10,4" Margin="10,0,0,0"/>
+   </DockPanel>
+  </StackPanel>
+  <Border Background="White" CornerRadius="8" ClipToBounds="True">
+   <Grid>
+    <DataGrid x:Name="TaskTable" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False"
+      SelectionMode="Single" SelectionChanged="TaskSelected" ClipboardCopyMode="None" AutomationProperties.Name="全部平台统一任务清单">
+     <DataGrid.Columns>
+      <DataGridTemplateColumn Header="任务（点击直达）" Width="2*">
+       <DataGridTemplateColumn.CellTemplate>
+        <DataTemplate>
+         <Button Click="GoTask" IsEnabled="{Binding CanOpen}" ToolTip="{Binding OpenHint}"
+             Style="{x:Null}" Padding="0" Margin="0" BorderThickness="0" Background="Transparent"
+             HorizontalContentAlignment="Left" Foreground="#245AC3" Cursor="Hand">
+          <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" TextDecorations="Underline"/>
+         </Button>
+        </DataTemplate>
+       </DataGridTemplateColumn.CellTemplate>
+      </DataGridTemplateColumn>
+      <DataGridTextColumn Header="课程" Binding="{Binding Course}" Width="1.1*"/>
+      <DataGridTextColumn Header="来源平台" Binding="{Binding Platform}" Width="0.9*"/>
+      <DataGridTextColumn Header="截止时间" Binding="{Binding Deadline}" Width="1.3*"/>
+      <DataGridTextColumn Header="优先级" Binding="{Binding Priority}" Width="0.8*"/>
+      <DataGridTextColumn Header="我的状态" Binding="{Binding State}" Width="0.9*"/>
+      <DataGridTextColumn Header="平台状态" Binding="{Binding PlatformState}" Width="1.2*" MinWidth="140">
+       <DataGridTextColumn.ElementStyle>
+        <Style TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="ToolTip" Value="{Binding PlatformState}"/></Style>
+       </DataGridTextColumn.ElementStyle>
+      </DataGridTextColumn>
+     </DataGrid.Columns>
+    </DataGrid>
+    <TextBlock x:Name="EmptyText" Text="还没有任务。连接学习通、雨课堂、长江雨课堂或中国大学 MOOC 后，任务会自动同步到这里；也可新增任务。"
+     VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="#718199" TextWrapping="Wrap" MaxWidth="500" FontSize="16" IsHitTestVisible="False"/>
+    <wv:WebView2 x:Name="SessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+    <wv:WebView2 x:Name="RainSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+    <wv:WebView2 x:Name="ChangjiangSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+    <wv:WebView2 x:Name="MoocSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+   </Grid>
+  </Border>
+ </DockPanel>
+</Window>

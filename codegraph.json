@@ -1,0 +1,4 @@
+{
+  "exclude": [".local/", ".tools/", "artifacts/", "**/bin/", "**/obj/"],
+  "deprioritize": ["tests/", "scripts/"]
+}

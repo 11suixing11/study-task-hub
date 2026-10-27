@@ -1,0 +1,46 @@
+<Window x:Class="AccessProbe.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="连接学习通" Width="1180" Height="820"
+        MinWidth="960" MinHeight="640" Background="#F5F5F5">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="连接学习通" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Margin="0,8,0,10" TextWrapping="Wrap"
+                       Text="完成一次官方登录后，可回到任务清单。程序会在后台发现课程、读取作业并自动保存，后续无需逐个打开课程或作业页。" />
+            <WrapPanel Margin="0,0,0,8">
+                <Button Content="打开任务清单" Padding="14,7" Margin="0,0,8,0" Click="OpenTaskDashboard" />
+                <Button x:Name="LoginButton" Content="打开官方登录" Padding="14,7" Margin="0,0,8,0" Click="OpenLogin" IsEnabled="False" />
+                <Button x:Name="RefreshButton" Content="刷新登录页" Padding="14,7" Margin="0,0,8,0" Click="RefreshLogin" IsEnabled="False" />
+                <Button x:Name="ClearButton" Content="清除登录数据" Padding="14,7" Margin="0,0,8,0" Click="ClearSession" IsEnabled="False" />
+            </WrapPanel>
+            <TextBlock x:Name="StatusText" Text="正在初始化独立登录环境……" TextWrapping="Wrap" Margin="0,0,0,6" />
+            <TextBlock x:Name="LoginSyncStatusText" Text="登录完成后自动采集，无需打开课程、填写课程名称或手动保存。" TextWrapping="Wrap" Foreground="#245AC3" Margin="0,0,0,6" />
+        </StackPanel>
+        <Border DockPanel.Dock="Bottom" Background="White" Padding="12" Margin="0,10,0,0">
+            <Expander Header="高级诊断与手动读取" IsExpanded="False">
+            <StackPanel>
+                <WrapPanel Margin="0,8,0,8">
+                    <Button x:Name="ReadWorkButton" Content="读取当前作业页" Padding="14,7" Margin="0,0,8,0" Click="ReadCurrentWorkPage" IsEnabled="False" />
+                    <Button x:Name="CollectButton" Content="读取通知（试验）" Padding="14,7" Margin="0,0,8,0" Click="CollectNotices" IsEnabled="False" />
+                    <Button x:Name="BrowserProbeButton" Content="浏览器内验证通知接口" Padding="14,7" Margin="0,0,8,0" Click="VerifyBrowserNotice" IsEnabled="False" />
+                    <Button Content="导出脱敏验证记录" Padding="14,7" Click="ExportReport" />
+                </WrapPanel>
+                <CheckBox x:Name="ObserveCheck" Margin="0,0,0,8" Content="仅统计响应状态类别，不记录具体请求（不记录地址、请求内容、响应正文或 Cookie）" />
+                <TextBlock x:Name="OriginText" Text="当前站点：未打开" Margin="0,0,0,8" />
+                <TextBlock x:Name="DiagnosticText" Text="诊断仅记录导航状态与拦截类别，不包含二维码、地址参数或账号信息。" TextWrapping="Wrap" Margin="0,0,0,8" />
+                <TextBlock Text="人工核对（仅记录你的观察，不代表自动采集已通过）" FontWeight="SemiBold" />
+                <WrapPanel Margin="0,8,0,8">
+                    <CheckBox x:Name="LoginObserved" Content="已完成官方登录" Margin="0,0,16,0" />
+                    <CheckBox x:Name="CoursesObserved" Content="能看到本人课程" Margin="0,0,16,0" />
+                    <CheckBox x:Name="TasksObserved" Content="能看到课程作业" Margin="0,0,16,0" />
+                    <CheckBox x:Name="StatusObserved" Content="能看到提交状态" />
+                </WrapPanel>
+                <TextBlock Text="手动读取仅用于诊断。首页自动同步会发现课程并导入作业；未识别的分页、登录失效和读取失败会在同步详情中显示。完整年份、时区和任务覆盖仍以真实平台核对为准。" TextWrapping="Wrap" Foreground="#565656" />
+            </StackPanel>
+            </Expander>
+        </Border>
+        <wv:WebView2 x:Name="Browser" />
+    </DockPanel>
+</Window>

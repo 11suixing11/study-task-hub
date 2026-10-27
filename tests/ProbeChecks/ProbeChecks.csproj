@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <DefaultItemExcludesInProjectFolder>$(DefaultItemExcludesInProjectFolder);.local\**\*</DefaultItemExcludesInProjectFolder>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <PackageReference Include="AngleSharp" Version="1.8.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../src/AccessProbe/ProbePolicy.cs" Link="ProbePolicy.cs" />
+    <Compile Include="../../src/AccessProbe/HttpsUpgradeChain.cs" Link="HttpsUpgradeChain.cs" />
+    <Compile Include="../../src/AccessProbe/NoticeReader.cs" Link="NoticeReader.cs" />
+    <Compile Include="../../src/AccessProbe/WorkListParser.cs" Link="WorkListParser.cs" />
+    <Compile Include="../../src/AccessProbe/WorkDetailParser.cs" Link="WorkDetailParser.cs" />
+    <Compile Include="../../src/AccessProbe/WorkPageSnapshot.cs" Link="WorkPageSnapshot.cs" />
+    <Compile Include="../../src/AccessProbe/ChaoxingSync.cs" Link="ChaoxingSync.cs" />
+    <Compile Include="../../src/AccessProbe/ChaoxingHttpReader.cs" Link="ChaoxingHttpReader.cs" />
+    <Compile Include="../../src/AccessProbe/ChaoxingSessionStore.cs" Link="ChaoxingSessionStore.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../src/AccessProbe/TaskDomain.cs" Link="TaskDomain.cs" />
+    <Compile Include="../../src/AccessProbe/CourseRecording.cs" Link="CourseRecording.cs" />
+    <Compile Include="../../src/AccessProbe/TaskStore.CourseRecording.cs" Link="TaskStore.CourseRecording.cs" />
+    <Compile Include="../../src/AccessProbe/TaskNavigation.cs" Link="TaskNavigation.cs" />
+    <Compile Include="../../src/AccessProbe/ChaoxingTaskMetadata.cs" Link="ChaoxingTaskMetadata.cs" />
+    <Compile Include="../../src/AccessProbe/TaskStore.cs" Link="TaskStore.cs" />
+    <Compile Include="../../src/AccessProbe/TaskStore.Platforms.cs" Link="TaskStore.Platforms.cs" />
+    <Compile Include="../../src/AccessProbe/TaskStore.Mooc.cs" Link="TaskStore.Mooc.cs" />
+    <Compile Include="../../src/AccessProbe/MoocDomain.cs" Link="MoocDomain.cs" />
+    <Compile Include="../../src/AccessProbe/MoocParser.cs" Link="MoocParser.cs" />
+    <Compile Include="../../src/AccessProbe/MoocTaskNavigation.cs" Link="MoocTaskNavigation.cs" />
+    <Compile Include="../../src/AccessProbe/MoocHttpReader.cs" Link="MoocHttpReader.cs" />
+    <Compile Include="../../src/AccessProbe/MoocSessionStore.cs" Link="MoocSessionStore.cs" />
+    <Compile Include="../../src/AccessProbe/MoocSynchronizer.cs" Link="MoocSynchronizer.cs" />
+    <Compile Include="../../src/AccessProbe/RainClassroomDomain.cs" Link="RainClassroomDomain.cs" />
+    <Compile Include="../../src/AccessProbe/RainClassroomParser.cs" Link="RainClassroomParser.cs" />
+    <Compile Include="../../src/AccessProbe/RainHttpReader.cs" Link="RainHttpReader.cs" />
+    <Compile Include="../../src/AccessProbe/RainSynchronizer.cs" Link="RainSynchronizer.cs" />
+    <Compile Include="../../src/AccessProbe/RainTaskNavigation.cs" Link="RainTaskNavigation.cs" />
+    <Compile Include="../../src/AccessProbe/LocalLinkProtector.cs" Link="LocalLinkProtector.cs" />
+    <Compile Include="../../src/AccessProbe/ReminderPlanner.cs" Link="ReminderPlanner.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,23 @@
+.local/
+.tools/
+.codegraph/
+.codegraph-*/
+artifacts/
+**/bin/
+**/obj/
+*.user
+*.suo
+*.db
+*.db-shm
+*.db-wal
+
+# 本地编辑器 / 工具配置（含绝对路径与机器特定状态）
+.obsidian/
+.codex/
+.codegraph*/
+**/__pycache__/
+*.pyc
+
+# 登录会话与 profile（DPAPI 加密，仅本机可解密）
+*.bin
+webview-profile*/
