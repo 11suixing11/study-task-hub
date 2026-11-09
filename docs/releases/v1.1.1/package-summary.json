@@ -12,19 +12,22 @@
   "publisherSignature": "not_signed",
   "files": [
     {
-      "file": "聚合平台-1.1.1-Setup-win-x64.exe",
+      "file": "StudyTaskHub-1.1.1-Setup-win-x64.exe",
+      "localDeliveryFile": "聚合平台-1.1.1-Setup-win-x64.exe",
       "bytes": 59109514,
       "sha256": "f60647632c563298a8700571daf0899e2e0b9775670b4388b8c83846f2311c2e"
     },
     {
-      "file": "聚合平台-1.1.1-便携版-win-x64.zip",
+      "file": "StudyTaskHub-1.1.1-Portable-win-x64.zip",
+      "localDeliveryFile": "聚合平台-1.1.1-便携版-win-x64.zip",
       "bytes": 82269213,
       "sha256": "11b4e4945790258bf7246e064ee23b7b024739ba24f7248e7d11cbd386cb63e7"
     },
     {
-      "file": "Windows-1.1.1-使用说明.txt",
-      "bytes": 3135,
-      "sha256": "3f12a3c73f27852e1390fc08c3a8d1d3a980719bc1516e6e84904a64bfb48007"
+      "file": "Windows-1.1.1-README.txt",
+      "localDeliveryFile": "Windows-1.1.1-使用说明.txt",
+      "bytes": 3651,
+      "sha256": "6bf842322da7760aa204f16889ccfc0fc7710051712216a75f641d9d84c50e84"
     }
   ],
   "regression": {

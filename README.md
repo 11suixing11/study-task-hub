@@ -2,7 +2,7 @@
 
 提供 Windows 安装版与独立 Android 手机版。Windows 使用 C# / .NET 10 / WPF / WebView2 / SQLite，Android 使用原生界面、系统 WebView 和本机 SQLite。已接入学习通、雨课堂、长江雨课堂、中国大学 MOOC、学堂在线、智慧树、旧版 U 校园和 PTA 的官方登录后任务采集；各平台覆盖范围见下方说明。首页统一显示已选课程的全平台、全状态任务，支持统计和同步。FiF 按要求停止适配，保留手动任务与历史数据。
 
-GitHub 下载：[Windows 1.1.1 发布与安装包](https://github.com/11suixing11/study-task-hub/releases/tag/v1.1.1)。安装程序、便携 ZIP、使用说明和 SHA256 校验文件均在 Release 附件中。源码仓库不包含本地任务库、Cookie、浏览器 profile、开发 SDK 或构建产物。
+GitHub 下载：[Windows 1.1.1 发布与安装包](https://github.com/11suixing11/study-task-hub/releases/tag/v1.1.1)。安装程序 `StudyTaskHub-1.1.1-Setup-win-x64.exe`、便携 ZIP、中文使用说明和 SHA256 校验文件均在 Release 附件中。源码仓库不包含本地任务库、Cookie、浏览器 profile、开发 SDK 或构建产物。
 
 2026-11-09 登录复核确认，官方票据到期后仍可能需要本人重新登录；本地保存 Cookie 无法延长官网会话。PTA 失效后删除归档、重新登录后提前关闭窗口可能漏存的问题仍待修复，见 [当前登录问题](docs/登录状态已知问题.md)。
 

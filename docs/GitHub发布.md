@@ -2,6 +2,8 @@
 
 仓库：[11suixing11/study-task-hub](https://github.com/11suixing11/study-task-hub)。Windows 最新安装版为 [1.1.1](https://github.com/11suixing11/study-task-hub/releases/tag/v1.1.1)，提供安装 EXE、便携 ZIP、使用说明和 SHA256 校验。安装包与便携包对应已验证构建 `20261106-184644-b9a71520`；源码另包含随后完成的托盘图标统一，其完整验证构建为 `20261106-193620-910cd4a7`。
 
+Release 附件名称为 `StudyTaskHub-1.1.1-Setup-win-x64.exe`、`StudyTaskHub-1.1.1-Portable-win-x64.zip` 和 `Windows-1.1.1-README.txt`。安装 EXE 与便携 ZIP 的内容和 SHA256 与本地中文命名的 1.1.1 交付文件一致；TXT 补充了 GitHub 文件名与当前登录问题。
+
 2026-11-07 的完整验证报告保存在 [安装包业务与桌面报告](releases/v1.1.1/packaged-build-verification.json) 和 [最新源码完整报告](releases/v1.1.1/source-build-verification.json)。这些测试使用合成数据；当前官方登录限制见 [已知问题](登录状态已知问题.md)。
 
 ## Windows 源码构建
