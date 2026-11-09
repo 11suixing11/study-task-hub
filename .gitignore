@@ -7,6 +7,12 @@ artifacts/
 **/obj/
 *.user
 *.suo
+**/node_modules/
+design/stageshow/playground/dist/
+design/stageshow/npm-install.log
+design/stageshow/npm-install.err
+design/stageshow/shots/windows-redesign/vite.log
+design/stageshow/shots/windows-redesign/vite-error.log
 *.db
 *.db-shm
 *.db-wal

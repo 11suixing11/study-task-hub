@@ -38,7 +38,7 @@ internal static partial class Program
         Environment.SetEnvironmentVariable("TEMP", runRoot); Environment.SetEnvironmentVariable("TMP", runRoot);
         RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
         app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        store = new TaskStore(Path.Combine(runRoot, "tasks.db")); store.SaveSettings(new(false, true) { LastSyncOutcome = "chaoxing-preserved" });
+        store = FixtureTaskStore.Create(Path.Combine(runRoot, "tasks.db"), pendingPlatforms: ["mooc"]); store.SaveSettings(new(false, true) { LastSyncOutcome = "chaoxing-preserved" });
         SeedOtherPlatforms();
         dashboard = new(store, runRoot, () => connections.Add("chaoxing"), () => app.Shutdown(), opened.Add)
         { Title = "学习任务聚合 · MOOC 合成桌面验收" };
@@ -58,13 +58,22 @@ internal static partial class Program
             service.StartAutomatic(); await Task.Delay(100);
             Check(fixture.Requests == 0 && fixture.HomeRequests == 0 && !service.IsRunning, "unconnected MOOC makes no requests");
             Click("MoocConnectionButton");
+            await WaitAsync(() => app.Windows.OfType<CourseSelectionWindow>().Any());
+            var manager = app.Windows.OfType<CourseSelectionWindow>().Single();
+            await WaitAsync(() => manager.FindName("RecordingCourseList") is ListBox { ItemsSource: not null });
+            ((Button)manager.FindName("RecordingConnectionButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(connections.SequenceEqual(new[] { "mooc" }), "MOOC connection button selects its platform");
             var noLogin = await RunAsync(service.ConnectionOpened);
             Check(noLogin.LoginRequired && fixture.Requests == 0 && store.LoadTasks().Count == 3, "logged-out official home never imports another platform");
-            Check(store.LoadMoocSettings().LastSyncOutcome == "login_required" && Text("MoocSyncStatusText").Contains("MOOC001", StringComparison.Ordinal), "login-required outcome and banner are visible");
+            Check(store.LoadCourseRecording("mooc").LastCatalogRefresh?.Outcome == "login_required" && Text("MoocSyncStatusText").Contains("MOOC001", StringComparison.Ordinal), "login-required catalog outcome and banner are visible");
             Check(((Expander)dashboard.FindName("PlatformSyncExpander")).IsExpanded && Text("SyncOverviewText").Contains("MOOC", StringComparison.Ordinal), "MOOC warning enters common platform status");
             fixture.RenewNext = true; Fixtures.SetCookie(browser, fixture.ExpectedToken);
-            var imported = await RunAsync(() => service.LoginNavigationCompleted(MoocPlatform.Home.AbsoluteUri), summary => !summary.LoginRequired);
+            var catalog = await RunAsync(() => service.LoginNavigationCompleted(MoocPlatform.Home.AbsoluteUri), summary => !summary.LoginRequired);
+            Check(catalog.Courses == 2 && catalog.Tasks == 0 && catalog.CoursesRead == 0 && store.LoadTasks().Count == 3, "login lists all courses before task collection");
+            var selection = store.LoadCourseRecording("mooc");
+            Check(!selection.SelectionConfirmed && selection.SelectedCourseKeys.Count == 0 && store.LoadPlatformSessionInfo("mooc").State == "ready", "login saves cookie while waiting for explicit course selection");
+            store.SaveCourseRecording("mooc", false, selection.Courses.Select(course => course.Key).ToArray(), true, selection.Revision, DateTimeOffset.UtcNow);
+            var imported = await RunAsync(() => _ = service.RecordingCoursesChangedAsync());
             Check(imported.Courses == 2 && imported.CoursesRead == 2 && imported.Tasks == 8 && imported.Added == 8 && imported.Problems.Count == 0, "official cookie login automatically reads every course term and new exam");
             Check(imported.SpocCourses == 1 && imported.CatalogPages == 2 && imported.NewExamTasks == 2 && imported.StatusNeedsReview == 2, "MOOC SPOC pagination and review counters reflect metadata");
             Check(imported.TasksWithDeadline == 8 && imported.TasksWithLink == 8 && imported.Requests == 6, "all MOOC metadata includes deadlines and exact links");
@@ -76,6 +85,7 @@ internal static partial class Program
             var cookies = await browser.CoreWebView2.CookieManager.GetCookiesAsync("");
             Check(cookies.Single(cookie => cookie.Name == Fixtures.AuthName).Value == "synthetic-renewed", "HTTP renewal reaches WebView profile"); cookies.Clear();
             service.ConnectionClosed();
+            manager.Close();
             await VerifyAggregationAsync();
             await VerifyCourseRecordingAsync();
             await VerifySwitchesAsync();
@@ -88,7 +98,7 @@ internal static partial class Program
             Check(await service.SaveForExitAsync(), "desktop service saves session at graceful exit");
             passed = true;
         }
-        catch (Exception error) { failure = error.GetType().Name + ": " + error.Message; }
+        catch (Exception error) { failure = error.ToString(); }
         finally
         {
             File.WriteAllText(Path.Combine(runRoot, "mooc-desktop-checks.json"), JsonSerializer.Serialize(new
@@ -220,13 +230,15 @@ internal static partial class Program
     private static async Task VerifySwitchesAsync()
     {
         store.SaveMoocSettings(store.LoadMoocSettings() with { AutomaticSyncEnabled = false }); service.SettingsChanged(false);
-        var before = fixture.Requests; service.ConnectionOpened(); service.StartAutomatic(); await Task.Delay(350);
-        Check(fixture.Requests == before && !service.IsRunning, "per-platform disable stops login timer and automatic requests");
+        var before = fixture.Requests; service.StartAutomatic(); await Task.Delay(350);
+        Check(fixture.Requests == before && !service.IsRunning, "per-platform disable stops background requests");
+        await RunAsync(service.ConnectionOpened); service.ConnectionClosed();
+        Check(store.LoadPlatformSessionInfo("mooc").State == "ready", "explicit login saves cookie with automatic sync disabled");
         await service.StartAsync(true); Check(fixture.Requests > before, "manual MOOC sync works with automatic switch off");
         store.SaveMoocSettings(store.LoadMoocSettings() with { AutomaticSyncEnabled = true });
         await RunAsync(() => service.SettingsChanged(true)); service.ConnectionClosed();
         store.SaveSettings(store.LoadSettings() with { AutomaticSyncEnabled = false }); service.SettingsChanged(false);
-        before = fixture.Requests; service.StartAutomatic(); service.ConnectionOpened(); await Task.Delay(350);
+        before = fixture.Requests; service.StartAutomatic(); await Task.Delay(350);
         Check(fixture.Requests == before, "global automatic switch stops MOOC requests");
         store.SaveSettings(store.LoadSettings() with { AutomaticSyncEnabled = true }); await RunAsync(() => service.SettingsChanged(true)); service.ConnectionClosed();
     }
@@ -289,6 +301,7 @@ internal static partial class Program
             && System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(RainAddressPolicy.Query(new Uri(loginBrowser.CoreWebView2.Source))!["returnUrl"])) == MoocPlatform.Home.AbsoluteUri,
             "connection opens official sign-in form directly and returns to personal home");
         Check(loginBrowser.CoreWebView2.Settings.IsPasswordAutosaveEnabled == false && loginBrowser.CoreWebView2.Settings.IsGeneralAutofillEnabled == false, "login credentials are not retained in browser autofill");
+        await PlatformConnectionTestData.ConnectionPopupChecks.VerifyAsync(loginBrowser.CoreWebView2, MoocPlatform.Host, Check);
         window.Close(); service.Cancel(); await WaitAsync(() => !service.IsRunning);
         Check(MoocPlatform.IsLoginNavigation("https://open.weixin.qq.com/connect/qrconnect") && MoocPlatform.IsLoginNavigation("https://webzj.reg.163.com/"), "official WeChat and URS login jumps supported");
     }
@@ -334,8 +347,14 @@ internal static partial class Program
         var result = new TaskCompletionSource<MoocSyncSummary>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Completed(MoocSyncSummary summary) { if (matches is null || matches(summary)) result.TrySetResult(summary); }
         service.Completed += Completed;
+        void Catalog(MoocSyncSummary summary)
+        {
+            if (summary.LoginRequired || !store.LoadCourseRecording("mooc").SelectionConfirmed) { Completed(summary); return; }
+            dashboard.Dispatcher.BeginInvoke(new Action(async () => await service.RecordingCoursesChangedAsync()));
+        }
+        service.CatalogCompleted += Catalog;
         try { start(); var summary = await result.Task.WaitAsync(TimeSpan.FromSeconds(30)); await WaitAsync(() => !service.IsRunning); await Task.Delay(75); return summary; }
-        finally { service.Completed -= Completed; }
+        finally { service.Completed -= Completed; service.CatalogCompleted -= Catalog; }
     }
     private static async Task WaitAsync(Func<bool> ready)
     { var expires = DateTimeOffset.UtcNow.AddSeconds(10); while (!ready()) { if (DateTimeOffset.UtcNow > expires) throw new TimeoutException("After " + lastCheck); await Task.Delay(25); } }

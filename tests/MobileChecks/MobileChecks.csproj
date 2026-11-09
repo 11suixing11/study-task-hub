@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><NuGetAudit>false</NuGetAudit></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageReference Include="AngleSharp" Version="1.8.5" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../src/AccessProbe/ProbePolicy.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/HttpsUpgradeChain.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/WorkListParser.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/WorkDetailParser.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/ChaoxingSync.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/ChaoxingHttpReader.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/ChaoxingSessionStore.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/TaskDomain.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/CourseRecording.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/TaskStore*.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/TaskNavigation.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/ChaoxingTaskMetadata.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/PlatformSessionArchive.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/LocalLinkProtector.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/ReminderPlanner.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/RainClassroomDomain.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/RainClassroomParser.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/RainHttpReader.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/RainSessionStore.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/RainSynchronizer.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/RainTaskNavigation.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MoocDomain.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MoocParser.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MoocHttpReader.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MoocSessionStore.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MoocSynchronizer.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MoocTaskNavigation.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/XuetangDomain.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/XuetangParser.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/XuetangHttpReader.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/XuetangSessionStore.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/XuetangSynchronizer.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/XuetangTaskNavigation.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MetadataPlatformDomain.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MetadataPlatformParser*.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MetadataHttpReader*.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MetadataSessionStore.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MetadataSynchronizer*.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MetadataTaskNavigation*.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/MetadataFailureText.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/ZhihuishuMetadataCrypto.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe.Android/MobileSessionRules.cs" Link="MobileSessionRules.cs" />
+    <Compile Include="../../src/AccessProbe.Android/MobileVault.cs" Link="MobileVault.cs" />
+    <Compile Include="../../src/AccessProbe.Android/MobileSync.cs" Link="MobileSync.cs" />
+    <Compile Include="../../src/AccessProbe.Android/MobileSyntheticChecks.cs" Link="MobileSyntheticChecks.cs" />
+  </ItemGroup>
+</Project>

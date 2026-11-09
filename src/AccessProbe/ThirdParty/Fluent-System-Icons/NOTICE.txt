@@ -1,0 +1,13 @@
+Microsoft Fluent System Icons
+Copyright (c) 2020 Microsoft Corporation
+License: MIT (see LICENSE.txt in this directory).
+Repository: https://github.com/microsoft/fluentui-system-icons
+Pinned revision: e15fc0de25fab983e3e42bac8798be69a85c23bf
+
+The application vendors 28 regular SVG assets and 7 color SVG assets.
+Regular silhouettes are normalized to the application's 32-unit artboard and use the control foreground.
+Color assets are converted to native WPF vector drawings with their original gradients and opacity.
+The original SVGs, source URLs and SHA-256 hashes are retained under Assets/Icons/Fluent.
+The upstream color variant is deprecated. These selected, MIT-licensed assets are pinned locally.
+No upstream trademarks or platform logos are supplied by this icon collection.
+The application icon and eight platform source illustrations remain original product artwork.

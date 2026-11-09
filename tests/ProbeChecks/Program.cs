@@ -1,5 +1,8 @@
 using AccessProbe;
 
+ApplicationPathsChecks.Run();
+InstallationImportChecks.Run();
+
 var allowed = new[] { "https://i.chaoxing.com/", "https://passport2.chaoxing.com/login?token=test", "https://i.xuexitong.com/", "about:blank" };
 var blocked = new[] { "http://i.chaoxing.com/", "https://chaoxing.com.evil.example/", "https://evilchaoxing.com/", "https://i.chaoxing.com@evil.example/", "https://user@i.chaoxing.com/", "file:///C:/Windows/", "javascript:alert(1)", "https://i.chaoxing.com:9443/", "not-a-url" };
 foreach (var address in allowed)
@@ -39,3 +42,7 @@ await ChaoxingSessionChecks.RunAsync();
 await RainClassroomChecks.RunAsync();
 await MoocChecks.RunAsync();
 await CourseRecordingChecks.RunAsync();
+await XuetangChecks.RunAsync();
+await MetadataPlatformChecks.RunAsync();
+PlatformSessionChecks.Run();
+await PtaChecks.RunAsync();

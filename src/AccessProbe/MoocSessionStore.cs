@@ -27,8 +27,9 @@ public sealed record MoocSessionCookie(string Name, string Value, string Domain,
     public override string ToString() => nameof(MoocSessionCookie);
 }
 
-public sealed class MoocSessionStore(string path)
+public sealed class MoocSessionStore(string path, TaskStore? repository = null)
 {
+    private readonly PlatformSessionArchive archive = new("mooc", path, repository);
     private const int MaximumBytes = 2 * 1024 * 1024;
     private static readonly byte[] Entropy = SHA256.HashData(Encoding.UTF8.GetBytes("LearningTaskAggregator.mooc-session.v1"));
     private sealed record Snapshot(int Schema, DateTimeOffset SavedAtUtc, MoocSessionCookie[] Cookies);
@@ -37,17 +38,17 @@ public sealed class MoocSessionStore(string path)
     public IReadOnlyList<MoocSessionCookie> Load(DateTimeOffset now)
     {
         if (!OperatingSystem.IsWindows()) { LastLoadOutcome = "unavailable"; return []; }
-        if (!File.Exists(path)) { LastLoadOutcome = "not_saved"; return []; }
         byte[]? plain = null;
         try
         {
-            if (new FileInfo(path).Length > MaximumBytes) { LastLoadOutcome = "invalid"; return []; }
-            plain = ProtectedData.Unprotect(File.ReadAllBytes(path), Entropy, DataProtectionScope.CurrentUser);
+            var bytes = archive.Read();
+            if (bytes is null) { LastLoadOutcome = "not_saved"; return []; }
+            plain = ProtectedData.Unprotect(bytes, Entropy, DataProtectionScope.CurrentUser);
             var value = JsonSerializer.Deserialize<Snapshot>(plain);
             if (plain.Length > MaximumBytes || value is null || value.Schema != 1 || value.Cookies is null
                 || value.Cookies.Length > 512 || value.SavedAtUtc > now.AddMinutes(5) || value.Cookies.Any(cookie => !IsValid(cookie)))
             { LastLoadOutcome = "invalid"; return []; }
-            if (value.SavedAtUtc < now.AddDays(-30)) { LastLoadOutcome = "too_old"; return []; }
+            if (!archive.UsesRepository && value.SavedAtUtc < now.AddDays(-30)) { LastLoadOutcome = "too_old"; return []; }
             var result = value.Cookies.Where(cookie => !cookie.IsExpired(now)).DistinctBy(cookie => cookie.Key).ToArray();
             LastLoadOutcome = result.Length > 0 ? "available" : "expired_or_empty"; return result;
         }
@@ -63,18 +64,16 @@ public sealed class MoocSessionStore(string path)
         if (cookies.Length > 512) throw new InvalidDataException("Session cookie limit exceeded.");
         if (cookies.Length == 0) { Clear(); return; }
         var plain = JsonSerializer.SerializeToUtf8Bytes(new Snapshot(1, now, cookies));
-        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             if (plain.Length > MaximumBytes) throw new InvalidDataException("Session archive limit exceeded.");
             var bytes = ProtectedData.Protect(plain, Entropy, DataProtectionScope.CurrentUser);
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-            File.WriteAllBytes(temporary, bytes);
-            if (File.Exists(path)) File.Replace(temporary, path, null); else File.Move(temporary, path);
+            archive.Write(bytes, now);
         }
-        finally { CryptographicOperations.ZeroMemory(plain); if (File.Exists(temporary)) File.Delete(temporary); }
+        finally { CryptographicOperations.ZeroMemory(plain); }
     }
-    public void Clear() { if (File.Exists(path)) File.Delete(path); }
+    public void Clear() => archive.Clear();
+    public void Invalidate(DateTimeOffset now) => archive.Invalidate(now);
 
     public static bool IsValid(MoocSessionCookie? cookie)
     {

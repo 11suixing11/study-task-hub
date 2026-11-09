@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "packageVersion": "1.1.1",
+  "platform": "windows-x64",
+  "packagedBuild": "20261106-184644-b9a71520",
+  "latestSourceVerifiedBuild": "20261106-193620-910cd4a7",
+  "sourceDifference": "Latest source also unifies the tray brand icon; the uploaded binaries retain the packaged build.",
+  "builtAtUtc": "2026-11-06T18:54:41.7495361+00:00",
+  "verifiedAtUtc": "2026-11-06T18:56:32.093339+00:00",
+  "selfContained": true,
+  "runtimeVersion": "10.0.13",
+  "publisherSignature": "not_signed",
+  "files": [
+    {
+      "file": "聚合平台-1.1.1-Setup-win-x64.exe",
+      "bytes": 59109514,
+      "sha256": "f60647632c563298a8700571daf0899e2e0b9775670b4388b8c83846f2311c2e"
+    },
+    {
+      "file": "聚合平台-1.1.1-便携版-win-x64.zip",
+      "bytes": 82269213,
+      "sha256": "11b4e4945790258bf7246e064ee23b7b024739ba24f7248e7d11cbd386cb63e7"
+    },
+    {
+      "file": "Windows-1.1.1-使用说明.txt",
+      "bytes": 3135,
+      "sha256": "3f12a3c73f27852e1390fc08c3a8d1d3a980719bc1516e6e84904a64bfb48007"
+    }
+  ],
+  "regression": {
+    "projects": 11,
+    "businessChecks": 2996,
+    "desktopAndRestartChecks": 1162,
+    "pythonChecks": 40,
+    "outcome": "passed",
+    "data": "synthetic_only",
+    "network": "local_handlers_and_webview_fixtures_only"
+  },
+  "installation": {
+    "outcome": "passed",
+    "upgradePreservesData": true,
+    "installation": true,
+    "uninstallPreservesData": true,
+    "productionDataAccessed": false,
+    "browserProfilesExcluded": true,
+    "officialNetworkAccessed": false,
+    "schema": 1,
+    "installedPayload": "sha256-matched",
+    "installedStartup": {
+      "outcome": "passed",
+      "installed": true,
+      "runtime": "10.0.13",
+      "tasks": 0,
+      "resources": 1,
+      "officialNetworkAccessed": false,
+      "productionDataAccessed": false
+    },
+    "sourceUnchanged": true,
+    "uninstallRegistrationRemoved": true,
+    "syntheticImport": true,
+    "finishedAtUtc": "2026-11-07T02:55:46.7786608+08:00",
+    "version": "20261106-184644-b9a71520",
+    "encryptedArchivesPreserved": true,
+    "importedSyntheticArchiveDecrypts": true,
+    "syntheticDatabaseMarkerPreserved": true
+  },
+  "delivery": {
+    "outcome": "passed",
+    "installerSourceSha256Matched": true,
+    "portableSourceSha256Matched": true,
+    "zipCrc": "passed",
+    "allExtractedFileHashesMatched": true,
+    "portableFileCount": 607,
+    "portableStartup": "passed",
+    "sameTestedInstallerPayload": true,
+    "embeddedBrandFramesMatch": true,
+    "productionDataModified": false,
+    "installationAndPortableChecksUseSyntheticData": true
+  },
+  "mobileSharedChecks": {
+    "Outcome": "passed",
+    "Checks": 40,
+    "Tasks": 2,
+    "RestartChecked": false,
+    "OfficialNetworkAccessed": false,
+    "ProductionDataAccessed": false
+  },
+  "knownLoginIssues": "../../登录状态已知问题.md"
+}

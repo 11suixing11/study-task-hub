@@ -13,7 +13,7 @@ public partial class TaskDashboardWindow
     {
         var platformId = (sender as FrameworkElement)?.Tag as string;
         platformId ??= PlatformFilter.SelectedIndex > 0 ? PlatformCatalog.Sites[PlatformFilter.SelectedIndex - 1].Id : "chaoxing";
-        ShowCourseSelection(platformId);
+        ShowPlatformManager(platformId);
     }
 
     private void ShowCourseSelection(string platformId)
@@ -29,6 +29,8 @@ public partial class TaskDashboardWindow
     {
         "chaoxing" when sync is not null => sync.RefreshCourseCatalogAsync(),
         "mooc" when moocSync is not null => moocSync.RefreshCourseCatalogAsync(),
+        "xuetang" when xuetangSync is not null => xuetangSync.RefreshCourseCatalogAsync(),
+        _ when metadataServices.TryGetValue(platformId, out var metadataService) => metadataService.RefreshCourseCatalogAsync(),
         _ when rainServices.TryGetValue(platformId, out var service) => service.RefreshCourseCatalogAsync(),
         _ => Task.CompletedTask
     };
@@ -41,6 +43,8 @@ public partial class TaskDashboardWindow
         {
             if (platformId == "chaoxing" && sync is not null) await sync.RecordingCoursesChangedAsync();
             else if (platformId == "mooc" && moocSync is not null) await moocSync.RecordingCoursesChangedAsync();
+            else if (platformId == "xuetang" && xuetangSync is not null) await xuetangSync.RecordingCoursesChangedAsync();
+            else if (metadataServices.TryGetValue(platformId, out var metadataService)) await metadataService.RecordingCoursesChangedAsync();
             else if (rainServices.TryGetValue(platformId, out var service)) await service.RecordingCoursesChangedAsync();
         }
         catch { if (!permitClose) ShowError("COURSE001", "课程选择已保存，后续同步将按新选择执行；本轮刷新未完成。"); }

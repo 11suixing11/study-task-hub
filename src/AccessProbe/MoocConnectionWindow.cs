@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -13,7 +13,7 @@ public sealed class MoocConnectionWindow : Window
     private readonly MoocSyncService service;
     private readonly WebView2 browser = new();
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray };
-    private readonly Button login = new() { Content = "打开官方登录", Padding = new Thickness(14, 7, 14, 7), IsEnabled = false };
+    private readonly Button login = new Wpf.Ui.Controls.Button { Content = "打开官方登录", Appearance = Wpf.Ui.Controls.ControlAppearance.Primary, Padding = new Thickness(14, 7, 14, 7), IsEnabled = false };
     private bool initialized, closing, clearing, syncMessageVisible;
     private ulong latestNavigation;
     private readonly DispatcherTimer loadTimer = new() { Interval = TimeSpan.FromSeconds(20) };
@@ -22,19 +22,21 @@ public sealed class MoocConnectionWindow : Window
     {
         this.service = service;
         Title = "连接中国大学 MOOC · 官方登录"; Width = 1080; Height = 820; MinWidth = 780; MinHeight = 600;
-        WindowStartupLocation = WindowStartupLocation.CenterScreen; FontFamily = new FontFamily("Microsoft YaHei UI"); FontSize = 13;
+        WindowStartupLocation = WindowStartupLocation.CenterScreen; FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI"); FontSize = 13;
+        Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/AccessProbe;component/FluentTheme.xaml", UriKind.Relative) });
+        SetResourceReference(BackgroundProperty, "CanvasBrush");
         var root = new DockPanel { Margin = new Thickness(18) }; var header = new StackPanel(); DockPanel.SetDock(header, Dock.Top);
         header.Children.Add(new TextBlock { Text = "连接中国大学 MOOC", FontSize = 24, FontWeight = FontWeights.SemiBold });
         header.Children.Add(new TextBlock
         {
-            Text = "请在下方官网使用手机号、邮箱或微信完成登录。登录后自动采集课程与任务到统一清单；点击任务可在系统浏览器进入相应做题或提交页面。",
+            Text = "请在下方官网使用手机号、邮箱或微信完成登录。登录后保存 Cookie 并返回课程列表；在平台管理窗口保存选择后采集任务，点击任务可打开官方入口。",
             TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 8, 0, 12)
         });
         var buttons = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) }; buttons.Children.Add(login);
         login.Click += (_, _) => NavigateLogin();
-        var dashboard = new Button { Content = "回到任务清单", Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(10, 0, 0, 0) };
+        var dashboard = new Wpf.Ui.Controls.Button { Content = "回到任务清单", Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(10, 0, 0, 0) };
         dashboard.Click += (_, _) => showDashboard(); buttons.Children.Add(dashboard);
-        var clear = new Button { Content = "重新连接", Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(10, 0, 0, 0) };
+        var clear = new Wpf.Ui.Controls.Button { Content = "重新连接", Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent, Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(10, 0, 0, 0) };
         clear.Click += async (_, _) =>
         {
             if (!initialized || clearing) return;
@@ -89,7 +91,9 @@ public sealed class MoocConnectionWindow : Window
             core.NewWindowRequested += (_, request) =>
             {
                 request.Handled = true;
-                if (MoocPlatform.IsLoginNavigation(request.Uri)) core.Navigate(request.Uri);
+                var address = request.Uri;
+                if (MoocPlatform.IsLoginNavigation(address))
+                    Dispatcher.BeginInvoke(new Action(() => { if (!closing && !clearing) core.Navigate(address); }));
                 else status.Text = "MOOC003：当前登录方式的跳转尚未适配，请使用官网手机号、邮箱或微信登录。";
             };
             void PageReady(ulong navigationId)
@@ -97,7 +101,7 @@ public sealed class MoocConnectionWindow : Window
                 if (closing || navigationId != latestNavigation) return;
                 loadTimer.Stop(); service.LoginNavigationCompleted(core.Source);
                 if (!service.IsRunning && !syncMessageVisible)
-                { status.Text = "官方登录页面已就绪，请完成登录；任务会自动采集到统一清单。"; status.Foreground = Brushes.DimGray; }
+                { status.Text = "官方登录页面已就绪，请完成登录；随后返回课程列表，保存选择后采集任务。"; status.Foreground = Brushes.DimGray; }
             }
             core.DOMContentLoaded += (_, navigation) => PageReady(navigation.NavigationId);
             core.NavigationCompleted += (_, navigation) =>

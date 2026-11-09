@@ -140,7 +140,7 @@ internal static class RainClassroomChecks
     {
         var path = Path.Combine(root, "store.db");
         var protector = new FixtureProtector();
-        var store = new TaskStore(path, protector);
+        var store = FixtureTaskStore.Create(path, protector);
         store.SaveSettings(new(false, true) { LastSyncOutcome = "chaoxing-existing", LastSyncAtUtc = now });
         var rain = RainClassroomParser.Chapter(Chapter, RainPlatform.Rain, "www.yuketang.cn", "77", room, schedule).Tasks;
         var changjiang = RainClassroomParser.Chapter(Chapter, RainPlatform.Changjiang, "changjiang.yuketang.cn", "77", room, schedule).Tasks;
@@ -185,7 +185,7 @@ internal static class RainClassroomChecks
         Check(store.LoadPlatformSettings("changjiang").LastSyncAtUtc is null);
         Check(store.LoadSettings().LastSyncOutcome == "chaoxing-existing" && store.LoadSettings().LastSyncAtUtc == now);
         Reject(() => store.SavePlatformSettings("changjiang", new() { Host = "www.yuketang.cn" }), "RAIN003");
-        var reopened = new TaskStore(path, protector);
+        var reopened = FixtureTaskStore.Create(path, protector);
         Check(reopened.LoadTasks().Count == before && reopened.LoadPlatformSettings("yuketang").LastSummary?.Tasks == 3);
         Check(!JsonSerializer.Serialize(rain[0]).Contains("SYNTHETIC-SIGN", StringComparison.Ordinal));
         Check(!Encoding.UTF8.GetString(File.ReadAllBytes(path)).Contains("/ai-workspace/lms-graph/", StringComparison.Ordinal));
@@ -268,7 +268,7 @@ internal static class RainClassroomChecks
     {
         foreach (var platform in RainPlatform.All)
         {
-            var store = new TaskStore(Path.Combine(root, platform.Id + "-sync.db"), new FixtureProtector());
+            var store = FixtureTaskStore.Create(Path.Combine(root, platform.Id + "-sync.db"), new FixtureProtector());
             var pages = new List<string>();
             var handler = new FixtureHandler(request =>
             {
@@ -302,7 +302,7 @@ internal static class RainClassroomChecks
             var second = await new RainSynchronizer(store, reader, platform, platform.DefaultHost).RunAsync();
             Check(second.Added == 0 && second.Updated == 4 && store.LoadTasks().Count == 4);
         }
-        var isolated = new TaskStore(Path.Combine(root, "failures.db"), new FixtureProtector());
+        var isolated = FixtureTaskStore.Create(Path.Combine(root, "failures.db"), new FixtureProtector());
         using (var reader = Reader(new FixtureHandler(_ => new(HttpStatusCode.Unauthorized))))
         {
             var result = await new RainSynchronizer(isolated, reader, RainPlatform.Rain, "www.yuketang.cn").RunAsync();
@@ -354,7 +354,7 @@ internal static class RainClassroomChecks
         }
         foreach (var mode in new[] { "catalog_chapter", "request_limit", "rate_limit" })
         {
-            var stored = new TaskStore(Path.Combine(root, mode + ".db"), new FixtureProtector());
+            var stored = FixtureTaskStore.Create(Path.Combine(root, mode + ".db"), new FixtureProtector());
             var catalog = mode == "request_limit" ? JsonSerializer.Serialize(new
             {
                 errcode = 0, data = new { list = Enumerable.Range(101, 13).Select(id => new { id, name = "班级", course_name = "课程" }).ToArray() }

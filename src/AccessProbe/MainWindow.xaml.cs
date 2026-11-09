@@ -88,7 +88,7 @@ public partial class MainWindow : Window
                 if (navigation.IsSuccess) mainHttpsUpgrade.Reset();
                 navigationOutcome = navigation.IsSuccess ? "loaded" : navigation.WebErrorStatus.ToString();
                 StatusText.Text = navigation.IsSuccess
-                    ? "页面已加载。登录成功后程序会在首页后台同步课程与作业，无需逐个打开作业页。"
+                    ? "页面已加载。登录成功后保存 Cookie 并返回课程列表；回到平台管理窗口选择课程后采集任务。"
                     : navigation.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled
                         ? "本次页面导航已取消（例如刷新或跳转），不等同于账号登录失败。可重新打开官方登录。"
                         : $"页面导航失败：{navigation.WebErrorStatus}，HTTP {navigation.HttpStatusCode}。未跳过证书验证；此提示不能判断账号状态。";
@@ -108,7 +108,7 @@ public partial class MainWindow : Window
             CollectButton.IsEnabled = true;
             BrowserProbeButton.IsEnabled = true;
             ReadWorkButton.IsEnabled = true;
-            StatusText.Text = "正在打开官方登录。登录成功后可回到首页，程序会自动同步各课程作业。";
+            StatusText.Text = "正在打开官方登录。登录后返回课程列表，在平台管理窗口保存选择后采集任务。";
             if (OfficialNavigationCompleted is not null) core.Navigate("https://i.chaoxing.com/");
         }
         catch

@@ -6,6 +6,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>Assets\Icons\app.ico</ApplicationIcon>
     <DefaultItemExcludesInProjectFolder>$(DefaultItemExcludesInProjectFolder);.local\**\*</DefaultItemExcludesInProjectFolder>
   </PropertyGroup>
   <ItemGroup>
@@ -15,5 +16,13 @@
 
     <PackageReference Include="AngleSharp" Version="1.8.5" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\Icons\catalog.json" LogicalName="AccessProbe.Icons.catalog.json" />
+    <Content Include="Assets\Icons\app.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="ThirdParty\WPF-UI\LICENSE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="ThirdParty\WPF-UI\ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="ThirdParty\Fluent-System-Icons\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

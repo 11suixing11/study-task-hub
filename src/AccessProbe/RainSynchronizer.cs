@@ -1,11 +1,13 @@
 namespace AccessProbe;
 
-public sealed class RainSynchronizer(TaskStore store, IRainMetadataReader reader, RainPlatform platform, string host)
+public sealed class RainSynchronizer(TaskStore store, IRainMetadataReader reader, RainPlatform platform, string host,
+    Func<CancellationToken, Task>? validateSession = null)
 {
     public const int MaximumRequests = 1200;
 
     public async Task<RainSyncSummary> RunAsync(IProgress<string>? progress = null, CancellationToken cancellation = default, bool catalogOnly = false)
     {
+        catalogOnly |= !store.LoadCourseRecording(platform.Id).SelectionConfirmed;
         platform.CheckHost(host);
         var problems = new List<RainSyncProblem>();
         var allTasks = new Dictionary<string, CollectedTask>(StringComparer.Ordinal);
@@ -42,6 +44,7 @@ public sealed class RainSynchronizer(TaskStore store, IRainMetadataReader reader
         var catalog = RainClassroomParser.Catalog(list.Json);
         covered = catalog.Covered; duplicates += catalog.DuplicateRows;
         if (catalog.Outcome != "ok") Problem("", catalog.Outcome, "课程列表结构或数量");
+        await Validate();
         var recording = await Task.Run(() => store.ObserveRecordingCourses(platform.Id,
             catalog.Courses.Select(course => CourseRecordingRules.Rain(platform, host, account, course)).ToArray(), covered,
             DateTimeOffset.UtcNow, cancellation), cancellation);
@@ -102,7 +105,7 @@ public sealed class RainSynchronizer(TaskStore store, IRainMetadataReader reader
             if (loginRequired) break;
             if (roomTasks.Count > 0)
             {
-                cancellation.ThrowIfCancellationRequested();
+                await Validate();
                 var imported = await Task.Run(() => store.ImportCollectedTasks(roomTasks.Values.ToArray(), DateTimeOffset.UtcNow, cancellation, recordingRevision), cancellation);
                 added += imported.Added; updated += imported.Updated; duplicates += imported.DuplicateRows;
                 foreach (var (key, task) in roomTasks) allTasks[key] = task;
@@ -111,6 +114,14 @@ public sealed class RainSynchronizer(TaskStore store, IRainMetadataReader reader
         }
         store.CheckCourseRecordingRevision(platform.Id, recordingRevision, cancellation);
         return Summary(catalog.Courses.Count);
+
+        async Task Validate()
+        {
+            cancellation.ThrowIfCancellationRequested();
+            store.CheckCourseRecordingRevision(platform.Id, recordingRevision, cancellation);
+            if (validateSession is not null) await validateSession(cancellation);
+            cancellation.ThrowIfCancellationRequested();
+        }
 
         RainSyncSummary Summary(int courses) => new(platform.Id, courses, coursesRead, allTasks.Count,
             added, updated, loginRequired, covered, problems)

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" role="img">
+  <title>聚合平台 · 叠层任务卡</title>
+  <defs>
+    <linearGradient id="brand-base" x1="5" y1="2" x2="28" y2="31" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#48CEFF"/>
+      <stop offset="0.35" stop-color="#168CF6"/>
+      <stop offset="0.7" stop-color="#4262E6"/>
+      <stop offset="1" stop-color="#713BCB"/>
+    </linearGradient>
+    <radialGradient id="brand-glow" cx="6" cy="3" r="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B3F4FF" stop-opacity="0.48"/>
+      <stop offset="0.62" stop-color="#83CFFF" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#7EA6FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="brand-paper" x1="11" y1="8" x2="24" y2="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.62" stop-color="#F6FAFF"/>
+      <stop offset="1" stop-color="#E4EAFF"/>
+    </linearGradient>
+    <linearGradient id="brand-badge" x1="18" y1="17" x2="25" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9A8BFF"/>
+      <stop offset="0.45" stop-color="#735BF0"/>
+      <stop offset="1" stop-color="#5136C8"/>
+    </linearGradient>
+  </defs>
+  <path d="M10 1 H22 C28.1 1 31 3.9 31 10 V22 C31 28.1 28.1 31 22 31 H10 C3.9 31 1 28.1 1 22 V10 C1 3.9 3.9 1 10 1 Z" fill="url(#brand-base)"/>
+  <path d="M10 1 H22 C28.1 1 31 3.9 31 10 V22 C31 28.1 28.1 31 22 31 H10 C3.9 31 1 28.1 1 22 V10 C1 3.9 3.9 1 10 1 Z" fill="url(#brand-glow)"/>
+  <path d="M2 10 C2 4.55 4.55 2 10 2 H22 C27.45 2 30 4.55 30 10" stroke="#D7F6FF" stroke-opacity="0.48" stroke-width="0.45" stroke-linecap="round"/>
+  <path d="M2 22 C2 27.45 4.55 30 10 30 H22 C27.45 30 30 27.45 30 22" stroke="#242BA7" stroke-opacity="0.22" stroke-width="0.45" stroke-linecap="round"/>
+  <path d="M6.9 10.55 C6.58 8.75 7.48 7.61 9.26 7.29 L16.72 5.94 C18.5 5.62 19.63 6.47 19.95 8.27 L22.33 21.64 C22.65 23.44 21.75 24.58 19.97 24.9 L12.51 26.25 C10.73 26.57 9.6 25.72 9.28 23.92 Z" fill="#D4F4FF" fill-opacity="0.34" stroke="#ECFDFF" stroke-opacity="0.35" stroke-width="0.4"/>
+  <path d="M8.54 8.77 C8.66 6.93 9.72 5.96 11.56 6.08 L19.06 6.57 C20.9 6.69 21.85 7.8 21.73 9.64 L20.83 23.38 C20.71 25.22 19.65 26.19 17.81 26.07 L10.31 25.58 C8.47 25.46 7.52 24.35 7.64 22.51 Z" fill="#EDF8FF" fill-opacity="0.6" stroke="#FFFFFF" stroke-opacity="0.38" stroke-width="0.4"/>
+  <path d="M13.7 9.75 H20.8 C23.05 9.75 24.3 11 24.3 13.25 V23.8 C24.3 26.05 23.05 27.3 20.8 27.3 H13.7 C11.45 27.3 10.2 26.05 10.2 23.8 V13.25 C10.2 11 11.45 9.75 13.7 9.75 Z" fill="#203DA0" fill-opacity="0.14"/>
+  <path d="M13.45 8.9 H20.55 C22.8 8.9 24.05 10.15 24.05 12.4 V23.2 C24.05 25.45 22.8 26.7 20.55 26.7 H13.45 C11.2 26.7 9.95 25.45 9.95 23.2 V12.4 C9.95 10.15 11.2 8.9 13.45 8.9 Z" fill="#2C43A1" fill-opacity="0.13"/>
+  <path d="M13.45 8.05 H20.55 C22.6 8.05 23.75 9.2 23.75 11.25 V22.95 C23.75 25 22.6 26.15 20.55 26.15 H13.45 C11.4 26.15 10.25 25 10.25 22.95 V11.25 C10.25 9.2 11.4 8.05 13.45 8.05 Z" fill="url(#brand-paper)" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="0.45"/>
+  <path d="M13.3 11.85 H19.9" stroke="#4C83DE" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M13.3 15.4 H19.9 M13.3 18.95 H16.2" stroke="#9AAED8" stroke-width="1.15" stroke-linecap="round"/>
+  <path d="M26.75 22.9 A5.3 5.3 0 1 1 16.15 22.9 A5.3 5.3 0 1 1 26.75 22.9 Z" fill="#3441A7" fill-opacity="0.22"/>
+  <path d="M26.65 22 A5.3 5.3 0 1 1 16.05 22 A5.3 5.3 0 1 1 26.65 22 Z" fill="url(#brand-badge)" stroke="#C5BFFF" stroke-opacity="0.78" stroke-width="0.4"/>
+  <path d="M17.2 19.8 C18.17 17.78 20.44 16.78 22.62 17.27" stroke="#E8DEFF" stroke-opacity="0.55" stroke-width="0.45" stroke-linecap="round"/>
+  <path d="M18.75 22.05 L20.6 23.9 L24.2 20.3" stroke="#FFFFFF" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

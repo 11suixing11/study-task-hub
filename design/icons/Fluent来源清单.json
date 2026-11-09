@@ -1,0 +1,490 @@
+{
+  "schema": 1,
+  "provider": "Microsoft Fluent System Icons",
+  "repository": "https://github.com/microsoft/fluentui-system-icons",
+  "revision": "e15fc0de25fab983e3e42bac8798be69a85c23bf",
+  "license": "MIT",
+  "downloadedAtUtc": "2026-11-06T15:55:04.998955+00:00",
+  "colorUpstreamStatus": "deprecated; selected assets vendored at the pinned revision",
+  "assets": [
+    {
+      "key": "tasks",
+      "name": "Document Text",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/tasks-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Document%20Text/SVG/ic_fluent_document_text_24_regular.svg",
+      "sha256": "f76c2ec8378f3d0d2f6569b34ff54b7b3c3b7215a93745b92d4906aa882f84e5",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "todo",
+      "name": "Clipboard Task",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/todo-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Clipboard%20Task/SVG/ic_fluent_clipboard_task_24_regular.svg",
+      "sha256": "b2db65a324f18726ea89ad41899b4574482b6747f270c1b15c0674f38b739c14",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "soon",
+      "name": "Clock",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/soon-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Clock/SVG/ic_fluent_clock_24_regular.svg",
+      "sha256": "5b2faea30a81e8db8c2ec212be3c0f1aa7f756e62b2ef3c7f0fc081afdf08726",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "overdue",
+      "name": "Error Circle",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/overdue-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Error%20Circle/SVG/ic_fluent_error_circle_24_regular.svg",
+      "sha256": "56ce670f8d505b8fb2a9e66ae523d3d566aed346f29470666a5d914c7f3f504e",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "completed",
+      "name": "Checkmark Circle",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/completed-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Checkmark%20Circle/SVG/ic_fluent_checkmark_circle_24_regular.svg",
+      "sha256": "b3df75bf058b424fc56c8ec440672237051210017806404b8fecffee3d4253fc",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "document",
+      "name": "Document",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/document-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Document/SVG/ic_fluent_document_24_regular.svg",
+      "sha256": "c70164c6ee7f495a3bb4978de76628e166d6ba5b52210a016ddcfe35138528b1",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "sync",
+      "name": "Arrow Sync",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/sync-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Arrow%20Sync/SVG/ic_fluent_arrow_sync_24_regular.svg",
+      "sha256": "9537e4dc984b915d1d67bf2ed61c1fdf713c69d0b293a4dc12b2520d57ab55b7",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "courses",
+      "name": "Book Open",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/courses-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Book%20Open/SVG/ic_fluent_book_open_24_regular.svg",
+      "sha256": "d7623873a8264a1ade7f195bafa80e202a85ff10e3e4411e04290d993be1aafa",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "add",
+      "name": "Add",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/add-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Add/SVG/ic_fluent_add_24_regular.svg",
+      "sha256": "167c7f2703870a06ff80dbbcc5d60fa37bfae9d225f37ed3d585949239bc3431",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "sidebar",
+      "name": "Panel Left",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/sidebar-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Panel%20Left/SVG/ic_fluent_panel_left_24_regular.svg",
+      "sha256": "4f9e2178b40bfcf45e1319490d8c18a21371de42877888ce167f2af79c773176",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "inspector",
+      "name": "Panel Right",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/inspector-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Panel%20Right/SVG/ic_fluent_panel_right_24_regular.svg",
+      "sha256": "6f3c2964c9352fe6062ee59ef2c658cdf56ddbcf68629ac8ab0b222d9742abd9",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "settings",
+      "name": "Settings",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/settings-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Settings/SVG/ic_fluent_settings_24_regular.svg",
+      "sha256": "5ac05e6e11c9ec9f24703091c42ca1f5c91f4032cb0eee35c892d1872a38871b",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "search",
+      "name": "Search",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/search-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Search/SVG/ic_fluent_search_24_regular.svg",
+      "sha256": "dc8ec761e8cdc52032b86e15c424716ded96d168970b5b611257253a41484b62",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "open",
+      "name": "Open",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/open-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Open/SVG/ic_fluent_open_24_regular.svg",
+      "sha256": "1c6f88021029a3f1faa19e77f8d7d5eca72a5b01fdecca66515cabe28c74653e",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "edit",
+      "name": "Edit",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/edit-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Edit/SVG/ic_fluent_edit_24_regular.svg",
+      "sha256": "2dae3a8425dbeb5ff15a0e1af84f5d15719fe62b012937a6a5457a1481804c73",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "more",
+      "name": "More Horizontal",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/more-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/More%20Horizontal/SVG/ic_fluent_more_horizontal_24_regular.svg",
+      "sha256": "aacb8ee10e503858f5465d18beb79f16d1ad790eb2b802127ee572062129fc3a",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "info",
+      "name": "Info",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/info-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Info/SVG/ic_fluent_info_24_regular.svg",
+      "sha256": "ec9891767b25630079faca1b06026cab94eee56129dc1264a40d256aa65911bb",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "saved",
+      "name": "Shield Checkmark",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/saved-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Shield%20Checkmark/SVG/ic_fluent_shield_checkmark_24_regular.svg",
+      "sha256": "d25f0805ecf71295565592d2a4677fdc30eb8894922882fc8c1d8fdcd5f2140f",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "copy",
+      "name": "Copy",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/copy-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Copy/SVG/ic_fluent_copy_24_regular.svg",
+      "sha256": "599789902ed3de0b58da04dbac37e9a96cba962659197ecd0ea2463799ed85dd",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "delete",
+      "name": "Delete",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/delete-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Delete/SVG/ic_fluent_delete_24_regular.svg",
+      "sha256": "0f0769b54d5862f2390ea7e51aab825e5dc10d4fa36da34d1559acc55799be92",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "returned",
+      "name": "Arrow Hook Up Left",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/returned-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Arrow%20Hook%20Up%20Left/SVG/ic_fluent_arrow_hook_up_left_24_regular.svg",
+      "sha256": "a985230f10bc6b73270b05b48f9e3e15c3424f27d2c207bfc389b968f82821a3",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "review",
+      "name": "Warning",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/review-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Warning/SVG/ic_fluent_warning_24_regular.svg",
+      "sha256": "9ea77c6c004bf7ce7232d348bda79baf63e4ef3bccca09638066dee955811976",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "ignored",
+      "name": "Eye Off",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/ignored-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Eye%20Off/SVG/ic_fluent_eye_off_24_regular.svg",
+      "sha256": "69c812230955937160708700e81ff4064251ff7107834fa86b9e1c7b2d479272",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "save",
+      "name": "Save",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/save-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Save/SVG/ic_fluent_save_24_regular.svg",
+      "sha256": "35d473d8af5134ab3679d3f41e7270d6ac6bce66fc5f98caccb42d75350b237f",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "connect",
+      "name": "Link",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/connect-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Link/SVG/ic_fluent_link_24_regular.svg",
+      "sha256": "6792b4658fb8334e1214ec8c558e1295676d084ae7d3b7e60fe1339bfed28548",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "stop",
+      "name": "Stop",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/stop-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Stop/SVG/ic_fluent_stop_24_regular.svg",
+      "sha256": "00dbf98c80cad5069f11311046585118b2f27fd622c84fb28eb90c5127bb760a",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "check-all",
+      "name": "Select All On",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/check-all-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Select%20All%20On/SVG/ic_fluent_select_all_on_24_regular.svg",
+      "sha256": "0926e4a839486f338a88df22b671398dbac3ae08921c552d4bb5635dad6ad0d5",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "clear-selection",
+      "name": "Select All Off",
+      "style": "regular",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/clear-selection-regular.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Select%20All%20Off/SVG/ic_fluent_select_all_off_24_regular.svg",
+      "sha256": "b64f7243bcb25968f936e187a3947d32b37bf65dd8e5e6fc0005b21bce39955e",
+      "elements": [
+        "path",
+        "svg"
+      ]
+    },
+    {
+      "key": "tasks",
+      "name": "Document Text",
+      "style": "color",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/tasks-color.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Document%20Text/SVG/ic_fluent_document_text_24_color.svg",
+      "sha256": "6c6654a8db202201af9d8709f841dacd27ab74001655601bdb8e9314feb97374",
+      "elements": [
+        "defs",
+        "linearGradient",
+        "path",
+        "radialGradient",
+        "stop",
+        "svg"
+      ]
+    },
+    {
+      "key": "todo",
+      "name": "Clipboard Task",
+      "style": "color",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/todo-color.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Clipboard%20Task/SVG/ic_fluent_clipboard_task_24_color.svg",
+      "sha256": "c81cab69d8fdf02ac921dc31b66f46ec4388ba1dc85818fe9488de4dea0ca831",
+      "elements": [
+        "defs",
+        "linearGradient",
+        "path",
+        "radialGradient",
+        "stop",
+        "svg"
+      ]
+    },
+    {
+      "key": "soon",
+      "name": "Clock",
+      "style": "color",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/soon-color.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Clock/SVG/ic_fluent_clock_24_color.svg",
+      "sha256": "2a1f40b0e5c23fbec26fed225d4b5bb5dd3f128f0826918c9d588b88c11355c7",
+      "elements": [
+        "defs",
+        "linearGradient",
+        "path",
+        "stop",
+        "svg"
+      ]
+    },
+    {
+      "key": "overdue",
+      "name": "Error Circle",
+      "style": "color",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/overdue-color.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Error%20Circle/SVG/ic_fluent_error_circle_24_color.svg",
+      "sha256": "c6ee3d3d5510ab3269533edfa93864b420cfc03729290f8acbf09956f5ddc4d0",
+      "elements": [
+        "defs",
+        "linearGradient",
+        "path",
+        "stop",
+        "svg"
+      ]
+    },
+    {
+      "key": "completed",
+      "name": "Checkmark Circle",
+      "style": "color",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/completed-color.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Checkmark%20Circle/SVG/ic_fluent_checkmark_circle_24_color.svg",
+      "sha256": "bf4fc912b3c2b41a3143f631f49cb5f6deda8c70083a1909528b899afe7dbed8",
+      "elements": [
+        "defs",
+        "linearGradient",
+        "path",
+        "stop",
+        "svg"
+      ]
+    },
+    {
+      "key": "document",
+      "name": "Document",
+      "style": "color",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/document-color.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Document/SVG/ic_fluent_document_24_color.svg",
+      "sha256": "3219a365c3b637a5ae5f695ee541189236e8780696507e78a811bd3684eee5ee",
+      "elements": [
+        "defs",
+        "linearGradient",
+        "path",
+        "radialGradient",
+        "stop",
+        "svg"
+      ]
+    },
+    {
+      "key": "courses",
+      "name": "Book Open",
+      "style": "color",
+      "size": 24,
+      "path": "src/AccessProbe/Assets/Icons/Fluent/svg/courses-color.svg",
+      "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/e15fc0de25fab983e3e42bac8798be69a85c23bf/assets/Book%20Open/SVG/ic_fluent_book_open_24_color.svg",
+      "sha256": "ab555183ecc7171af583febccd397e53c09f83f22b9fa46d460bde8b3552a932",
+      "elements": [
+        "defs",
+        "linearGradient",
+        "path",
+        "stop",
+        "svg"
+      ]
+    }
+  ]
+}

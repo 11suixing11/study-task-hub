@@ -14,6 +14,7 @@ public static class TaskNavigationRules
     {
         if (WorkListParser.ParseTaskLocation(original.OriginalString) is null || !TaskRules.IsSafeLink(target.OriginalString)) return null;
         if (ChaoxingSyncParser.IsWorkActionRedirect(original, target)) return "answer";
+        if (ChaoxingSyncParser.IsWorkPreviewRedirect(original, target)) return "preview";
         if (!ChaoxingSyncParser.IsReadAddress(target) || !ChaoxingSyncParser.IsWorkRedirect(original, target)
             || WorkListParser.ParseDetailLocation(target.OriginalString) is null) return null;
         return target.AbsolutePath switch
@@ -25,7 +26,16 @@ public static class TaskNavigationRules
         };
     }
 
-    public static string ActionName(TaskItem task) => TaskRules.IsActive(task) ? "做题 / 提交 ↗" : "查看作业 ↗";
+    public static bool UsesSavedPlatformEntry(TaskItem task) => !task.Overrides.HasFlag(TaskOverrides.Link)
+        && task.Source is TaskSource.RainClassroom or TaskSource.Mooc or TaskSource.Xuetang or TaskSource.Zhihuishu or TaskSource.Ucampus or TaskSource.Fif or TaskSource.Pta;
+
+    public static string ActionName(TaskItem task) => UsesSavedPlatformEntry(task)
+        ? TaskRules.IsSafeLink(task.Link) ? "打开官方任务 ↗" : "入口待核对"
+        : TaskRules.IsActive(task) ? "做题 / 提交 ↗" : "查看作业 ↗";
+
+    public static string OpenHint(TaskItem task) => UsesSavedPlatformEntry(task)
+        ? TaskRules.IsSafeLink(task.Link) ? "在系统浏览器打开官方任务入口；可能还需登录、核验或继续跳转" : "官网任务入口尚未确认，请在对应平台核对"
+        : TaskRules.IsActive(task) ? "打开该任务的官方做题 / 提交页面" : "打开该任务的官方查看 / 提交记录";
 
     public static string OpenMessage(TaskLinkResolution result) => result.Outcome == "opened_saved_link"
         ? (result.Destination == "manual" ? "已在系统浏览器打开该任务的作业链接。"
@@ -37,6 +47,7 @@ public static class TaskNavigationRules
             "answer" => "已在系统浏览器打开该作业的做题 / 提交页面。",
             "submitted" => "已在系统浏览器打开该作业的提交记录页面。",
             "view" => "已在系统浏览器打开该作业的查看页面。",
+            "preview" => "已在系统浏览器打开该作业的官方预览入口，请按官网提示继续。",
             _ => "已在系统浏览器打开该任务入口，页面由官方平台继续跳转。"
         };
 }
@@ -64,18 +75,45 @@ public sealed class TaskNavigationService
             if (!TaskRules.IsSafeLink(task.Link))
                 throw new TaskValidationException(task.LinkIssue ?? "LINK001", "作业链接不可用，请同步对应平台或编辑补充。");
             var result = new TaskLinkResolution("opened_saved_link", "manual", task.Link);
+            if (task.Source is TaskSource.Zhihuishu or TaskSource.Ucampus or TaskSource.Fif or TaskSource.Pta && !task.Overrides.HasFlag(TaskOverrides.Link))
+            {
+                if (MetadataPlatform.All.FirstOrDefault(platform => platform.Id == task.PlatformId)?.Source != task.Source || task.CollectedNavigationKey.Length == 0
+                    || MetadataTaskNavigation.Key(task.PlatformId, task.Link) != task.CollectedNavigationKey)
+                    throw new TaskValidationException("LINK003", "平台入口与所选任务的归属不一致，请同步后重试。");
+                result = new("opened", "entry", task.Link);
+                if (task.Source == TaskSource.Ucampus)
+                {
+                    if (resolve is null) throw new TaskValidationException("UC003", "U 校园任务入口需要先核对登录状态，请连接平台后重试。");
+                    var signed = await resolve(new Uri(task.Link!), cancellation);
+                    if (signed.Outcome != "ready" || signed.Address is null)
+                        throw new TaskValidationException(signed.Outcome == "login_required" ? "UC001" : "UC003",
+                            signed.Outcome == "official_confirmation_required" ? "官网要求确认重做，请在对应课程的作业或测试列表中确认后继续。"
+                                : signed.Outcome == "account_mismatch" ? "当前 U 校园账号与任务归属不一致，请切换正确账号后同步。"
+                                : "U 校园任务入口未确认，请在官网重新登录或同步后重试。");
+                    if (!MetadataTaskNavigation.UcampusDestinationMatches(task.Link!, signed.Address))
+                        throw new TaskValidationException("LINK003", "U 校园返回的入口与所选任务不一致，未打开。");
+                    result = new("opened", signed.Destination, signed.Address);
+                }
+            }
+            if (task.Source == TaskSource.Xuetang && !task.Overrides.HasFlag(TaskOverrides.Link))
+            {
+                if (task.PlatformId != XuetangPlatform.Id || task.CollectedNavigationKey.Length == 0
+                    || XuetangTaskNavigation.Key(task.Link!) != task.CollectedNavigationKey)
+                    throw new TaskValidationException("LINK003", "学堂在线入口与所选任务的归属不一致，请同步后重试。");
+                result = new("opened", "entry", task.Link);
+            }
             if (task.Source == TaskSource.Mooc && !task.Overrides.HasFlag(TaskOverrides.Link))
             {
                 if (task.CollectedNavigationKey.Length == 0 || MoocTaskNavigation.Key(task.Link!) != task.CollectedNavigationKey)
                     throw new TaskValidationException("LINK003", "MOOC 入口与所选任务的课程、学期或编号不一致，请同步后重试。");
-                result = new("opened", TaskRules.IsActive(task) ? "answer" : "view", task.Link);
+                result = new("opened", "entry", task.Link);
             }
             if (task.Source == TaskSource.RainClassroom && !task.Overrides.HasFlag(TaskOverrides.Link))
             {
                 if (task.CollectedNavigationKey.Length == 0 || RainTaskNavigation.Key(task.PlatformId, task.Link!) != task.CollectedNavigationKey)
                     throw new TaskValidationException("LINK003", "作业入口与所选任务的归属不一致，请同步对应平台后重试。");
                 // The official SPA route is opened externally; the aggregator never GETs answering content.
-                result = new("opened", TaskRules.IsActive(task) ? "answer" : "view", task.Link);
+                result = new("opened", "entry", task.Link);
             }
             if (task.Source == TaskSource.Chaoxing && !task.Overrides.HasFlag(TaskOverrides.Link)
                 && resolve is not null && WorkListParser.ParseTaskLocation(task.Link) is { } location)

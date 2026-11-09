@@ -83,7 +83,7 @@ internal static class MoocChecks
         Check(!MoocPlatform.IsReadRequest(MoocPlatform.NewExamRpc, new Dictionary<string, string> { ["termId"] = "2001", ["examId"] = "7001" }), "new exam RPC fields restricted");
         Check(!MoocPlatform.IsReadRequest("/mm-tiku/web/j/mocExamBean.getPaper.rpc", new Dictionary<string, string> { ["examId"] = "7001" }), "start exam RPC not allowed");
         var path = Path.Combine(Path.GetTempPath(), "mooc-new-exam-" + Guid.NewGuid().ToString("N"), "tasks.db");
-        var store = new TaskStore(path); var imported = store.ImportMoocTasks(batch.Tasks, Now);
+        var store = FixtureTaskStore.Create(path); var imported = store.ImportMoocTasks(batch.Tasks, Now);
         Check(imported.Added == 3 && store.LoadTasks().Count == 3 && store.LoadTasks().Count(task => task.State == TaskState.NeedsReview) == 1, "new exam tasks share store and review status");
     }
 
@@ -141,7 +141,7 @@ internal static class MoocChecks
     private static async Task StoreAndSyncChecks()
     {
         var root = Path.Combine(Path.GetTempPath(), "mooc-checks-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
-        var path = Path.Combine(root, "tasks.db"); var store = new TaskStore(path);
+        var path = Path.Combine(root, "tasks.db"); var store = FixtureTaskStore.Create(path);
         var existing = store.Create(new("手动任务", "chaoxing", "旧课程", DeadlineKind.Unknown, null, null, null, null, "", "", null), Now);
         var collected = MoocParser.Term(Term(), "9001", Course).Tasks;
         var imported = store.ImportMoocTasks(collected, Now);
@@ -169,11 +169,11 @@ internal static class MoocChecks
         Reject(() => store.ImportMoocTasks([collected[0] with { Link = collected[0].Link!.Replace("tid=2001", "tid=9001") }], Now), "MOOC003");
         using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
         try { store.ImportMoocTasks(collected, Now, cancelled.Token); throw new Exception("MOOC check: cancellation ignored"); } catch (OperationCanceledException) { checks++; }
-        Check(new TaskStore(path).LoadTasks().Count == initialCount, "reopen store preserves all platforms");
+        Check(FixtureTaskStore.Create(path).LoadTasks().Count == initialCount, "reopen store preserves all platforms");
         var opened = new List<string>(); var navigation = new TaskNavigationService(store, null, opened.Add);
         var target = store.LoadTasks().First(task => task.PlatformStatusText == "已批改");
         var result = await navigation.OpenAsync(target.Id, CancellationToken.None);
-        Check(opened.Single() == target.Link && result.Destination == "view", "user click opens task directly");
+        Check(opened.Single() == target.Link && result.Destination == "entry", "user click opens official entry without claiming rendered content");
         using (var connection = new SqliteConnection("Data Source=" + path))
         {
             connection.Open(); using var command = connection.CreateCommand();
@@ -182,7 +182,7 @@ internal static class MoocChecks
         try { await navigation.OpenAsync(target.Id, CancellationToken.None); throw new Exception("MOOC check: mismatched navigation opened"); }
         catch (TaskValidationException error) { Check(error.Code == "LINK003" && opened.Count == 1, "navigation mismatch blocks browser"); }
 
-        var syncStore = new TaskStore(Path.Combine(root, "sync.db"));
+        var syncStore = FixtureTaskStore.Create(Path.Combine(root, "sync.db"));
         var reader = new FakeReader((path, fields) => path == MoocPlatform.CourseRpc
             ? Ok(fields["p"] == "1" ? Page([CourseOne], 1, 2, 2) : Page([CourseTwo], 2, 2, 2))
             : Ok(path == MoocPlatform.NewExamRpc ? "{\"code\":0,\"result\":[]}" : Term(fields["termId"])));
@@ -207,10 +207,10 @@ internal static class MoocChecks
         var contract = new FakeReader((_, _) => new("rpc_error", 200));
         Check((await new MoocSynchronizer(syncStore, contract, "9001").RunAsync()).Problems.Single().Code == "MOOC003", "bad RPC not empty result");
         var newReader = new FakeReader((path, _) => Ok(path == MoocPlatform.CourseRpc ? Page([CourseOne], 1, 1, 1) : path == MoocPlatform.NewExamRpc ? NewExamList() : Term()));
-        var newSummary = await new MoocSynchronizer(new TaskStore(Path.Combine(root, "new-sync.db")), newReader, "9001").RunAsync();
+        var newSummary = await new MoocSynchronizer(FixtureTaskStore.Create(Path.Combine(root, "new-sync.db")), newReader, "9001").RunAsync();
         Check(newSummary.CoursesRead == 1 && newSummary.Tasks == 8 && newSummary.NewExamTasks == 3 && newSummary.StatusNeedsReview == 1, "synchronizer includes new exams and review counters");
         var failedNewReader = new FakeReader((path, _) => path == MoocPlatform.NewExamRpc ? new("rpc_error", 200) : Ok(path == MoocPlatform.CourseRpc ? Page([CourseOne], 1, 1, 1) : Term()));
-        var failedNew = await new MoocSynchronizer(new TaskStore(Path.Combine(root, "failed-new.db")), failedNewReader, "9001").RunAsync();
+        var failedNew = await new MoocSynchronizer(FixtureTaskStore.Create(Path.Combine(root, "failed-new.db")), failedNewReader, "9001").RunAsync();
         Check(failedNew.CoursesRead == 0 && failedNew.Tasks == 5 && failedNew.Problems.Any(problem => problem.Message.Contains("新版考试", StringComparison.Ordinal)), "unrecognized new exam request keeps legacy tasks and partial coverage");
         var deniedSession = new FakeReader((path, _) => Ok(path == MoocPlatform.CourseRpc ? Page([CourseOne], 1, 1, 1) : path == MoocPlatform.NewExamRpc ? "{\"code\":0,\"result\":[]}" : Term()));
         try

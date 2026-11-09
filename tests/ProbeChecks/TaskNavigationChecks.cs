@@ -37,6 +37,16 @@ internal static class TaskNavigationChecks
             Check(!JsonSerializer.Serialize(result).Contains("REFRESHED", StringComparison.Ordinal) && result.ToString() == nameof(TaskLinkResolution));
         }
         var upgradedTarget = Target("dowork");
+        var previewTarget = Target("preview").Replace("&answerId=501", "", StringComparison.Ordinal);
+        var previewContent = new UnreadableContent();
+        var previewHandler = new CaptureHandler(_ => new(HttpStatusCode.Found) { Headers = { Location = new(previewTarget) }, Content = previewContent });
+        using (var previewReader = new ChaoxingHttpReader((_, _) => Task.FromResult<IReadOnlyList<Cookie>>([]), previewHandler))
+        {
+            var preview = await previewReader.ResolveTaskAddressAsync(new(Entry), CancellationToken.None);
+            Check(preview is { Outcome: "ready", Destination: "preview" } && preview.Address == previewTarget);
+            Check(previewContent.Reads == 0 && previewHandler.Requests.Count == 1);
+            Check(TaskNavigationRules.OpenMessage(preview).Contains("官方预览入口", StringComparison.Ordinal));
+        }
         var upgradeHandler = new CaptureHandler(_ => new(HttpStatusCode.Found)
             { Headers = { Location = new(upgradedTarget.Replace("https://", "http://", StringComparison.Ordinal)) } });
         using (var reader = new ChaoxingHttpReader((_, _) => Task.FromResult<IReadOnlyList<Cookie>>([]), upgradeHandler))
@@ -64,7 +74,9 @@ internal static class TaskNavigationChecks
             Target("dowork").Replace("&answerId=501", "", StringComparison.Ordinal),
             Target("dowork") + "&courseId=101", Target("submit"),
             Target("view").Replace("mooc1.chaoxing.com", "evil.example", StringComparison.Ordinal),
-            Target("view").Replace("enc=REFRESHED%2BVALUE%26ONLY", "enc=", StringComparison.Ordinal)
+            Target("view").Replace("enc=REFRESHED%2BVALUE%26ONLY", "enc=", StringComparison.Ordinal),
+            previewTarget.Replace("workId=401", "workId=999", StringComparison.Ordinal), previewTarget + "&answerId=501",
+            previewTarget + "&redirect=https%3A%2F%2Fevil.example", previewTarget.Replace("mooc1.chaoxing.com", "evil.example", StringComparison.Ordinal)
         })
         {
             var handler = new CaptureHandler(_ => new(HttpStatusCode.Found) { Headers = { Location = new(target) } });
@@ -94,7 +106,7 @@ internal static class TaskNavigationChecks
         }
 
         var root = Path.Combine(Path.GetTempPath(), "aggregate-navigation-" + Guid.NewGuid().ToString("N"));
-        var store = new TaskStore(Path.Combine(root, "tasks.db"));
+        var store = FixtureTaskStore.Create(Path.Combine(root, "tasks.db"));
         var now = DateTimeOffset.UtcNow;
         store.ImportWorks([new("合成任务", "未交", "剩余50小时", WorkListParser.ParseTaskLocation(Entry))], "合成课程", now);
         var task = store.LoadTasks().Single();
@@ -103,6 +115,8 @@ internal static class TaskNavigationChecks
         var navigation = new TaskNavigationService(store, (address, _) =>
         { resolves++; Check(address.OriginalString == Entry); return Task.FromResult(new TaskLinkResolution("ready", "answer", Target("dowork"))); }, opened.Add);
         Check((await navigation.OpenAsync(task.Id, CancellationToken.None)).Destination == "answer" && opened.Single() == Target("dowork"));
+        var previewNavigation = new TaskNavigationService(store, (_, _) => Task.FromResult(new TaskLinkResolution("ready", "preview", previewTarget)), opened.Add);
+        Check((await previewNavigation.OpenAsync(task.Id, CancellationToken.None)).Destination == "preview" && opened.Last() == previewTarget);
         Check(store.Get(task.Id) == baseline && resolves == 1); // Jumping does not complete, submit or edit a task.
         var fallback = new TaskNavigationService(store, (_, _) => Task.FromResult(new TaskLinkResolution("login_required", "none")), opened.Add);
         Check((await fallback.OpenAsync(task.Id, CancellationToken.None)).Destination == "login_required" && opened.Last() == Entry);
@@ -150,6 +164,16 @@ internal static class TaskNavigationChecks
         }
         Check(TaskNavigationRules.ActionName(task).Contains("提交", StringComparison.Ordinal)
             && TaskNavigationRules.ActionName(task with { State = TaskState.Completed }).Contains("查看", StringComparison.Ordinal));
+        foreach (var source in new[] { TaskSource.RainClassroom, TaskSource.Mooc, TaskSource.Xuetang, TaskSource.Zhihuishu })
+        {
+            var savedEntry = task with { Source = source, Overrides = TaskOverrides.None };
+            Check(TaskNavigationRules.ActionName(savedEntry) == "打开官方任务 ↗"
+                && TaskNavigationRules.ActionName(savedEntry with { State = TaskState.Completed }) == "打开官方任务 ↗");
+            Check(TaskNavigationRules.OpenHint(savedEntry).Contains("登录、核验", StringComparison.Ordinal));
+            Check(TaskNavigationRules.ActionName(savedEntry with { Link = null }) == "入口待核对"
+                && TaskNavigationRules.OpenHint(savedEntry with { Link = null }).Contains("尚未确认", StringComparison.Ordinal));
+        }
+        Check(!TaskNavigationRules.OpenMessage(new("opened", "entry")).Contains("做题 / 提交页面", StringComparison.Ordinal));
         Console.WriteLine($"PASS: {checks} task-specific external navigation, signed redirects, no answer-page reads, latest links and cancellation checks (synthetic data only).");
     }
 

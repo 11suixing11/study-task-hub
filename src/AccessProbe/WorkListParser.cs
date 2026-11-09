@@ -94,6 +94,9 @@ public static class WorkListParser
     // Used only to recognize and stop a redirect into answering; it does not authorize fetching this route.
     internal static WorkTaskLocation? ParseActionLocation(string? raw) => ParseLocation(raw, "/mooc-ans/mooc2/work/dowork");
 
+    // The official preview has work/course identity but no personal answer id; it is opened only by the user.
+    internal static WorkTaskLocation? ParsePreviewLocation(string? raw) => ParseLocation(raw, "/mooc-ans/mooc2/work/preview");
+
     private static WorkTaskLocation? ParseLocation(string? raw, params string[] paths)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;

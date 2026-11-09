@@ -11,28 +11,63 @@ public partial class App : Application
     private ChaoxingSyncService? sync;
     private MoocSyncService? moocSync;
     private MoocConnectionWindow? moocConnection;
+    private XuetangSyncService? xuetangSync;
+    private XuetangConnectionWindow? xuetangConnection;
     private readonly Dictionary<string, RainSyncService> rainServices = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RainConnectionWindow> rainConnections = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, MetadataSyncService> metadataServices = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, MetadataConnectionWindow> metadataConnections = new(StringComparer.Ordinal);
     private TaskStore? store;
     private bool exiting;
+    private Mutex? instanceMutex;
+    private bool instanceHeld;
 
     protected override void OnStartup(StartupEventArgs args)
     {
         base.OnStartup(args);
-        if (args.Args.Length is not (2 or 4) || args.Args[0] != "--project-root"
-            || args.Args.Length == 4 && (args.Args[2] != "--connect-platform" || args.Args[3] != MoocPlatform.Id && !RainPlatform.All.Any(platform => platform.Id == args.Args[3])))
+        if (args.Args.Length == 4 && args.Args[0] == "--import-project" && args.Args[2] == "--data-root")
         {
-            MessageBox.Show("请使用项目内“启动聚合平台.cmd”启动。", "启动参数缺失");
+            try { InstallationDataImport.Import(args.Args[1], args.Args[3]); Shutdown(); }
+            catch { Shutdown(12); }
+            return;
+        }
+        if (args.Args.Length == 2 && args.Args[0] == "--verify-installation")
+        {
+            try
+            {
+                var check = ApplicationPaths.Resolve(["--data-root", args.Args[1]], AppContext.BaseDirectory,
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+                var verifiedStore = new TaskStore(check.Database);
+                var resources = Resources.MergedDictionaries.Count;
+                File.WriteAllText(Path.Combine(check.Root, "installation-checks.json"),
+                    System.Text.Json.JsonSerializer.Serialize(new { outcome = "passed", installed = check.Installed,
+                        runtime = Environment.Version.ToString(), tasks = verifiedStore.LoadTasks().Count, resources,
+                        officialNetworkAccessed = false, productionDataAccessed = false }));
+                Shutdown();
+            }
+            catch { Shutdown(13); }
+            return;
+        }
+        ApplicationLocation location;
+        try
+        {
+            location = ApplicationPaths.Resolve(args.Args, AppContext.BaseDirectory,
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+            instanceMutex = new Mutex(false, location.InstanceMutex);
+            try { instanceHeld = instanceMutex.WaitOne(0); }
+            catch (AbandonedMutexException) { instanceHeld = true; }
+            if (!instanceHeld)
+            {
+                MessageBox.Show("聚合平台已在运行。请从托盘打开首页；更新版本前先点击首页“退出程序”。", "聚合平台已启动");
+                Shutdown(); return;
+            }
+        }
+        catch (TaskValidationException error)
+        {
+            MessageBox.Show(error.Code + "：" + error.Message, "启动失败");
             Shutdown(1); return;
         }
-        var root = Path.GetFullPath(args.Args[1]);
-        if (!File.Exists(Path.Combine(root, "NuGet.Config"))
-            || !File.Exists(Path.Combine(root, "scripts", "build.ps1"))
-            || !File.Exists(Path.Combine(root, "src", "AccessProbe", "AccessProbe.csproj")))
-        {
-            MessageBox.Show("无法确认项目目录，已停止以避免写入其他位置。", "目录检查失败");
-            Shutdown(1); return;
-        }
+        var root = location.Root;
         var temporary = Path.Combine(root, ".local", "temp");
         Directory.CreateDirectory(temporary);
         Environment.SetEnvironmentVariable("TEMP", temporary);
@@ -40,7 +75,7 @@ public partial class App : Application
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         try
         {
-            store = new TaskStore(Path.Combine(root, ".local", "data", "tasks.db"));
+            store = new TaskStore(location.Database);
             store.RefreshAutomaticMetadata(DateTimeOffset.UtcNow);
             dashboard = new TaskDashboardWindow(store, root, () => ShowConnection(root), ExitApplication);
             MainWindow = dashboard; dashboard.Show();
@@ -67,6 +102,16 @@ public partial class App : Application
             moocSync = new MoocSyncService(store, root,
                 (Microsoft.Web.WebView2.Wpf.WebView2)dashboard.FindName("MoocSessionBrowser"));
             dashboard.AttachMoocSync(moocSync); dashboard.AutomaticSyncSettingChanged += moocSync.SettingsChanged;
+            xuetangSync = new XuetangSyncService(store, root,
+                (Microsoft.Web.WebView2.Wpf.WebView2)dashboard.FindName("XuetangSessionBrowser"));
+            dashboard.AttachXuetangSync(xuetangSync); dashboard.AutomaticSyncSettingChanged += xuetangSync.SettingsChanged;
+            foreach (var platform in MetadataPlatform.Enabled)
+            {
+                var service = new MetadataSyncService(platform, store, root,
+                    (Microsoft.Web.WebView2.Wpf.WebView2)dashboard.FindName(MetadataBrowserName(platform.Id)));
+                metadataServices.Add(platform.Id, service); dashboard.AttachMetadataSync(service);
+                dashboard.AutomaticSyncSettingChanged += service.SettingsChanged;
+            }
             dashboard.PlatformConnectionRequested += ShowPlatformConnection;
             dashboard.Closed += (_, _) => { if (!exiting) ExitApplication(); };
             var settings = store.LoadSettings();
@@ -81,17 +126,19 @@ public partial class App : Application
                 sync?.StartAutomatic();
                 foreach (var service in rainServices.Values) service.StartAutomatic();
                 moocSync?.StartAutomatic();
-                if (args.Args.Length == 4) ShowPlatformConnection(args.Args[3]);
+                xuetangSync?.StartAutomatic();
+                foreach (var service in metadataServices.Values) service.StartAutomatic();
+                if (location.ConnectPlatform is { } platform) ShowPlatformConnection(platform);
             }));
         }
         catch (TaskValidationException error)
         {
-            MessageBox.Show(error.Code + "：" + error.Message + "\n请查看 README.md，先备份任务库后处理。", "本地数据加载失败");
+            MessageBox.Show(error.Code + "：" + error.Message + "\n请先备份任务库，并查看使用说明。", "本地数据加载失败");
             ExitApplication();
         }
         catch
         {
-            MessageBox.Show("DB001：无法加载本地任务库。请检查 .local/data 目录是否可写，先备份已有 tasks.db。", "本地数据加载失败");
+            MessageBox.Show("DB001：无法加载本地任务库。请检查数据目录是否可写，先备份已有 tasks.db。\n" + location.Database, "本地数据加载失败");
             ExitApplication();
         }
     }
@@ -111,6 +158,8 @@ public partial class App : Application
 
     private void ShowPlatformConnection(string platformId)
     {
+        if (metadataServices.ContainsKey(platformId)) { ShowMetadataConnection(platformId); return; }
+        if (platformId == XuetangPlatform.Id) { ShowXuetangConnection(); return; }
         if (platformId != MoocPlatform.Id) { ShowRainConnection(platformId); return; }
         if (exiting || dashboard is null || moocSync is null) return;
         if (moocConnection is null)
@@ -120,6 +169,32 @@ public partial class App : Application
         }
         else moocSync.ConnectionOpened();
         moocConnection.Show(); moocConnection.WindowState = WindowState.Normal; moocConnection.Activate();
+    }
+
+    private void ShowXuetangConnection()
+    {
+        if (exiting || dashboard is null || xuetangSync is null) return;
+        if (xuetangConnection is null)
+        {
+            xuetangConnection = new XuetangConnectionWindow(xuetangSync, () => dashboard.ShowDashboard());
+            xuetangConnection.Closed += (_, _) => xuetangConnection = null;
+        }
+        else xuetangSync.ConnectionOpened();
+        xuetangConnection.Show(); xuetangConnection.WindowState = WindowState.Normal; xuetangConnection.Activate();
+    }
+
+    private static string MetadataBrowserName(string platformId) => platformId switch
+    { "ucampus" => "UcampusSessionBrowser", "fif" => "FifSessionBrowser", "pta" => "PtaSessionBrowser", _ => "ZhihuishuSessionBrowser" };
+    private void ShowMetadataConnection(string platformId)
+    {
+        if (exiting || dashboard is null || !metadataServices.TryGetValue(platformId, out var service)) return;
+        if (!metadataConnections.TryGetValue(platformId, out var window))
+        {
+            window = new MetadataConnectionWindow(service, () => dashboard.ShowDashboard());
+            metadataConnections.Add(platformId, window); window.Closed += (_, _) => metadataConnections.Remove(platformId);
+        }
+        else service.ConnectionOpened();
+        window.Show(); window.WindowState = WindowState.Normal; window.Activate();
     }
 
     private void ShowConnection(string root)
@@ -147,12 +222,31 @@ public partial class App : Application
         }
         connectionWindow?.Close();
         moocConnection?.Close();
+        xuetangConnection?.Close();
+        foreach (var window in metadataConnections.Values.ToArray()) window.Close();
         foreach (var window in rainConnections.Values.ToArray()) window.Close();
-        foreach (var service in rainServices.Values) service.Dispose(); rainServices.Clear();
+        foreach (var service in rainServices.Values)
+        {
+            if (!await service.SaveForExitAsync()) dashboard?.ShowError("SESSION001", service.Platform.Name + "登录未能保存，下次可能需要重新登录。");
+            service.Dispose();
+        }
+        rainServices.Clear();
         if (moocSync is not null && !await moocSync.SaveForExitAsync())
             MessageBox.Show("MOOC004：MOOC 登录状态未能保存，下次启动可能需要重新登录。已有任务已保留。",
                 "登录状态保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
         moocSync?.Dispose(); moocSync = null;
+        if (xuetangSync is not null && !await xuetangSync.SaveForExitAsync())
+            MessageBox.Show("XT004：学堂在线登录状态未能保存，下次启动可能需要重新登录。已有任务已保留。",
+                "登录状态保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        xuetangSync?.Dispose(); xuetangSync = null;
+        foreach (var service in metadataServices.Values)
+        {
+            if (!await service.SaveForExitAsync())
+                MessageBox.Show(service.Platform.CodePrefix + "004：" + service.Platform.Name + "登录状态未能保存，下次启动可能需要重新登录。已有任务保留。",
+                    "登录状态保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            service.Dispose();
+        }
+        metadataServices.Clear();
         if (sync is not null && !await sync.SaveForExitAsync())
             MessageBox.Show("SESSION001：登录状态未能保存到本地，下次启动可能需要重新登录。任务已保留；请检查项目目录是否可写。",
                 "登录状态保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -163,6 +257,9 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs args)
     {
-        sync?.Dispose(); moocSync?.Dispose(); foreach (var service in rainServices.Values) service.Dispose(); reminders?.Dispose(); base.OnExit(args);
+        sync?.Dispose(); moocSync?.Dispose(); xuetangSync?.Dispose(); foreach (var service in rainServices.Values) service.Dispose();
+        foreach (var service in metadataServices.Values) service.Dispose(); reminders?.Dispose(); base.OnExit(args);
+        if (instanceHeld) { instanceMutex?.ReleaseMutex(); instanceHeld = false; }
+        instanceMutex?.Dispose(); instanceMutex = null;
     }
 }

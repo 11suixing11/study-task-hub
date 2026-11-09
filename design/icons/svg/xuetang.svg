@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img">
+<title>学堂在线</title>
+<defs><linearGradient id="tile" x1="10%" y1="0%" x2="90%" y2="100%">
+<stop offset="0%" stop-color="#C292FF"/>
+<stop offset="50%" stop-color="#9665F4"/>
+<stop offset="100%" stop-color="#6B43D7"/>
+</linearGradient></defs>
+<path d="M 9 1 H 23 C 28.4 1 31 3.6 31 9 V 23 C 31 28.4 28.4 31 23 31 H 9 C 3.6 31 1 28.4 1 23 V 9 C 1 3.6 3.6 1 9 1 Z" fill="url(#tile)" stroke="#0C284D" stroke-opacity="0.125" stroke-width="0.45"/>
+<path d="M 2 10 C 2 4.6 4.6 2 10 2 H 22 C 27.4 2 30 4.6 30 10" fill="none" stroke="white" stroke-opacity="0.333" stroke-width="0.65"/>
+<path d="M 8.5 7.5 H 23.5 Q 26 7.5 26 10 V 20 Q 26 22.5 23.5 22.5 H 8.5 Q 6 22.5 6 20 V 10 Q 6 7.5 8.5 7.5 Z M 16 22.5 V 26 M 11 26 H 21" fill-rule="evenodd" fill="none" stroke="#FFFFFF" stroke-width="1.8" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 13 11.5 L 20 15 L 13 18.5 Z" fill-rule="evenodd" fill="#FFFFFF" stroke="none" stroke-width="1.9" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

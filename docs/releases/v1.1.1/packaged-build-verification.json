@@ -1,0 +1,116 @@
+{
+  "schema": 1,
+  "version": "20261106-184644-b9a71520",
+  "verifiedAtUtc": "2026-11-06T18:53:30.1940102+00:00",
+  "outcome": "passed",
+  "projects": 11,
+  "businessChecks": 2996,
+  "businessCategories": [
+    {
+      "checks": 25,
+      "scope": "installed/project data locations, argument validation, process isolation and help checks (synthetic only)."
+    },
+    {
+      "checks": 9,
+      "scope": "read-only legacy snapshot, WAL import, encrypted archive copy and existing-data preservation checks (synthetic only)."
+    },
+    {
+      "checks": 15,
+      "scope": "navigation and metadata policy checks."
+    },
+    {
+      "checks": 113,
+      "scope": "synthetic notice parsing and HTTP checks; no account accessed."
+    },
+    {
+      "checks": 33,
+      "scope": "synthetic work-list HTML and task-link checks; no account accessed."
+    },
+    {
+      "checks": 32,
+      "scope": "synthetic work-detail and year-ambiguity checks; no account accessed."
+    },
+    {
+      "checks": 28,
+      "scope": "synthetic loaded-page snapshot checks; no account accessed."
+    },
+    {
+      "checks": 29,
+      "scope": "HTTPS navigation upgrade and redirect-loop checks; synthetic URLs only."
+    },
+    {
+      "checks": 8,
+      "scope": "secret-free navigation classification checks."
+    },
+    {
+      "checks": 89,
+      "scope": "task persistence, import, state, local protection and reminder checks (synthetic data only)."
+    },
+    {
+      "checks": 71,
+      "scope": "platform-state mapping, automatic dates, visible estimates, priorities, manual preservation and migration checks (synthetic data only)."
+    },
+    {
+      "checks": 78,
+      "scope": "task-specific external navigation, signed redirects, no answer-page reads, latest links and cancellation checks (synthetic data only)."
+    },
+    {
+      "checks": 140,
+      "scope": "automatic course discovery, background import, session expiry, cancellation and read-only HTTP checks (synthetic data only)."
+    },
+    {
+      "checks": 59,
+      "scope": "encrypted session, cookie renewal and scope checks."
+    },
+    {
+      "checks": 282,
+      "scope": "rain/changjiang metadata, isolated storage, paging, transport and direct-link checks."
+    },
+    {
+      "checks": 143,
+      "scope": "MOOC metadata, pagination, task-link, merge and protected-session checks."
+    },
+    {
+      "checks": 160,
+      "scope": "course recording, platform isolation, catalog-only refresh, excluded-request, retained-task and reminder checks (synthetic only)."
+    },
+    {
+      "checks": 155,
+      "scope": "Xuetang official-contract metadata, paging, delayed deadlines, isolation, cancellation and protected-session checks (synthetic only)."
+    },
+    {
+      "checks": 1292,
+      "scope": "Zhihuishu shared/flip/smart lists and AI catalogs, legacy Unipus homework and exams, login diagnostics, FiF disabled, encryption, account isolation, paging, manual preservation and read-only HTTP checks (synthetic only)."
+    },
+    {
+      "checks": 75,
+      "scope": "all-platform encrypted cookie persistence, replacement, expiry, isolation and legacy migration checks (synthetic only)."
+    },
+    {
+      "checks": 160,
+      "scope": "PTA teaching-course, problem-set, session, pagination and navigation checks; synthetic metadata only."
+    }
+  ],
+  "syncStatusChecks": 40,
+  "desktopChecks": {
+    "dashboardUi": 77,
+    "automaticSync": 34,
+    "taskNavigation": 12,
+    "sessionRaces": 13,
+    "chaoxingProcessRestarts": 77,
+    "rainAndUnifiedDashboard": 95,
+    "moocAndCourseSelection": 107,
+    "moocProcessRestarts": 81,
+    "xuetangAndUnifiedDashboard": 71,
+    "xuetangProcessRestarts": 81,
+    "otherPlatformConnections": 254,
+    "otherPlatformProcessRestarts": 136,
+    "ptaAndTeachingCourses": 51,
+    "ptaProcessRestarts": 73,
+    "total": 1162
+  },
+  "data": "synthetic_only",
+  "network": "local_handlers_and_webview_fixtures_only",
+  "externalBrowser": "captured_without_launch",
+  "officialWindowAcceptance": "pending"
+}

@@ -1,0 +1,26 @@
+{
+  "status": "no-issues-detected",
+  "exitCode": 0,
+  "scopes": [
+    {
+      "selector": ".wb-host",
+      "findings": [],
+      "checked": {
+        "controls": 24,
+        "paddedContainers": 4,
+        "compositionCrops": 0
+      },
+      "deferred": [],
+      "manual": [
+        "This snapshot checks box fit and authored insets; inspect optical centering, shape contours, interaction states and motion visually."
+      ]
+    }
+  ],
+  "errors": [],
+  "manualReviewRequired": true,
+  "viewport": {
+    "width": 358,
+    "height": 1000
+  },
+  "url": "http://127.0.0.1:4280/?workbench"
+}

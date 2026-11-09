@@ -65,7 +65,7 @@ internal static class SessionRestartChecks
                 new MemoryStream(), 403, "Offline Only", "Cache-Control: no-store\r\n");
         };
         var window = new Window { Title = "学习通会话重启离线验收", Width = 320, Height = 140, Content = browser, ShowInTaskbar = false };
-        var store = new TaskStore(Path.Combine(root, "tasks.db"));
+        var store = FixtureTaskStore.Create(Path.Combine(root, "tasks.db"));
         store.SaveSettings(new(false, true));
         var transport = new FixtureHandler(phase);
         var service = new ChaoxingSyncService(store, root, browser, () => transport);
@@ -83,7 +83,7 @@ internal static class SessionRestartChecks
             {
                 environment = await service.GetLoginEnvironmentAsync();
                 var manager = browser.CoreWebView2.CookieManager;
-                var archive = new ChaoxingSessionStore(Path.Combine(root, ".local", "sessions", "chaoxing.bin"));
+                var archive = new ChaoxingSessionStore(Path.Combine(root, ".local", "sessions", "chaoxing.bin"), store);
                 recovery = service.SessionRecoveryOutcome;
                 if (phase == "seed")
                 {

@@ -34,6 +34,10 @@ public sealed partial class TaskStore
                 id TEXT PRIMARY KEY, revision INTEGER NOT NULL,
                 source_key TEXT UNIQUE, payload TEXT NOT NULL, protected_link BLOB);
             CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS platform_sessions(
+                platform_id TEXT PRIMARY KEY, protected_cookies BLOB,
+                saved_utc INTEGER, checked_utc INTEGER,
+                state TEXT NOT NULL DEFAULT 'saved');
             CREATE TABLE IF NOT EXISTS reminders(
                 id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
                 kind INTEGER NOT NULL, due_utc INTEGER NOT NULL, deadline_utc INTEGER,
@@ -377,7 +381,8 @@ public sealed partial class TaskStore
     private static void Reconcile(SqliteConnection connection, SqliteTransaction transaction, TaskItem task, DateTimeOffset now)
     {
         var recording = ReadCourseRecording(connection, transaction, task.PlatformId);
-        var recorded = CourseRecordingRules.IsSelected(recording, CourseRecordingRules.TaskCourseKey(task));
+        var recorded = task.Source == TaskSource.Manual && !recording.SelectionConfirmed
+            || CourseRecordingRules.IsSelected(recording, CourseRecordingRules.TaskCourseKey(task));
         var plans = recorded ? ReminderPlanner.TimedPlans(task, now) : [];
         using var command = Command(connection, transaction, "SELECT id,kind FROM reminders WHERE task_id=$task AND state!='requested';", ("$task", task.Id));
         var obsolete = new List<string>();
@@ -415,7 +420,8 @@ public sealed partial class TaskStore
             {
                 var task = Find(connection, transaction, "id", plan.TaskId);
                 if (task is null || !ReminderPlanner.IsCurrent(plan, task, now)
-                    || !CourseRecordingRules.IsSelected(ReadCourseRecording(connection, transaction, task.PlatformId), CourseRecordingRules.TaskCourseKey(task)))
+                    || !(task.Source == TaskSource.Manual && !ReadCourseRecording(connection, transaction, task.PlatformId).SelectionConfirmed
+                        || CourseRecordingRules.IsSelected(ReadCourseRecording(connection, transaction, task.PlatformId), CourseRecordingRules.TaskCourseKey(task))))
                 { Execute(connection, transaction, "DELETE FROM reminders WHERE id=$id;", ("$id", plan.Id)); continue; }
                 Execute(connection, transaction, "UPDATE reminders SET state='processing',lease_until_utc=$lease,attempts=attempts+1 WHERE id=$id;",
                     ("$lease", now.AddMinutes(2).ToUnixTimeMilliseconds()), ("$id", plan.Id));

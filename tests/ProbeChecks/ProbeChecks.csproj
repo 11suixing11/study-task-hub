@@ -12,6 +12,10 @@
     <PackageReference Include="AngleSharp" Version="1.8.5" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="../XuetangFixtures.cs" Link="XuetangFixtures.cs" />
+    <Compile Include="../MetadataFixtures.cs" Link="MetadataFixtures.cs" />
+    <Compile Include="../UcampusFixtures.cs" Link="UcampusFixtures.cs" />
+    <Compile Include="../PtaFixtures.cs" Link="PtaFixtures.cs" />
     <Compile Include="../../src/AccessProbe/ProbePolicy.cs" Link="ProbePolicy.cs" />
     <Compile Include="../../src/AccessProbe/HttpsUpgradeChain.cs" Link="HttpsUpgradeChain.cs" />
     <Compile Include="../../src/AccessProbe/NoticeReader.cs" Link="NoticeReader.cs" />
@@ -29,6 +33,8 @@
     <Compile Include="../../src/AccessProbe/TaskNavigation.cs" Link="TaskNavigation.cs" />
     <Compile Include="../../src/AccessProbe/ChaoxingTaskMetadata.cs" Link="ChaoxingTaskMetadata.cs" />
     <Compile Include="../../src/AccessProbe/TaskStore.cs" Link="TaskStore.cs" />
+    <Compile Include="../../src/AccessProbe/TaskStore.PlatformSessions.cs" Link="TaskStore.PlatformSessions.cs" />
+    <Compile Include="../../src/AccessProbe/PlatformSessionArchive.cs" Link="PlatformSessionArchive.cs" />
     <Compile Include="../../src/AccessProbe/TaskStore.Platforms.cs" Link="TaskStore.Platforms.cs" />
     <Compile Include="../../src/AccessProbe/TaskStore.Mooc.cs" Link="TaskStore.Mooc.cs" />
     <Compile Include="../../src/AccessProbe/MoocDomain.cs" Link="MoocDomain.cs" />
@@ -37,12 +43,48 @@
     <Compile Include="../../src/AccessProbe/MoocHttpReader.cs" Link="MoocHttpReader.cs" />
     <Compile Include="../../src/AccessProbe/MoocSessionStore.cs" Link="MoocSessionStore.cs" />
     <Compile Include="../../src/AccessProbe/MoocSynchronizer.cs" Link="MoocSynchronizer.cs" />
+    <Compile Include="../../src/AccessProbe/XuetangDomain.cs" Link="XuetangDomain.cs" />
+    <Compile Include="../../src/AccessProbe/XuetangLoginDiagnostics.cs" Link="XuetangLoginDiagnostics.cs" />
+    <Compile Include="../../src/AccessProbe/XuetangParser.cs" Link="XuetangParser.cs" />
+    <Compile Include="../../src/AccessProbe/XuetangTaskNavigation.cs" Link="XuetangTaskNavigation.cs" />
+    <Compile Include="../../src/AccessProbe/XuetangHttpReader.cs" Link="XuetangHttpReader.cs" />
+    <Compile Include="../../src/AccessProbe/XuetangSessionStore.cs" Link="XuetangSessionStore.cs" />
+    <Compile Include="../../src/AccessProbe/XuetangSynchronizer.cs" Link="XuetangSynchronizer.cs" />
+    <Compile Include="../../src/AccessProbe/TaskStore.Xuetang.cs" Link="TaskStore.Xuetang.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataPlatformDomain.cs" Link="MetadataPlatformDomain.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataLoginDiagnostics.cs" Link="MetadataLoginDiagnostics.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataFailureText.cs" Link="MetadataFailureText.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataPlatformParser.cs" Link="MetadataPlatformParser.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataPlatformParser.Ucampus.cs" Link="MetadataPlatformParser.Ucampus.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataPlatformParser.UcampusUnits.cs" Link="MetadataPlatformParser.UcampusUnits.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataPlatformParser.ZhihuishuLists.cs" Link="MetadataPlatformParser.ZhihuishuLists.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataPlatformParser.ZhihuishuSmart.cs" Link="MetadataPlatformParser.ZhihuishuSmart.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataPlatformParser.Pta.cs" Link="MetadataPlatformParser.Pta.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataTaskNavigation.cs" Link="MetadataTaskNavigation.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataTaskNavigation.ZhihuishuSmart.cs" Link="MetadataTaskNavigation.ZhihuishuSmart.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataTaskNavigation.Ucampus.cs" Link="MetadataTaskNavigation.Ucampus.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataTaskNavigation.UcampusUnits.cs" Link="MetadataTaskNavigation.UcampusUnits.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataTaskNavigation.Pta.cs" Link="MetadataTaskNavigation.Pta.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataSessionStore.cs" Link="MetadataSessionStore.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataHttpReader.cs" Link="MetadataHttpReader.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataHttpReader.Ucampus.cs" Link="MetadataHttpReader.Ucampus.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataHttpReader.ZhihuishuSession.cs" Link="MetadataHttpReader.ZhihuishuSession.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataHttpReader.Pta.cs" Link="MetadataHttpReader.Pta.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataSynchronizer.cs" Link="MetadataSynchronizer.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataSynchronizer.Ucampus.cs" Link="MetadataSynchronizer.Ucampus.cs" />
+    <Compile Include="../../src/AccessProbe/MetadataSynchronizer.Pta.cs" Link="MetadataSynchronizer.Pta.cs" />
+    <Compile Include="../../src/AccessProbe/ZhihuishuMetadataCrypto.cs" Link="ZhihuishuMetadataCrypto.cs" />
+    <Compile Include="../../src/AccessProbe/TaskStore.Metadata.cs" Link="TaskStore.Metadata.cs" />
     <Compile Include="../../src/AccessProbe/RainClassroomDomain.cs" Link="RainClassroomDomain.cs" />
     <Compile Include="../../src/AccessProbe/RainClassroomParser.cs" Link="RainClassroomParser.cs" />
     <Compile Include="../../src/AccessProbe/RainHttpReader.cs" Link="RainHttpReader.cs" />
+    <Compile Include="../../src/AccessProbe/RainSessionStore.cs" Link="RainSessionStore.cs" />
     <Compile Include="../../src/AccessProbe/RainSynchronizer.cs" Link="RainSynchronizer.cs" />
     <Compile Include="../../src/AccessProbe/RainTaskNavigation.cs" Link="RainTaskNavigation.cs" />
     <Compile Include="../../src/AccessProbe/LocalLinkProtector.cs" Link="LocalLinkProtector.cs" />
     <Compile Include="../../src/AccessProbe/ReminderPlanner.cs" Link="ReminderPlanner.cs" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../FixtureTaskStore.cs" Link="FixtureTaskStore.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../src/AccessProbe/ApplicationPaths.cs" Link="ApplicationPaths.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../src/AccessProbe/InstallationDataImport.cs" Link="InstallationDataImport.cs" /></ItemGroup>
 </Project>

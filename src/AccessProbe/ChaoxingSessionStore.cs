@@ -46,32 +46,33 @@ public sealed class ChaoxingSessionStore
     public static readonly TimeSpan MaximumAge = TimeSpan.FromDays(30);
     private const int MaximumBytes = 2 * 1024 * 1024;
     private static readonly byte[] Entropy = SHA256.HashData(Encoding.UTF8.GetBytes("LearningTaskAggregator.chaoxing-session.v1"));
-    private readonly string path;
+    private readonly PlatformSessionArchive archive;
     public string LastLoadOutcome { get; private set; } = "not_loaded";
     private sealed record Snapshot(int Schema, DateTimeOffset SavedAtUtc, ChaoxingSessionCookie[] Cookies);
 
-    public ChaoxingSessionStore(string path) => this.path = System.IO.Path.GetFullPath(path);
+    public ChaoxingSessionStore(string path, TaskStore? repository = null) => archive = new("chaoxing", System.IO.Path.GetFullPath(path), repository);
 
     public IReadOnlyList<ChaoxingSessionCookie> Load(DateTimeOffset now)
     {
         if (!OperatingSystem.IsWindows()) { LastLoadOutcome = "unavailable"; return []; }
-        if (!File.Exists(path)) { LastLoadOutcome = "not_saved"; return []; }
         byte[]? plain = null;
         try
         {
-            if (new FileInfo(path).Length > MaximumBytes) { LastLoadOutcome = "invalid"; return []; }
-            plain = ProtectedData.Unprotect(File.ReadAllBytes(path), Entropy, DataProtectionScope.CurrentUser);
+            var bytes = archive.Read();
+            if (bytes is null) { LastLoadOutcome = "not_saved"; return []; }
+            plain = ProtectedData.Unprotect(bytes, Entropy, DataProtectionScope.CurrentUser);
             if (plain.Length > MaximumBytes) { LastLoadOutcome = "invalid"; return []; }
             var snapshot = JsonSerializer.Deserialize<Snapshot>(plain);
             if (snapshot is null || snapshot.Schema != 1 || snapshot.Cookies is null
                 || snapshot.Cookies.Length > MaximumCookies || snapshot.SavedAtUtc > now.AddMinutes(5))
             { LastLoadOutcome = "invalid"; return []; }
-            if (snapshot.SavedAtUtc < now - MaximumAge) { LastLoadOutcome = "too_old"; return []; }
+            if (!archive.UsesRepository && snapshot.SavedAtUtc < now - MaximumAge) { LastLoadOutcome = "too_old"; return []; }
             if (snapshot.Cookies.Any(cookie => !IsValid(cookie))) { LastLoadOutcome = "invalid"; return []; }
             var cookies = snapshot.Cookies.Where(cookie => !cookie.IsExpired(now)).DistinctBy(cookie => cookie.Key).ToArray();
             LastLoadOutcome = cookies.Length == 0 ? "expired_or_empty" : "available";
             return cookies;
         }
+        catch (InvalidDataException) { LastLoadOutcome = "invalid"; return []; }
         catch (Exception error) when (error is CryptographicException or JsonException or IOException or UnauthorizedAccessException)
         { LastLoadOutcome = "unavailable"; return []; }
         finally { if (plain is not null) CryptographicOperations.ZeroMemory(plain); }
@@ -85,24 +86,20 @@ public sealed class ChaoxingSessionStore
         if (cookies.Length > MaximumCookies) throw new InvalidDataException("Session cookie limit exceeded.");
         if (cookies.Length == 0) { Clear(); return; }
         var plain = JsonSerializer.SerializeToUtf8Bytes(new Snapshot(1, now, cookies));
-        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             if (plain.Length > MaximumBytes) throw new InvalidDataException("Session archive limit exceeded.");
             var protectedBytes = ProtectedData.Protect(plain, Entropy, DataProtectionScope.CurrentUser);
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
-            File.WriteAllBytes(temporary, protectedBytes);
-            if (File.Exists(path)) File.Replace(temporary, path, null);
-            else File.Move(temporary, path);
+            archive.Write(protectedBytes, now);
         }
         finally
         {
             CryptographicOperations.ZeroMemory(plain);
-            if (File.Exists(temporary)) File.Delete(temporary);
         }
     }
 
-    public void Clear() { if (File.Exists(path)) File.Delete(path); }
+    public void Clear() => archive.Clear();
+    public void Invalidate(DateTimeOffset now) => archive.Invalidate(now);
 
     public static bool IsValid(ChaoxingSessionCookie? cookie)
     {
@@ -139,6 +136,13 @@ public static class ChaoxingResponseCookies
     public static IReadOnlyList<ChaoxingSessionCookie> Parse(Uri address, IEnumerable<string> headers, DateTimeOffset now)
     {
         if (address.Scheme != Uri.UriSchemeHttps || !ProbePolicy.IsAllowedNavigation(address.AbsoluteUri)) return [];
+        return Parse(address, headers, now, ChaoxingSessionStore.IsValid);
+    }
+
+    internal static IReadOnlyList<ChaoxingSessionCookie> Parse(Uri address, IEnumerable<string> headers, DateTimeOffset now,
+        Func<ChaoxingSessionCookie?, bool> isValid)
+    {
+        if (address.Scheme != Uri.UriSchemeHttps) return [];
         var result = new Dictionary<string, ChaoxingSessionCookie>(StringComparer.Ordinal);
         foreach (var header in headers.Take(128))
         {
@@ -184,7 +188,7 @@ public static class ChaoxingResponseCookies
                 {
                     if (maxAge is { } age) expires = age <= 0 ? now.AddSeconds(-1) : now.AddSeconds(age);
                     var cookie = new ChaoxingSessionCookie(name, value, domain, path, secure, httpOnly, expires, sameSite);
-                    if (!ChaoxingSessionStore.IsValid(cookie)) continue;
+                    if (!isValid(cookie)) continue;
                     // CookieContainer validates that a response cannot set another host's cookie.
                     var scope = new CookieContainer(); scope.Add(address, cookie.ToCookie());
                     result[cookie.Key] = cookie;

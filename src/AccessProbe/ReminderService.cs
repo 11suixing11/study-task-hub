@@ -10,6 +10,7 @@ public sealed class ReminderService : IDisposable
 {
     private readonly TaskStore store;
     private readonly Forms.NotifyIcon tray;
+    private readonly Icon trayIcon;
     private readonly DispatcherTimer timer;
     private readonly Action showWindow;
     private bool disposed;
@@ -21,7 +22,8 @@ public sealed class ReminderService : IDisposable
     {
         this.store = store; this.showWindow = showWindow;
         store.Changed += StoreChanged;
-        tray = new Forms.NotifyIcon { Icon = SystemIcons.Information, Text = "学习任务聚合 · 提醒运行中", Visible = true };
+        trayIcon = new Icon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Icons", "app.ico"), Forms.SystemInformation.SmallIconSize);
+        tray = new Forms.NotifyIcon { Icon = trayIcon, Text = "学习任务聚合 · 提醒运行中", Visible = true };
         tray.DoubleClick += (_, _) => showWindow();
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("打开任务清单", null, (_, _) => showWindow());
@@ -85,5 +87,6 @@ public sealed class ReminderService : IDisposable
         store.Changed -= StoreChanged;
         timer.Stop(); tray.Visible = false;
         tray.ContextMenuStrip?.Dispose(); tray.Dispose();
+        trayIcon.Dispose();
     }
 }

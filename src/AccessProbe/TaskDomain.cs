@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace AccessProbe;
 
 public enum TaskState { Pending, Completed, Ignored, Returned, NeedsReview }
-public enum TaskSource { Manual = 0, Chaoxing = 1, RainClassroom = 2, Mooc = 3 }
+public enum TaskSource { Manual = 0, Chaoxing = 1, RainClassroom = 2, Mooc = 3, Xuetang = 4, Ucampus = 5, Fif = 6, Zhihuishu = 7, Pta = 8 }
 public enum DeadlineKind { Unknown, Known, None }
 [Flags]
 public enum TaskOverrides { None = 0, Title = 1, Course = 2, Deadline = 4, Link = 8, Progress = 16, Priority = 32, Begin = 64, State = 128, Score = 256 }
@@ -36,6 +36,7 @@ public sealed record TaskItem
     public string PlatformStatusText { get; init; } = "";
     public string PlatformStateEvidence { get; init; } = "";
     public string AutomaticStatusExplanation { get; init; } = "";
+    public string CollectedLearningEvidence { get; init; } = "";
     public string CollectedNavigationKey { get; init; } = "";
     public string DisplayedTimeText { get; init; } = "";
     public string DetailTimeText { get; init; } = "";
@@ -61,6 +62,7 @@ public sealed record TaskDraft(
 public sealed record AppSettings(bool NotificationsEnabled = true, bool DisclaimerSeen = false)
 {
     public bool AutomaticSyncEnabled { get; init; } = true;
+    public bool ChaoxingAutomaticSyncEnabled { get; init; } = true;
     public DateTimeOffset? LastSyncAtUtc { get; init; }
     public string LastSyncOutcome { get; init; } = "not_started";
     public ChaoxingSyncSummary? LastSyncSummary { get; init; }
@@ -72,14 +74,15 @@ public static class PlatformCatalog
 {
     public static readonly IReadOnlyList<PlatformSite> Sites =
     [
-        new("mooc", "中国大学 MOOC", "icourse163.org", "官方手机号 / 邮箱 / 微信登录", "登录后自动同步课程、作业、测验及考试；覆盖范围以同步详情为准"),
-        new("chaoxing", "学习通", "chaoxing.com / xuexitong.com", "官方扫码 / 账号登录", "后台发现课程并同步作业；覆盖范围以最近同步结果为准"),
-        new("changjiang", "长江雨课堂", "changjiang.yuketang.cn", "官方扫码 / 账号登录", "登录后自动采集课程、作业与测验；实际覆盖范围见同步详情"),
-        new("yuketang", "雨课堂", "www.yuketang.cn / pro.yuketang.cn", "官方扫码 / 账号登录", "登录后自动采集课程、作业与测验；实际覆盖范围见同步详情"),
-        new("ucampus", "U 校园", "u.unipus.cn", "官方登录", "可手动录入；自动采集未适配"),
-        new("fif", "Fi 口语", "fifedu.com", "官方登录", "可手动录入；自动采集未适配"),
-        new("xuetang", "学堂在线", "xuetangx.com", "官方登录", "可手动录入；自动采集未适配"),
-        new("zhihuishu", "智慧树", "zhihuishu.com", "官方登录", "可手动录入；自动采集未适配")
+        new("mooc", "中国大学 MOOC", "icourse163.org", "官方手机号 / 邮箱 / 微信登录", "先选择课程，再采集作业、测验及考试；覆盖范围以同步详情为准"),
+        new("chaoxing", "学习通", "chaoxing.com / xuexitong.com", "官方扫码 / 账号登录", "先选择课程，再同步已选课程作业；覆盖范围以最近同步结果为准"),
+        new("changjiang", "长江雨课堂", "changjiang.yuketang.cn", "官方扫码 / 账号登录", "先选择课程，再采集作业与测验；实际覆盖范围见同步详情"),
+        new("yuketang", "雨课堂", "www.yuketang.cn / pro.yuketang.cn", "官方扫码 / 账号登录", "先选择课程，再采集作业与测验；实际覆盖范围见同步详情"),
+        new("ucampus", "U 校园", "u.unipus.cn", "官方登录", "先选择班课，再采集作业、测试与单元截止日期和必学进度；特殊课件的覆盖情况见同步详情"),
+        new("fif", "Fi 口语", "fifedu.com", "手动记录", "FiF 暂不适配；已有任务保留，可继续手动记录"),
+        new("xuetang", "学堂在线", "www.xuetangx.com", "官方登录", "先选择课程，再采集新版主站普通课程的练习与考试；旧版、多课项目暂未覆盖"),
+        new("zhihuishu", "智慧树", "zhihuishu.com", "官方登录", "先列出翻转课、共享课、智慧课程及 AI 智课，保存选择后采集已支持的作业、考试；其他学习任务与旧版课程的限制见同步详情"),
+        new("pta", "PTA", "pintia.cn", "官方登录", "先选择教学课程，再同步题目集、答卷状态与截止时间；互评和特殊题目集需核对")
     ];
     public static string Name(string id) => Sites.FirstOrDefault(site => site.Id == id)?.Name ?? id;
 }

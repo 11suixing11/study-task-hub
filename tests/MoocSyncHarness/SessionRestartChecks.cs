@@ -52,9 +52,9 @@ internal static class SessionRestartChecks
         var fixture = new Fixtures { ExpectedToken = phase == "seed" ? "synthetic-seed" : "synthetic-renewed", RenewNext = phase == "seed", RejectRpc = phase == "reject" };
         fixture.BlockBrowser(browser);
         var window = new Window { Title = "MOOC 会话重启合成验收", Width = 320, Height = 140, Content = browser, ShowInTaskbar = false };
-        var store = new TaskStore(Path.Combine(root, "tasks.db")); store.SaveSettings(new(false, true)); store.SaveMoocSettings(new() { Connected = true });
+        var store = FixtureTaskStore.Create(Path.Combine(root, "tasks.db")); store.SaveSettings(new(false, true)); store.SaveMoocSettings(new() { Connected = true });
         var service = new MoocSyncService(store, root, browser, fixture.CreateHandler);
-        var archive = new MoocSessionStore(Path.Combine(root, ".local", "sessions", "mooc.bin"));
+        var archive = new MoocSessionStore(Path.Combine(root, ".local", "sessions", "mooc.bin"), store);
         var checks = 0; string? failure = null, recovery = null, persistence = null; var exited = false;
         void Check(bool condition, string label) { if (!condition) throw new InvalidOperationException(label); checks++; }
         window.Loaded += async (_, _) =>

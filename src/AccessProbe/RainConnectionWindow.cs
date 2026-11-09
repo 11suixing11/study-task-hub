@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -13,7 +13,7 @@ public sealed class RainConnectionWindow : Window
     private readonly WebView2 browser = new();
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray };
     private readonly ComboBox hostChoice = new() { MinWidth = 210, Padding = new Thickness(8, 5, 8, 5) };
-    private readonly Button login = new() { Content = "打开官方登录", Padding = new Thickness(14, 7, 14, 7), IsEnabled = false };
+    private readonly Button login = new Wpf.Ui.Controls.Button { Content = "打开官方登录", Appearance = Wpf.Ui.Controls.ControlAppearance.Primary, Padding = new Thickness(14, 7, 14, 7), IsEnabled = false };
     private bool initialized;
     private bool closing;
     private bool changingHost;
@@ -24,13 +24,15 @@ public sealed class RainConnectionWindow : Window
         Title = "连接" + service.Platform.Name + " · 官方登录";
         Width = 1080; Height = 820; MinWidth = 780; MinHeight = 600;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        FontFamily = new FontFamily("Microsoft YaHei UI"); FontSize = 13;
+        FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI"); FontSize = 13;
+        Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/AccessProbe;component/FluentTheme.xaml", UriKind.Relative) });
+        SetResourceReference(BackgroundProperty, "CanvasBrush");
         var root = new DockPanel { Margin = new Thickness(18) };
         var header = new StackPanel(); DockPanel.SetDock(header, Dock.Top);
         header.Children.Add(new TextBlock { Text = "连接" + service.Platform.Name, FontSize = 24, FontWeight = FontWeights.SemiBold });
         header.Children.Add(new TextBlock
         {
-            Text = "请在下方官方页面完成登录。登录后自动读取课程与任务，可回到清单查看；做题和提交通过系统浏览器进入官方页面。",
+            Text = "请在下方官方页面完成登录。登录后保存 Cookie 并返回课程列表；在平台管理窗口保存选择后采集任务，做题和提交通过系统浏览器进入官方页面。",
             TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 8, 0, 12)
         });
         var buttons = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
@@ -41,9 +43,9 @@ public sealed class RainConnectionWindow : Window
         hostChoice.Visibility = service.Platform.Hosts.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
         buttons.Children.Add(hostChoice); buttons.Children.Add(login);
         login.Click += (_, _) => NavigateLogin();
-        var dashboard = new Button { Content = "回到任务清单", Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(10, 0, 0, 0) };
+        var dashboard = new Wpf.Ui.Controls.Button { Content = "回到任务清单", Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(10, 0, 0, 0) };
         dashboard.Click += (_, _) => showDashboard(); buttons.Children.Add(dashboard);
-        var clear = new Button { Content = "重新连接", Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(10, 0, 0, 0) };
+        var clear = new Wpf.Ui.Controls.Button { Content = "重新连接", Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent, Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(10, 0, 0, 0) };
         clear.Click += async (_, _) =>
         {
             if (!initialized || changingHost) return;
@@ -106,7 +108,9 @@ public sealed class RainConnectionWindow : Window
             core.NewWindowRequested += (_, request) =>
             {
                 request.Handled = true;
-                if (RainAddressPolicy.IsNavigation(service.Platform, request.Uri)) core.Navigate(request.Uri);
+                var address = request.Uri;
+                if (RainAddressPolicy.IsNavigation(service.Platform, address))
+                    Dispatcher.BeginInvoke(new Action(() => { if (!closing && !changingHost) core.Navigate(address); }));
                 else status.Text = "RAIN003：此登录跳转暂未适配，请使用当前官方页面的扫码或账号登录。";
             };
             core.NavigationCompleted += (_, navigation) =>
@@ -115,7 +119,7 @@ public sealed class RainConnectionWindow : Window
                 if (navigation.IsSuccess)
                 {
                     service.LoginNavigationCompleted(core.Source);
-                    status.Text = "官方页面已加载。登录完成后自动采集，请回到任务清单查看同步结果。";
+                    status.Text = "官方页面已加载。登录后返回课程列表，请回到平台管理窗口保存课程选择并采集。";
                 }
                 else if (navigation.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
                     status.Text = "RAIN002：官方页面加载失败（" + navigation.WebErrorStatus + "），请检查网络后重试。";

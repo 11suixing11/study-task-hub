@@ -13,15 +13,39 @@ internal static class CourseRecordingChecks
     {
         var root = Path.Combine(Path.GetTempPath(), "course-recording-checks-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         Storage(Path.Combine(root, "storage.db"));
+        CatalogResults(Path.Combine(root, "catalog-results.db"));
+        DefaultsAndMigration(Path.Combine(root, "defaults.db"));
         await Mooc(Path.Combine(root, "mooc.db"));
         foreach (var platform in RainPlatform.All) await Rain(Path.Combine(root, platform.Id + ".db"), platform);
         await Chaoxing(Path.Combine(root, "chaoxing.db"));
         Console.WriteLine($"PASS: {checks} course recording, platform isolation, catalog-only refresh, excluded-request, retained-task and reminder checks (synthetic only).");
     }
 
+    private static void DefaultsAndMigration(string path)
+    {
+        var store = new TaskStore(path);
+        Check(PlatformCatalog.Sites.All(site => !store.LoadCourseRecording(site.Id).SelectionConfirmed
+            && !store.LoadCourseRecording(site.Id).RecordAllCourses), "new repository requires explicit course confirmation");
+        var manual = store.Create(new("人工提醒", "mooc", "人工课程", DeadlineKind.Known, null, Now.AddHours(1), null, null, "", "", null), Now);
+        Check(store.LoadRecordedTasks().Any(task => task.Id == manual.Id) && store.TakeDue(Now.AddMinutes(1)).Any(item => item.Task.Id == manual.Id),
+            "manual task and reminder remain usable before course confirmation");
+        var course = CourseRecordingRules.Mooc("9001", new("已发现课程", "1001", "2001", "SYNTHETIC", 0));
+        store.ObserveRecordingCourses("mooc", [course], true, Now);
+        using (var db = new SqliteConnection("Data Source=" + path))
+        {
+            db.Open(); using var cmd = db.CreateCommand();
+            cmd.CommandText = "UPDATE settings SET value=json_remove(json_set(value,'$.RecordAllCourses',json('true')),'$.SelectionConfirmed') WHERE key='course-recording:mooc'";
+            cmd.ExecuteNonQuery();
+        }
+        var legacy = new TaskStore(path).LoadCourseRecording("mooc");
+        Check(!legacy.SelectionConfirmed && !legacy.RecordAllCourses && legacy.SelectedCourseKeys.Contains(course.Course.Key),
+            "old all-course mode becomes pending choices without selecting future courses");
+        Check(store.LoadRecordedTasks().Any(task => task.Id == manual.Id), "migration preserves visible task history");
+    }
+
     private static void Storage(string path)
     {
-        var store = new TaskStore(path); var keys = new Dictionary<string, string>();
+        var store = FixtureTaskStore.Create(path); var keys = new Dictionary<string, string>();
         foreach (var site in PlatformCatalog.Sites)
         {
             var task = store.Create(new("手动任务", site.Id, "同名课程", DeadlineKind.Known, null, Now.AddHours(1), null, null, "", "备注", null), Now);
@@ -40,7 +64,7 @@ internal static class CourseRecordingChecks
             Check(store.LoadRecordedTasks().Any(row => row.Id == task.Id) && store.TakeDue(Now.AddMinutes(1)).All(item => item.Task.Id != task.Id), "retained display does not enable excluded reminders");
         }
         Check(keys.Values.Distinct().Count() == PlatformCatalog.Sites.Count, "same course names are isolated by platform");
-        var reopened = new TaskStore(path);
+        var reopened = FixtureTaskStore.Create(path);
         Check(PlatformCatalog.Sites.All(site => !reopened.LoadCourseRecording(site.Id).RecordAllCourses && !reopened.LoadCourseRecording(site.Id).HideUnselectedTasks), "selection mode and retention persist across reopen");
         var course = new MoocCourse("无任务课程", "1001", "2001", "SYNTHETIC", 0);
         var discovered = CourseRecordingRules.Mooc("9001", course);
@@ -59,6 +83,35 @@ internal static class CourseRecordingChecks
         catch (OperationCanceledException) { checks++; }
     }
 
+    private static void CatalogResults(string path)
+    {
+        var store = FixtureTaskStore.Create(path);
+        var course = CourseRecordingRules.Mooc("9001", new("保留课程", "1001", "2001", "SYNTHETIC", 0));
+        store.ObserveRecordingCourses("mooc", [course], true, Now);
+        var recording = store.LoadCourseRecording("mooc");
+        store.SaveCourseRecording("mooc", false, [course.Course.Key], true, recording.Revision, Now);
+        var baseline = store.LoadCourseRecording("mooc");
+        var taskSummary = JsonSerializer.Serialize(store.LoadMoocSettings());
+        store.RecordCourseCatalogResult("mooc", "login_required", ["MOOC001", "MOOC001"], Now.AddMinutes(1));
+        var reopened = FixtureTaskStore.Create(path).LoadCourseRecording("mooc");
+        Check(reopened.LastCatalogRefresh is { Outcome: "login_required" } && reopened.LastCatalogRefresh.ProblemCodes.SequenceEqual(new[] { "MOOC001" }),
+            "catalog login failure and distinct codes persist across reopen");
+        Check(reopened.CatalogCheckedAtUtc == baseline.CatalogCheckedAtUtc && reopened.CatalogComplete
+            && reopened.Courses.SequenceEqual(baseline.Courses) && reopened.SelectedCourseKeys.SequenceEqual(baseline.SelectedCourseKeys)
+            && reopened.Revision == baseline.Revision, "failed refresh preserves complete prior catalog and course selection");
+        Check(JsonSerializer.Serialize(store.LoadMoocSettings()) == taskSummary, "catalog failure preserves prior task sync result");
+        Check(CourseRecordingRules.CatalogRefreshText(reopened).Contains("需要官方登录", StringComparison.Ordinal)
+            && CourseRecordingRules.CatalogRefreshText(reopened).Contains("MOOC001", StringComparison.Ordinal), "persisted failure explains required action");
+        Check(store.LoadCourseRecording("chaoxing").LastCatalogRefresh is null, "catalog refresh failures remain platform isolated");
+        Reject(() => store.RecordCourseCatalogResult("mooc", "error", ["https://private.example/?token=secret"], Now), "COURSE001");
+        Reject(() => store.RecordCourseCatalogResult("mooc", "unknown", [], Now), "COURSE001");
+        using var canceled = new CancellationTokenSource(); canceled.Cancel();
+        try { store.RecordCourseCatalogResult("mooc", "error", ["MOOC002"], Now, canceled.Token); throw new Exception("cancellation ignored"); }
+        catch (OperationCanceledException) { Check(store.LoadCourseRecording("mooc").LastCatalogRefresh?.Outcome == "login_required", "canceled refresh cannot replace prior result"); }
+        store.RecordCourseCatalogResult("mooc", "completed", [], Now.AddMinutes(2));
+        Check(store.LoadCourseRecording("mooc").LastCatalogRefresh is { Outcome: "completed", ProblemCodes.Count: 0 }, "successful recovery clears stale catalog error");
+    }
+
     private static string MoocCatalog(int count = 2) => JsonSerializer.Serialize(new
     {
         code = 0, result = new { pagination = new { totlePageCount = 1, totleCount = count, pageIndex = 1 },
@@ -75,7 +128,7 @@ internal static class CourseRecordingChecks
     private static async Task Mooc(string path)
     {
         var store = new TaskStore(path); var reader = new MoocReader();
-        var catalog = await new MoocSynchronizer(store, reader, "9001").RunAsync(catalogOnly: true);
+        var catalog = await new MoocSynchronizer(store, reader, "9001").RunAsync();
         Check(catalog.Courses == 2 && catalog.CoursesRead == 0 && reader.Paths.Count == 1 && store.LoadTasks().Count == 0, "MOOC catalog-only never reads tasks");
         var overview = store.LoadCourseRecordingOverview("mooc");
         Check(overview.Courses.Count == 2 && overview.Courses.Select(course => course.Key).Distinct().Count() == 2, "MOOC same names remain distinct");
@@ -115,7 +168,7 @@ internal static class CourseRecordingChecks
     private static async Task Rain(string path, RainPlatform platform)
     {
         var store = new TaskStore(path); var reader = new RainReader(platform);
-        var catalog = await new RainSynchronizer(store, reader, platform, platform.DefaultHost).RunAsync(catalogOnly: true);
+        var catalog = await new RainSynchronizer(store, reader, platform, platform.DefaultHost).RunAsync();
         Check(catalog.Courses == 2 && reader.Paths.Count == 2 && store.LoadTasks().Count == 0, "rain catalog refresh only reads identity and courses");
         var selected = CourseRecordingRules.RainKey(platform.Id, platform.DefaultHost, "77", "101");
         var current = store.LoadCourseRecording(platform.Id); store.SaveCourseRecording(platform.Id, false, [selected], true, current.Revision, Now);
@@ -128,12 +181,29 @@ internal static class CourseRecordingChecks
         Check(none.SelectedCourses == 0 && reader.Paths.Count == 2 && store.LoadRecordedTasks().Count == 0 && store.LoadTasks().Count == 1, "rain empty selection retains hidden history");
         current = store.LoadCourseRecording(platform.Id); store.SaveCourseRecording(platform.Id, false, [selected], true, current.Revision, Now);
         Check((await new RainSynchronizer(store, reader, platform, platform.DefaultHost).RunAsync()).Updated == 1, "rain reselect never duplicates task");
+        foreach (var rejectAt in new[] { 1, 2 })
+        {
+            var isolated = FixtureTaskStore.Create(path + ".session-" + rejectAt);
+            var guardedReader = new RainReader(platform); var validations = 0; var rejected = false;
+            Task ValidateSession(CancellationToken token)
+            {
+                token.ThrowIfCancellationRequested();
+                if (++validations == rejectAt) throw new InvalidOperationException("synthetic_session_changed");
+                return Task.CompletedTask;
+            }
+            try { await new RainSynchronizer(isolated, guardedReader, platform, platform.DefaultHost, ValidateSession).RunAsync(); }
+            catch (InvalidOperationException error) when (error.Message == "synthetic_session_changed") { rejected = true; }
+            Check(rejected && validations == rejectAt && isolated.LoadTasks().Count == 0,
+                "rain changed session cannot import parsed tasks");
+            Check(rejectAt == 2 || isolated.LoadCourseRecording(platform.Id).Courses.Count == 0,
+                "rain changed session cannot overwrite course catalog");
+        }
     }
 
     private static async Task Chaoxing(string path)
     {
         var store = new TaskStore(path); var reader = new ChaoxingReader();
-        var catalog = await new ChaoxingSynchronizer(store, reader, TimeSpan.Zero).RunAsync(null, CancellationToken.None, true);
+        var catalog = await new ChaoxingSynchronizer(store, reader, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
         Check(catalog.Courses == 2 && reader.Paths.Count == 2 && store.LoadTasks().Count == 0, "chaoxing refresh does not request work signatures or lists");
         var selected = CourseRecordingRules.ChaoxingKey("101", "201", "301");
         var current = store.LoadCourseRecording("chaoxing"); store.SaveCourseRecording("chaoxing", false, [selected], true, current.Revision, Now); reader.Paths.Clear();

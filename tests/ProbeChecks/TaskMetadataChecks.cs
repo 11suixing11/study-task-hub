@@ -60,7 +60,7 @@ internal static class TaskMetadataChecks
         Check(TaskRules.HasTrustedDeadline(trustedTask) && ReminderPlanner.TimedPlans(trustedTask, now).Count == 2);
 
         var root = Path.Combine(Path.GetTempPath(), "aggregate-metadata-" + Guid.NewGuid().ToString("N"));
-        var store = new TaskStore(Path.Combine(root, "tasks.db"));
+        var store = FixtureTaskStore.Create(Path.Combine(root, "tasks.db"));
         WorkTaskLocation Location(int work) => WorkListParser.ParseTaskLocation(
             "https://mooc1.chaoxing.com/mooc-ans/mooc2/work/task?courseId=101&classId=201&cpi=301&workId=" + work + "&enc=SYNTHETIC")!;
         var row = new WorkListTask("合成作业", "未交", "剩余1小时", Location(401)) { TimeObservedAtUtc = now.ToUniversalTime() };

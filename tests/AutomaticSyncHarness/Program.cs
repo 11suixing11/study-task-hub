@@ -50,7 +50,14 @@ internal static class Program
         File.WriteAllText(Path.Combine(harnessRoot, "latest-run.txt"), runRoot);
         Environment.SetEnvironmentVariable("TEMP", runRoot); Environment.SetEnvironmentVariable("TMP", runRoot);
         app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        store = new TaskStore(Path.Combine(runRoot, "tasks.db"));
+        app.DispatcherUnhandledException += (_, error) =>
+        {
+            failure = error.Exception.ToString();
+            WriteReport("failed");
+            error.Handled = true;
+            app.Shutdown(1);
+        };
+        store = FixtureTaskStore.Create(Path.Combine(runRoot, "tasks.db"), pendingPlatforms: ["chaoxing"]);
         store.SaveSettings(new(false, true));
         dashboard = new TaskDashboardWindow(store, runRoot, () => { loggedOut = !loggedOut; dashboard.ShowSuccess("合成会话切换完成，可点击立即同步。"); }, () => app.Shutdown(), openedTaskLinks.Add)
         { Title = "学习任务聚合 · 自动同步离线验收" };
@@ -87,14 +94,20 @@ internal static class Program
             Check(browser.CoreWebView2 is not null && browser.Visibility == Visibility.Hidden);
             Check(app.Windows.Count == 1);
             Check(initial.LoginRequired && store.LoadTasks().Count == 0);
-            Check(store.LoadSettings().LastSyncOutcome == "login_required");
-            // Completing official login is enough: no SyncNow, course click or import button.
+            Check(store.LoadCourseRecording("chaoxing").LastCatalogRefresh?.Outcome == "login_required");
             loggedOut = false;
-            var firstLogin = await RunAsync(() =>
+            var discovered = await RunAsync(() =>
             {
                 service.LoginConnectionOpened();
                 service.LoginNavigationCompleted(ChaoxingSyncParser.Portal);
             });
+            Check(discovered.Courses == 2 && discovered.CoursesRead == 0 && discovered.Tasks == 0 && store.LoadTasks().Count == 0);
+            var selection = store.LoadCourseRecording("chaoxing");
+            Check(!selection.SelectionConfirmed && selection.SelectedCourseKeys.Count == 0);
+            store.SaveCourseRecording("chaoxing", false, selection.Courses.Select(course => course.Key).ToArray(), true, selection.Revision, DateTimeOffset.UtcNow);
+            var firstLogin = await RunAsync(() => _ = service.RecordingCoursesChangedAsync());
+            service.LoginConnectionClosed();
+            foreach (var manager in app.Windows.OfType<CourseSelectionWindow>().ToArray()) manager.Close();
             Check(firstLogin.Courses == 2 && firstLogin.CoursesRead == 2 && firstLogin.Added == 2 && firstLogin.Problems.Count == 0);
             Check(firstLogin.DetailsSaved == 2); // Dates survive the observed task -> view redirect without replacing task links.
             Check(store.LoadTasks().Count == 2 && store.LoadTasks().All(task => task.DetailTimeText.Length > 0));
@@ -111,10 +124,12 @@ internal static class Program
             Check(((System.Windows.Controls.TextBlock)dashboard.FindName("SyncStatusText")).Text.Contains("关闭自动记录", StringComparison.Ordinal));
             var before = requestCount;
             service.StartAutomatic();
-            service.LoginConnectionOpened();
             service.LoginNavigationCompleted(ChaoxingSyncParser.Portal);
             await Task.Delay(200);
             Check(requestCount == before);
+            await RunAsync(service.LoginConnectionOpened);
+            Check(requestCount > before && store.LoadTasks().Count == 2);
+            service.LoginConnectionClosed();
             loggedOut = true;
             await service.StartAsync(true);
             Check(store.LoadSettings().LastSyncOutcome == "login_required");
@@ -165,6 +180,7 @@ internal static class Program
             });
             Check(!clearRecovery.LoginRequired && clearRecovery.Updated == 2);
             service.LoginConnectionClosed();
+            await VerifyConnectionPopupAsync();
             await VerifySessionRacesAsync(browser);
             sessionRestartChecks = await SessionRestartChecks.VerifyAsync(runRoot);
             verified = true;
@@ -174,11 +190,40 @@ internal static class Program
         }
         catch (Exception error)
         {
-            failure = error.GetType().Name;
+            failure = error.GetType().Name + ": " + error.Message + "\n" + error.StackTrace;
             WriteReport("failed");
             dashboard.ShowError("SYNC_TEST", $"离线桌面验收失败：第 {checks} 项（{failure}）。");
             if (verifyOnly) app.Shutdown(1);
         }
+    }
+
+    private static async Task VerifyConnectionPopupAsync()
+    {
+        var window = new MainWindow(runRoot, store, dashboard.ShowDashboard, service) { Title = "学习通 · 本地登录回跳验收" };
+        var loginBrowser = (WebView2)window.FindName("Browser");
+        loginBrowser.CoreWebView2InitializationCompleted += (_, result) =>
+        {
+            if (!result.IsSuccess) return;
+            var core = loginBrowser.CoreWebView2;
+            core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
+            core.WebResourceRequested += (_, request) => request.Response = core.Environment.CreateWebResourceResponse(
+                new MemoryStream(System.Text.Encoding.UTF8.GetBytes("<!doctype html><p>本地合成官方登录页</p>")), 200, "OK",
+                "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n");
+        };
+        window.Show();
+        try
+        {
+            await WaitUntilAsync(() => loginBrowser.CoreWebView2 is not null && ((System.Windows.Controls.Button)window.FindName("LoginButton")).IsEnabled);
+            var core = loginBrowser.CoreWebView2;
+            var initialReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            void InitialReady(object? sender, CoreWebView2DOMContentLoadedEventArgs args)
+            { if (core.Source == "https://i.chaoxing.com/__synthetic__/login") initialReady.TrySetResult(true); }
+            core.DOMContentLoaded += InitialReady;
+            try { core.Navigate("https://i.chaoxing.com/__synthetic__/login"); await initialReady.Task.WaitAsync(TimeSpan.FromSeconds(10)); }
+            finally { core.DOMContentLoaded -= InitialReady; }
+            await PlatformConnectionTestData.ConnectionPopupChecks.VerifyAsync(core, "i.chaoxing.com", (condition, _) => Check(condition));
+        }
+        finally { window.Close(); }
     }
 
     private static async Task VerifySessionRacesAsync(WebView2 browser)
@@ -199,7 +244,7 @@ internal static class Program
             manager.AddOrUpdateCookie(cookie);
         }
         var archivePath = Path.Combine(runRoot, ".local", "sessions", "chaoxing.bin");
-        var archive = new ChaoxingSessionStore(archivePath);
+        var archive = new ChaoxingSessionStore(archivePath, store);
         SetCookie("synthetic-before-renewal");
         renewEachPortal = true;
         await service.StartAsync(true);
@@ -307,6 +352,10 @@ internal static class Program
         taskRoute = "prompt";
         await ClickAndWaitAsync(toolbar);
         NavigationCheck(openedTaskLinks.Last().Contains("/work/prompt?", StringComparison.Ordinal));
+        taskRoute = "preview"; before = requestCount;
+        await ClickAndWaitAsync(toolbar);
+        NavigationCheck(openedTaskLinks.Last().Contains("/work/preview?", StringComparison.Ordinal) && requestCount == before + 1);
+        NavigationCheck(((System.Windows.Controls.TextBlock)dashboard.FindName("ResultText")).Text.Contains("官方预览入口", StringComparison.Ordinal));
         loggedOut = true;
         await ClickAndWaitAsync(toolbar);
         NavigationCheck(openedTaskLinks.Last().Contains("/work/task?", StringComparison.Ordinal));
@@ -351,6 +400,13 @@ internal static class Program
         void Finished(ChaoxingSyncSummary result)
         { if (expected is null || expected(result)) completed.TrySetResult(result); }
         service.Completed += Finished;
+        void Catalog(ChaoxingSyncSummary result)
+        {
+            if (result.LoginRequired || !store.LoadCourseRecording("chaoxing").SelectionConfirmed) { Finished(result); return; }
+            // Regression re-login checks explicitly apply their already confirmed course choice.
+            dashboard.Dispatcher.BeginInvoke(new Action(async () => await service.RecordingCoursesChangedAsync()));
+        }
+        service.CatalogCompleted += Catalog;
         try
         {
             start();
@@ -359,7 +415,7 @@ internal static class Program
             await Task.Delay(50);
             return result;
         }
-        finally { service.Completed -= Finished; }
+        finally { service.Completed -= Finished; service.CatalogCompleted -= Catalog; }
     }
 
     private static void Check(bool condition)

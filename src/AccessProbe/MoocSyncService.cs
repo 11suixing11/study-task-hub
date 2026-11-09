@@ -40,12 +40,15 @@ public sealed class MoocSyncService : IDisposable
     public string SessionPersistenceOutcome { get; private set; } = "not_saved";
     public event Action<string, bool, bool>? StatusChanged;
     public event Action<MoocSyncSummary>? Completed;
+    public event Action? CourseSelectionRequired;
+    public event Action<MoocSyncSummary>? CatalogCompleted;
 
     public MoocSyncService(TaskStore store, string root, WebView2 sessionBrowser,
         Func<HttpMessageHandler>? handlerFactory = null, TimeSpan? loginCheckInterval = null, TimeSpan? accountTimeout = null)
     {
         this.store = store; projectRoot = root; browser = sessionBrowser; this.handlerFactory = handlerFactory;
-        sessionStore = new(Path.Combine(root, ".local", "sessions", "mooc.bin"));
+        sessionStore = new(Path.Combine(root, ".local", "sessions", "mooc.bin"), store);
+        sessionRejected = store.LoadPlatformSessionInfo("mooc").State == "expired";
         loginTimer = new() { Interval = loginCheckInterval ?? TimeSpan.FromSeconds(5) };
         this.accountTimeout = accountTimeout ?? TimeSpan.FromSeconds(30);
         timer.Tick += (_, _) => StartAutomatic(); loginTimer.Tick += (_, _) => CheckLogin();
@@ -56,7 +59,7 @@ public sealed class MoocSyncService : IDisposable
     {
         if (disposed || stopping || clearing) return;
         var settings = store.LoadMoocSettings();
-        if (!settings.Connected) { StatusChanged?.Invoke("中国大学 MOOC 尚未连接；完成官方登录后自动采集到统一清单。", false, false); return; }
+        if (!settings.Connected) { StatusChanged?.Invoke("中国大学 MOOC 尚未连接；完成官方登录后返回课程列表，保存选择后采集任务。", false, false); return; }
         if (!store.LoadSettings().AutomaticSyncEnabled || !settings.AutomaticSyncEnabled)
         { StatusChanged?.Invoke("中国大学 MOOC 自动同步已关闭，可点击“同步所有平台”手动更新。", false, true); return; }
         timer.Start(); _ = StartAsync(false);
@@ -84,15 +87,15 @@ public sealed class MoocSyncService : IDisposable
     }
     private void ScheduleLoginCheck()
     {
-        if (disposed || stopping || clearing || !store.LoadSettings().AutomaticSyncEnabled || !store.LoadMoocSettings().AutomaticSyncEnabled) return;
+        if (disposed || stopping || clearing || !loginOpen && (!store.LoadSettings().AutomaticSyncEnabled || !store.LoadMoocSettings().AutomaticSyncEnabled)) return;
         loginPending = true; loginTimer.Start();
     }
     private void CheckLogin()
     {
-        if (disposed || stopping || clearing || !store.LoadSettings().AutomaticSyncEnabled || !store.LoadMoocSettings().AutomaticSyncEnabled)
+        if (disposed || stopping || clearing || !loginOpen && (!store.LoadSettings().AutomaticSyncEnabled || !store.LoadMoocSettings().AutomaticSyncEnabled))
         { loginPending = false; loginTimer.Stop(); return; }
         if (IsRunning || !loginPending) return;
-        loginPending = false; loginTimer.Stop(); _ = StartAsync(false, true);
+        loginPending = false; loginTimer.Stop(); _ = StartAsync(loginOpen, true);
     }
 
     public async Task StartAsync(bool manual, bool afterLogin = false, bool catalogOnly = false)
@@ -103,13 +106,15 @@ public sealed class MoocSyncService : IDisposable
         if (!settings.Connected) { StatusChanged?.Invoke("MOOC001：请先连接中国大学 MOOC 并完成官方登录。", false, true); return; }
         if (!manual && (!store.LoadSettings().AutomaticSyncEnabled || !settings.AutomaticSyncEnabled)) return;
         if (!manual && !afterLogin && DateTimeOffset.UtcNow < retryAfter) return;
+        var needsSelection = !store.LoadCourseRecording("mooc").SelectionConfirmed;
+        catalogOnly |= needsSelection || afterLogin && loginOpen;
         using var runCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(10));
         cancellation = runCancellation; var runFinished = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously); finished = runFinished;
         var scope = new ReadScope(generation);
         var stage = "session_initialization";
         try
         {
-            StatusChanged?.Invoke("正在后台同步中国大学 MOOC…", true, false);
+            StatusChanged?.Invoke(catalogOnly ? "正在使用当前登录读取中国大学 MOOC 课程…" : "正在同步中国大学 MOOC 已选课程…", true, false);
             await EnsureSessionAsync(runCancellation.Token);
             stage = "session_validation";
             await ValidateSessionAsync(scope, runCancellation.Token);
@@ -137,17 +142,24 @@ public sealed class MoocSyncService : IDisposable
             CheckScope(scope, runCancellation.Token);
             if (catalogOnly)
             {
+                var codes = summary.Problems.Select(problem => problem.Code).Distinct(StringComparer.Ordinal).Take(16).ToArray();
+                var catalogOutcome = CourseRecordingRules.CatalogRefreshOutcome(summary.CourseListCovered, summary.LoginRequired, codes);
+                store.RecordCourseCatalogResult("mooc", catalogOutcome, codes, DateTimeOffset.UtcNow, runCancellation.Token);
+                retryAfter = DateTimeOffset.UtcNow.AddMinutes(summary.LoginRequired ? 30 : 5);
                 StatusChanged?.Invoke(summary.LoginRequired ? "MOOC001：请在连接 MOOC 窗口完成官方登录后刷新课程。"
-                    : summary.CourseListCovered ? $"中国大学 MOOC 课程列表已刷新，共 {summary.Courses} 门课程。"
+                    : catalogOutcome == "completed" ? $"中国大学 MOOC 课程列表已刷新，共 {summary.Courses} 门课程。"
                     : "中国大学 MOOC 课程列表未完整刷新；原有课程选择保留，请查看官方登录与网络。", false,
-                    summary.LoginRequired || !summary.CourseListCovered || summary.Problems.Count > 0);
+                    catalogOutcome != "completed");
+                if (!summary.LoginRequired && summary.CourseListCovered && (needsSelection || afterLogin && loginOpen)) CourseSelectionRequired?.Invoke();
+                CatalogCompleted?.Invoke(summary);
+                if (afterLogin && summary.LoginRequired && loginOpen) ScheduleLoginCheck();
                 return;
             }
             var outcome = summary.LoginRequired ? "login_required" : summary.Problems.Count > 0 || !summary.CourseListCovered || summary.CoursesRead != (summary.SelectedCourses ?? summary.Courses) ? "partial" : "completed";
             stage = "result_persistence";
             store.RecordMoocSyncResult(summary, outcome, DateTimeOffset.UtcNow, runCancellation.Token);
             retryAfter = DateTimeOffset.UtcNow.AddMinutes(summary.LoginRequired ? 30 : 5);
-            var message = summary.LoginRequired ? "MOOC001：中国大学 MOOC 需要登录；完成官方登录后自动采集，已有任务保留。"
+            var message = summary.LoginRequired ? "MOOC001：中国大学 MOOC 需要登录；请在平台管理窗口重新登录，再保存课程选择并采集，已有任务保留。"
                 : $"中国大学 MOOC 已读取 {summary.CoursesRead}/{summary.SelectedCourses ?? summary.Courses} 门已选课程（发现 {summary.Courses} 门），采集 {summary.Tasks} 条任务；新增 {summary.Added}、更新 {summary.Updated}。"
                     + (summary.Problems.Count > 0 ? $"有 {summary.Problems.Count} 项需处理，见同步详情。" : "")
                     + (summary.StatusNeedsReview > 0 ? $"有 {summary.StatusNeedsReview} 条状态待核对。" : "");
@@ -164,7 +176,10 @@ public sealed class MoocSyncService : IDisposable
         catch (OperationCanceledException)
         { if (!disposed && !stopping) StatusChanged?.Invoke("中国大学 MOOC 本轮同步已停止；已有任务保留。", false, true); }
         catch (TaskValidationException error)
-        { if (!disposed && !stopping) StatusChanged?.Invoke(error.Code + "：" + error.Message, false, true); }
+        {
+            if (catalogOnly && !disposed && !stopping && !clearing) RecordCatalogFailure(error.Code, runCancellation.Token);
+            if (!disposed && !stopping) StatusChanged?.Invoke(error.Code + "：" + error.Message, false, true);
+        }
         catch (Exception error)
         {
             if (!disposed && !stopping && !clearing)
@@ -189,6 +204,7 @@ public sealed class MoocSyncService : IDisposable
                         store.RecordMoocSyncResult(summary, "error", DateTimeOffset.UtcNow, runCancellation.Token);
                         Completed?.Invoke(summary);
                     }
+                    else store.RecordCourseCatalogResult("mooc", "error", ["MOOC002"], DateTimeOffset.UtcNow, runCancellation.Token);
                 }
                 catch (Exception persistenceError) when (persistenceError is SessionChangedException or OperationCanceledException
                     or TaskValidationException or Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException) { }
@@ -202,6 +218,13 @@ public sealed class MoocSyncService : IDisposable
             cancellation = null; runFinished.TrySetResult(true); finished = null;
             if (loginPending && !disposed && !stopping && !clearing) loginTimer.Start();
         }
+    }
+
+    private void RecordCatalogFailure(string code, CancellationToken token)
+    {
+        try { store.RecordCourseCatalogResult("mooc", "error", [code], DateTimeOffset.UtcNow, token); }
+        catch (Exception error) when (error is OperationCanceledException or TaskValidationException
+            or Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException) { }
     }
 
     public async Task RefreshCourseCatalogAsync()
@@ -424,14 +447,16 @@ public sealed class MoocSyncService : IDisposable
         try
         {
             CheckScope(scope, token); var current = await ReadProfileAsync(); CheckScope(scope, token); CheckFingerprint(scope, current);
-            if (loginRequired) { sessionRejected = true; return ClearArchive(); }
-            sessionRejected = false; return SaveProfile(current);
+            if (loginRequired) { sessionRejected = true; sessionStore.Invalidate(DateTimeOffset.UtcNow); SessionPersistenceOutcome = "expired"; return true; }
+            sessionRejected = false; var saved = SaveProfile(current);
+            if (saved) store.ConfirmPlatformSession("mooc", DateTimeOffset.UtcNow);
+            return saved;
         }
         finally { cookieGate.Release(); }
     }
     private bool SaveProfile(IReadOnlyList<MoocSessionCookie> current)
     {
-        if (sessionRejected) return ClearArchive();
+        if (sessionRejected) return true;
         try { sessionStore.Save(current, DateTimeOffset.UtcNow); SessionPersistenceOutcome = current.Count > 0 ? "saved" : "empty"; return true; }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or CryptographicException)
         { SessionPersistenceOutcome = "unavailable"; return false; }

@@ -1,0 +1,4 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+ <!-- Compatibility entry for older resource consumers. -->
+ <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="FluentTheme.xaml" /></ResourceDictionary.MergedDictionaries>
+</ResourceDictionary>

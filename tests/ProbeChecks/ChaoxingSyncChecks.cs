@@ -65,7 +65,7 @@ internal static class ChaoxingSyncChecks
 
         var root = Path.Combine(Path.GetTempPath(), "aggregate-sync-checks-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
-        var store = new TaskStore(Path.Combine(root, "tasks.db"));
+        var store = FixtureTaskStore.Create(Path.Combine(root, "tasks.db"));
         var reader = new FixtureReader();
         var progress = new CapturedProgress();
         var summary = await new ChaoxingSynchronizer(store, reader, TimeSpan.Zero).RunAsync(progress, CancellationToken.None);
@@ -99,18 +99,18 @@ internal static class ChaoxingSyncChecks
         Check(noSignature.CoursesRead == 0 && noSignature.Problems.All(problem => problem.Code == "SYNC005"));
         var unknown = await new ChaoxingSynchronizer(store, new FixtureReader { UnknownList = true }, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
         Check(unknown.CoursesRead == 0 && unknown.Problems.All(problem => problem.Code == "SYNC006"));
-        var crossCourseStore = new TaskStore(Path.Combine(root, "cross-course.db"));
+        var crossCourseStore = FixtureTaskStore.Create(Path.Combine(root, "cross-course.db"));
         var cross = await new ChaoxingSynchronizer(crossCourseStore, new FixtureReader { WrongCourseLink = true }, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
         Check(cross.Added == 1 && cross.Problems.Any(problem => problem.Code == "SYNC006"));
         var deferredPaging = await new ChaoxingSynchronizer(store, new FixtureReader { UnknownPaging = true }, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
         Check(!deferredPaging.CourseListCovered && deferredPaging.Problems.Any(problem => problem.Code == "SYNC007"));
-        var emptyCourseStore = new TaskStore(Path.Combine(root, "empty-course.db"));
+        var emptyCourseStore = FixtureTaskStore.Create(Path.Combine(root, "empty-course.db"));
         var emptyCourse = await new ChaoxingSynchronizer(emptyCourseStore, new FixtureReader { EmptyFirstCourse = true }, TimeSpan.Zero)
             .RunAsync(null, CancellationToken.None);
         Check(emptyCourse.CoursesRead == 2 && emptyCourse.Added == 1 && emptyCourse.Problems.Count == 0);
-        foreach (var mode in new[] { "view", "prompt", "action", "wrong_work", "wrong_answer", "unknown" })
+        foreach (var mode in new[] { "view", "prompt", "action", "preview", "unsupported_redirect", "wrong_work", "wrong_answer", "unknown" })
         {
-            var detailStore = new TaskStore(Path.Combine(root, "detail-" + mode + ".db"));
+            var detailStore = FixtureTaskStore.Create(Path.Combine(root, "detail-" + mode + ".db"));
             var detailReader = new FixtureReader { DetailMode = mode };
             var detailSummary = await new ChaoxingSynchronizer(detailStore, detailReader, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
             Check(detailSummary.CoursesRead == 2 && detailSummary.Added == 2 && detailStore.LoadTasks().Count == 2);
@@ -123,20 +123,28 @@ internal static class ChaoxingSyncChecks
             else if (mode == "action")
                 Check(detailSummary.DetailsSaved == 0 && detailSummary.DetailsRequireAction == 2 && detailSummary.Problems.Count == 0
                     && detailStore.LoadTasks().All(task => task.DetailCheckedAtUtc is not null && task.State == TaskState.Completed));
+            else if (mode == "preview")
+                Check(detailSummary.DetailsSaved == 0 && detailSummary.DetailsRequirePreview == 2 && detailSummary.Problems.Count == 0
+                    && detailStore.LoadTasks().All(task => task.DetailCheckedAtUtc is not null && task.DeadlineEvidence == DeadlineEvidence.RemainingTime
+                        && task.State == TaskState.Completed && task.Link!.Contains("/work/task?", StringComparison.Ordinal)));
+            else if (mode == "unsupported_redirect")
+                Check(detailSummary.DetailsSaved == 0 && detailSummary.Problems.Count == 2
+                    && detailSummary.Problems.All(problem => problem.Code == "SYNC005" && problem.Message.Contains("未适配的页面跳转", StringComparison.Ordinal)));
             else if (mode == "wrong_answer")
                 Check(detailSummary.DetailsSaved == 1 && detailSummary.Problems.Single().Code == "SYNC006"
                     && detailStore.LoadTasks().Single(task => task.CourseName.Contains("A &", StringComparison.Ordinal)).DetailTimeText.Length == 0);
             else
                 Check(detailSummary.DetailsSaved == 0 && detailSummary.Problems.Count > 0 && detailSummary.Problems.All(problem => problem.Code == "SYNC006")
                     && detailStore.LoadTasks().All(task => task.DetailTimeText.Length == 0));
-            if (mode is "prompt" or "action")
+            if (mode is "prompt" or "action" or "preview")
             {
                 detailReader.Addresses.Clear();
                 await new ChaoxingSynchronizer(detailStore, detailReader, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
                 Check(detailReader.Addresses.Count == 6);
                 detailStore.RecordSyncResult(detailSummary, "completed", DateTimeOffset.UtcNow);
                 Check(detailStore.LoadSettings().LastSyncSummary is { } recorded
-                    && recorded.DetailsUnavailable == detailSummary.DetailsUnavailable && recorded.DetailsRequireAction == detailSummary.DetailsRequireAction);
+                    && recorded.DetailsUnavailable == detailSummary.DetailsUnavailable && recorded.DetailsRequireAction == detailSummary.DetailsRequireAction
+                    && recorded.DetailsRequirePreview == detailSummary.DetailsRequirePreview);
             }
         }
         using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
@@ -145,7 +153,7 @@ internal static class ChaoxingSyncChecks
         Check(store.LoadTasks().Count == 2);
         store.SaveSettings(store.LoadSettings() with { AutomaticSyncEnabled = false });
         store.RecordSyncResult(summary, "completed", DateTimeOffset.UtcNow);
-        var reopened = new TaskStore(Path.Combine(root, "tasks.db"));
+        var reopened = FixtureTaskStore.Create(Path.Combine(root, "tasks.db"));
         Check(!reopened.LoadSettings().AutomaticSyncEnabled && reopened.LoadSettings().LastSyncSummary?.CoursesRead == 2);
         Check(reopened.LoadSettings().LastSyncAtUtc is not null && reopened.LoadTasks().Count == 2);
 
@@ -245,6 +253,24 @@ internal static class ChaoxingSyncChecks
             Check((await actionReader.ReadAsync(new(actionTarget), CancellationToken.None)).Outcome == "unsupported_redirect" && actionHandler.Methods.Count == 1);
         }
         Check(!ChaoxingSyncParser.IsReadAddress(new(actionTarget)) && WorkListParser.ParseDetailLocation(actionTarget) is null);
+        var previewTarget = TaskA.Replace("/work/task?", "/work/preview?", StringComparison.Ordinal).Replace("&answerId=501", "", StringComparison.Ordinal);
+        var previewHandler = new CaptureHandler(_ => new(HttpStatusCode.Found) { Headers = { Location = new Uri(previewTarget) } });
+        using (var previewReader = new ChaoxingHttpReader((_, _) => Task.FromResult<IReadOnlyList<Cookie>>([]), previewHandler))
+        {
+            Check((await previewReader.ReadAsync(new(TaskA), CancellationToken.None)).Outcome == "detail_requires_preview" && previewHandler.Methods.Count == 1);
+            Check((await previewReader.ReadAsync(new(previewTarget), CancellationToken.None)).Outcome == "unsupported_redirect" && previewHandler.Methods.Count == 1);
+        }
+        Check(!ChaoxingSyncParser.IsReadAddress(new(previewTarget)) && WorkListParser.ParseDetailLocation(previewTarget) is null);
+        foreach (var target in new[] { previewTarget.Replace("courseId=101", "courseId=999", StringComparison.Ordinal),
+            previewTarget.Replace("classId=201", "classId=999", StringComparison.Ordinal), previewTarget.Replace("cpi=301", "cpi=999", StringComparison.Ordinal),
+            previewTarget.Replace("workId=401", "workId=999", StringComparison.Ordinal), previewTarget + "&answerId=501", previewTarget + "&redirect=https%3A%2F%2Fevil.example",
+            previewTarget + "&courseId=101", previewTarget.Replace("enc=SYNTHETIC%2BONLY", "enc=", StringComparison.Ordinal),
+            previewTarget.Replace("mooc1.chaoxing.com", "evil.example", StringComparison.Ordinal) })
+        {
+            var rejectedHandler = new CaptureHandler(_ => new(HttpStatusCode.Found) { Headers = { Location = new Uri(target) } });
+            using var rejectedReader = new ChaoxingHttpReader((_, _) => Task.FromResult<IReadOnlyList<Cookie>>([]), rejectedHandler);
+            Check((await rejectedReader.ReadAsync(new(TaskA), CancellationToken.None)).Outcome == "unsupported_redirect" && rejectedHandler.Methods.Count == 1);
+        }
         var taskLoop = new CaptureHandler(request => new(HttpStatusCode.Found) { Headers = { Location = request.RequestUri } });
         using (var taskLoopReader = new ChaoxingHttpReader((_, _) => Task.FromResult<IReadOnlyList<Cookie>>([]), taskLoop))
             Check((await taskLoopReader.ReadAsync(new(TaskA), CancellationToken.None)).Outcome == "unsupported_redirect" && taskLoop.Methods.Count == 6);
@@ -305,6 +331,8 @@ internal static class ChaoxingSyncChecks
             else if (address.AbsolutePath == "/mooc-ans/mooc2/work/task")
             {
                 if (DetailMode == "action") return Task.FromResult(new ChaoxingPage("detail_requires_user_action", 302, address, ""));
+                if (DetailMode == "preview") return Task.FromResult(new ChaoxingPage("detail_requires_preview", 302, address, ""));
+                if (DetailMode == "unsupported_redirect") return Task.FromResult(new ChaoxingPage("unsupported_redirect", 302, address, ""));
                 if (DetailMode is "view" or "prompt" or "wrong_work" or "wrong_answer")
                 {
                     var target = address.OriginalString.Replace("/work/task?", "/work/" + (DetailMode == "prompt" ? "prompt" : "view") + "?", StringComparison.Ordinal);

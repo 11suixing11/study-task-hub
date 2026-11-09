@@ -4,4 +4,6 @@
     <UseWPF>true</UseWPF><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../src/AccessProbe/AccessProbe.csproj" /></ItemGroup>
+  <ItemGroup><Compile Include="../ConnectionPopupChecks.cs" Link="ConnectionPopupChecks.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../FixtureTaskStore.cs" Link="FixtureTaskStore.cs" /></ItemGroup>
 </Project>

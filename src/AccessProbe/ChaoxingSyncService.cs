@@ -43,12 +43,15 @@ public sealed class ChaoxingSyncService : IDisposable
     public string SessionPersistenceOutcome { get; private set; } = "not_saved";
     public event Action<string, bool, bool>? StatusChanged;
     public event Action<ChaoxingSyncSummary>? Completed;
+    public event Action? CourseSelectionRequired;
+    public event Action<ChaoxingSyncSummary>? CatalogCompleted;
 
     public ChaoxingSyncService(TaskStore store, string root, WebView2 sessionBrowser,
         Func<HttpMessageHandler>? handlerFactory = null, TimeSpan? loginCheckInterval = null)
     {
         this.store = store; projectRoot = root; browser = sessionBrowser; this.handlerFactory = handlerFactory;
-        sessionStore = new ChaoxingSessionStore(Path.Combine(root, ".local", "sessions", "chaoxing.bin"));
+        sessionStore = new ChaoxingSessionStore(Path.Combine(root, ".local", "sessions", "chaoxing.bin"), store);
+        sessionRejected = store.LoadPlatformSessionInfo("chaoxing").State == "expired";
         timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) };
         timer.Tick += (_, _) => StartAutomatic();
         loginTimer = new DispatcherTimer { Interval = loginCheckInterval ?? TimeSpan.FromSeconds(5) };
@@ -59,7 +62,7 @@ public sealed class ChaoxingSyncService : IDisposable
     {
         if (disposed || stopping || sessionClearing) return;
         var settings = store.LoadSettings();
-        if (!settings.AutomaticSyncEnabled)
+        if (!settings.AutomaticSyncEnabled || !settings.ChaoxingAutomaticSyncEnabled)
         { StatusChanged?.Invoke("您已关闭自动记录，任务不会自动更新，请手动维护任务。", false, true); return; }
         timer.Start();
         _ = StartAsync(false);
@@ -106,21 +109,23 @@ public sealed class ChaoxingSyncService : IDisposable
 
     private void ScheduleLoginCheck()
     {
-        if (disposed || stopping || sessionClearing || !store.LoadSettings().AutomaticSyncEnabled) return;
+        if (disposed || stopping || sessionClearing || !loginWindowOpen && (!store.LoadSettings().AutomaticSyncEnabled
+            || !store.LoadSettings().ChaoxingAutomaticSyncEnabled)) return;
         loginPending = true;
         loginTimer.Start();
     }
 
     private void CheckLoginSession()
     {
-        if (disposed || stopping || sessionClearing || !loginPending || !store.LoadSettings().AutomaticSyncEnabled)
+        if (disposed || stopping || sessionClearing || !loginPending || !loginWindowOpen && (!store.LoadSettings().AutomaticSyncEnabled
+            || !store.LoadSettings().ChaoxingAutomaticSyncEnabled))
         { loginPending = false; loginTimer.Stop(); return; }
         // Login can complete while startup synchronization is still waiting for HTTP/WebView.
         // Keep the pending check until that run releases the shared session.
         if (IsRunning) return;
         loginPending = false;
         loginTimer.Stop();
-        _ = StartAsync(false, afterLogin: true);
+        _ = StartAsync(loginWindowOpen, afterLogin: true);
     }
 
     public void SessionClearing()
@@ -140,7 +145,7 @@ public sealed class ChaoxingSyncService : IDisposable
         awaitingLogin = true;
         retryAfter = default;
         StatusChanged?.Invoke(succeeded
-            ? "SYNC001：学习通登录数据已清除，完成官方登录后将自动采集。已保留本地任务。"
+            ? "SYNC001：学习通登录数据已清除，完成官方登录后返回课程列表，保存选择后采集。已保留本地任务。"
             : "登录数据清理未完成，请核对官方登录状态；本地任务已保留。", false, true);
         if (loginWindowOpen) ScheduleLoginCheck();
     }
@@ -161,8 +166,10 @@ public sealed class ChaoxingSyncService : IDisposable
             return;
         }
         var settings = store.LoadSettings();
-        if (!manual && !settings.AutomaticSyncEnabled) return;
+        if (!manual && (!settings.AutomaticSyncEnabled || !settings.ChaoxingAutomaticSyncEnabled)) return;
         if (!manual && !afterLogin && DateTimeOffset.UtcNow < retryAfter) return;
+        var needsSelection = !store.LoadCourseRecording("chaoxing").SelectionConfirmed;
+        catalogOnly |= needsSelection || afterLogin && loginWindowOpen;
         using var runCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(15));
         cancellation = runCancellation;
         var runFinished = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -170,7 +177,7 @@ public sealed class ChaoxingSyncService : IDisposable
         IChaoxingPageReader? reader = null;
         try
         {
-            StatusChanged?.Invoke("正在后台同步学习通…", true, false);
+            StatusChanged?.Invoke(catalogOnly ? "正在使用当前登录读取学习通课程…" : "正在同步学习通已选课程…", true, false);
             await EnsureSessionAsync(runCancellation.Token);
             var scope = new ReadScope(sessionGeneration);
             reader = CreateReader(scope);
@@ -183,12 +190,21 @@ public sealed class ChaoxingSyncService : IDisposable
             runCancellation.Token.ThrowIfCancellationRequested();
             if (disposed || stopping || sessionClearing) return;
             var persisted = await FinishSessionAsync(scope, result.LoginRequired, runCancellation.Token);
+            awaitingLogin = result.LoginRequired;
             if (catalogOnly)
             {
+                var codes = result.Problems.Select(problem => problem.Code)
+                    .Concat(persisted ? [] : new[] { "SESSION001" }).Distinct(StringComparer.Ordinal).Take(16).ToArray();
+                var catalogOutcome = CourseRecordingRules.CatalogRefreshOutcome(result.CourseListCovered, result.LoginRequired, codes);
+                store.RecordCourseCatalogResult("chaoxing", catalogOutcome, codes, DateTimeOffset.UtcNow, runCancellation.Token);
+                retryAfter = DateTimeOffset.UtcNow.AddMinutes(result.LoginRequired ? 30 : 5);
                 StatusChanged?.Invoke(result.LoginRequired ? "SYNC001：请在连接学习通窗口完成官方登录后刷新课程。"
-                    : result.CourseListCovered ? $"学习通课程列表已刷新，共 {result.Courses} 门课程。"
+                    : catalogOutcome == "completed" ? $"学习通课程列表已刷新，共 {result.Courses} 门课程。"
                     : "学习通课程列表未完整刷新，请查看官方登录与网络状态；原有课程选择保留。", false,
-                    result.LoginRequired || !result.CourseListCovered || !persisted);
+                    catalogOutcome != "completed");
+                if (!result.LoginRequired && result.CourseListCovered && (needsSelection || afterLogin && loginWindowOpen)) CourseSelectionRequired?.Invoke();
+                if (afterLogin && result.LoginRequired && loginWindowOpen) ScheduleLoginCheck();
+                CatalogCompleted?.Invoke(result);
                 return;
             }
             awaitingLogin = result.LoginRequired;
@@ -197,11 +213,11 @@ public sealed class ChaoxingSyncService : IDisposable
             await Task.Run(() => store.RecordSyncResult(result, outcome, DateTimeOffset.UtcNow, runCancellation.Token), runCancellation.Token);
             retryAfter = DateTimeOffset.UtcNow.AddMinutes(result.LoginRequired ? 30 : 5);
             var message = result.LoginRequired
-                ? "SYNC001：学习通需要登录。点击“连接学习通”完成一次登录，程序会自动读取各课程并汇总任务。"
+                ? "SYNC001：学习通需要登录。请在平台管理窗口点击“连接平台”完成登录，再保存课程选择并采集；已有任务保留。"
                 : $"学习通已同步 {result.CoursesRead}/{result.SelectedCourses ?? result.Courses} 门已选课程（发现 {result.Courses} 门）；新增 {result.Added} 条、更新 {result.Updated} 条。"
                     + (result.Problems.Count > 0 ? $"有 {result.Problems.Count} 项未完成，点击“同步详情”查看。" : "")
-                    + (result.DetailsUnavailable + result.DetailsRequireAction > 0
-                        ? $"其中 {result.DetailsUnavailable + result.DetailsRequireAction} 条任务未取得作答时间，列表信息已保留。" : "")
+                    + (result.DetailsUnavailable + result.DetailsRequireAction + result.DetailsRequirePreview > 0
+                        ? $"其中 {result.DetailsUnavailable + result.DetailsRequireAction + result.DetailsRequirePreview} 条任务未取得详情作答时间，列表信息已保留。" : "")
                     + (result.DetailsDeferred > 0 ? $"剩余 {result.DetailsDeferred} 条任务时间将在后续同步读取。" : "");
             if (!result.LoginRequired && !persisted) message += "SESSION001：登录状态未能保存，重启后可能需要重新登录。";
             StatusChanged?.Invoke(message, false, result.LoginRequired || result.Problems.Count > 0 || !persisted);
@@ -225,14 +241,20 @@ public sealed class ChaoxingSyncService : IDisposable
         {
             if (!disposed && !stopping)
             {
-                var enabled = store.LoadSettings().AutomaticSyncEnabled;
+                var enabled = store.LoadSettings() is { AutomaticSyncEnabled: true, ChaoxingAutomaticSyncEnabled: true };
                 StatusChanged?.Invoke(enabled ? "本轮同步已停止，已保存的任务保留。" : "您已关闭自动记录，任务不会自动更新，请手动维护任务。", false, true);
             }
         }
         catch (TaskValidationException error)
-        { if (!disposed) StatusChanged?.Invoke(error.Code + "：" + error.Message, false, true); }
+        {
+            if (catalogOnly && !disposed && !stopping && !sessionClearing) RecordCatalogFailure(error.Code, runCancellation.Token);
+            if (!disposed) StatusChanged?.Invoke(error.Code + "：" + error.Message, false, true);
+        }
         catch
-        { if (!disposed) StatusChanged?.Invoke("SYNC002：后台同步未完成，请检查网络与 WebView2 运行时。已保留本地任务。", false, true); }
+        {
+            if (catalogOnly && !disposed && !stopping && !sessionClearing) RecordCatalogFailure("SYNC002", runCancellation.Token);
+            if (!disposed) StatusChanged?.Invoke("SYNC002：后台同步未完成，请检查网络与 WebView2 运行时。已保留本地任务。", false, true);
+        }
         finally
         {
             (reader as IDisposable)?.Dispose();
@@ -241,6 +263,13 @@ public sealed class ChaoxingSyncService : IDisposable
             if (ReferenceEquals(finished, runFinished)) finished = null;
             if (loginPending && !disposed && !stopping && !sessionClearing) loginTimer.Start();
         }
+    }
+
+    private void RecordCatalogFailure(string code, CancellationToken token)
+    {
+        try { store.RecordCourseCatalogResult("chaoxing", "error", [code], DateTimeOffset.UtcNow, token); }
+        catch (Exception error) when (error is OperationCanceledException or TaskValidationException
+            or Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException) { }
     }
 
     public async Task RefreshCourseCatalogAsync()
@@ -423,10 +452,12 @@ public sealed class ChaoxingSyncService : IDisposable
             if (loginRequired)
             {
                 sessionRejected = true;
-                return TryClearArchive();
+                sessionStore.Invalidate(DateTimeOffset.UtcNow); SessionPersistenceOutcome = "expired"; return true;
             }
             sessionRejected = false;
-            return SaveProfile(current);
+            var saved = SaveProfile(current);
+            if (saved) store.ConfirmPlatformSession("chaoxing", DateTimeOffset.UtcNow);
+            return saved;
         }
         finally { cookieGate.Release(); }
     }
@@ -434,7 +465,7 @@ public sealed class ChaoxingSyncService : IDisposable
     private bool SaveProfile(IReadOnlyList<ChaoxingSessionCookie> cookies)
     {
         // A confirmed expired session must not be re-archived by an exit or an unrelated response.
-        if (sessionRejected) return TryClearArchive();
+        if (sessionRejected) return true;
         try
         {
             sessionStore.Save(cookies, DateTimeOffset.UtcNow);

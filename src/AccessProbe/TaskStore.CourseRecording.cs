@@ -18,7 +18,17 @@ public sealed partial class TaskStore
         try
         {
             var settings = JsonSerializer.Deserialize<CourseRecordingSettings>(json) ?? throw new JsonException();
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty(nameof(CourseRecordingSettings.SelectionConfirmed), out _))
+            {
+                var wasAll = document.RootElement.TryGetProperty(nameof(CourseRecordingSettings.RecordAllCourses), out var all)
+                    && all.ValueKind == JsonValueKind.True;
+                settings = settings with { SelectionConfirmed = false, RecordAllCourses = false,
+                    SelectedCourseKeys = wasAll ? (settings.Courses ?? []).Where(course => course.Available).Select(course => course.Key).ToArray()
+                        : settings.SelectedCourseKeys };
+            }
             if (settings.Revision < 0 || settings.Courses is null || settings.SelectedCourseKeys is null
+                || settings.LastCatalogRefresh is { } refresh && !CourseRecordingRules.IsCatalogRefresh(refresh)
                 || settings.SelectedCourseKeys.Any(key => !CourseRecordingRules.IsKey(platformId, key))
                 || settings.Courses.Any(course => course is null || !CourseRecordingRules.IsKey(platformId, course.Key)
                     || string.IsNullOrWhiteSpace(course.Name) || course.Name.Length > 200 || course.Detail is null || course.Detail.Length > 200)
@@ -99,7 +109,12 @@ public sealed partial class TaskStore
                 var bound = task with { RecordingCourseKey = matches[0], Revision = task.Revision + 1 };
                 Write(connection, transaction, bound); Reconcile(connection, transaction, bound, now);
             }
-            result = current with { Courses = courses.Values.ToArray(), SelectedCourseKeys = selectedKeys.ToArray(), CatalogCheckedAtUtc = now.ToUniversalTime(), CatalogComplete = complete };
+            result = current with
+            {
+                Courses = courses.Values.ToArray(), SelectedCourseKeys = selectedKeys.ToArray(),
+                CatalogCheckedAtUtc = now.ToUniversalTime(), CatalogComplete = complete,
+                LastCatalogRefresh = new(now.ToUniversalTime(), complete ? "completed" : "partial", [])
+            };
             WriteCourseRecording(connection, transaction, platformId, result);
             foreach (var task in ReadRecordingTasks(connection, transaction, platformId)) Reconcile(connection, transaction, task, now);
             cancellation.ThrowIfCancellationRequested(); transaction.Commit();
@@ -122,7 +137,7 @@ public sealed partial class TaskStore
                 throw new TaskValidationException("COURSE001", "选中的课程不属于当前平台，请刷新课程列表。");
             result = current with
             {
-                Revision = checked(current.Revision + 1), RecordAllCourses = recordAll,
+                Revision = checked(current.Revision + 1), SelectionConfirmed = true, RecordAllCourses = recordAll,
                 SelectedCourseKeys = keys, HideUnselectedTasks = hideUnselectedTasks, Courses = courses
             };
             WriteCourseRecording(connection, transaction, platformId, result);
@@ -133,6 +148,24 @@ public sealed partial class TaskStore
     }
 
     public bool IsCourseRecorded(string platformId, string courseKey) => CourseRecordingRules.IsSelected(LoadCourseRecording(platformId), courseKey);
+
+    public void RecordCourseCatalogResult(string platformId, string outcome, IReadOnlyList<string> problemCodes,
+        DateTimeOffset now, CancellationToken cancellation = default)
+    {
+        CheckRecordingPlatform(platformId);
+        var refresh = new CourseCatalogRefresh(now.ToUniversalTime(), outcome, problemCodes.Distinct(StringComparer.Ordinal).ToArray());
+        if (!CourseRecordingRules.IsCatalogRefresh(refresh))
+            throw new TaskValidationException("COURSE001", "课程刷新结果无法确认，未保存诊断。");
+        lock (gate)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            using var connection = Open(); using var transaction = connection.BeginTransaction();
+            var settings = ReadCourseRecording(connection, transaction, platformId);
+            WriteCourseRecording(connection, transaction, platformId, settings with { LastCatalogRefresh = refresh });
+            cancellation.ThrowIfCancellationRequested(); transaction.Commit();
+        }
+        Changed?.Invoke();
+    }
 
     public void CheckCourseRecordingRevision(string platformId, long expectedRevision, CancellationToken cancellation = default)
     {

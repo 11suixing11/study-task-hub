@@ -101,8 +101,13 @@ public partial class MainWindow
         if (closing) return;
         if (!clearing && ProbePolicy.IsAllowedNavigation(request.Uri))
         {
-            try { core.Navigate(request.Uri); }
-            catch { StatusText.Text = "页面打开失败，请返回课程页重试。"; }
+            var address = request.Uri;
+            Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+            {
+                if (closing || clearing) return;
+                try { core.Navigate(address); }
+                catch { StatusText.Text = "页面打开失败，请返回课程页重试。"; }
+            }));
             return;
         }
         if (!clearing && ProbePolicy.TryGetHttpsNavigation(request.Uri, out var upgraded))
@@ -111,12 +116,16 @@ public partial class MainWindow
             if (mainHttpsUpgrade.TrySchedule(upgraded))
             {
                 RecordHttpsUpgrade("新窗口", "new_window");
-                try { core.Navigate(upgraded); }
-                catch
+                Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
                 {
-                    mainHttpsUpgrade.Reset();
-                    StatusText.Text = "HTTPS 页面打开失败，请返回课程页重试。";
-                }
+                    if (closing || clearing) return;
+                    try { core.Navigate(upgraded); }
+                    catch
+                    {
+                        mainHttpsUpgrade.Reset();
+                        StatusText.Text = "HTTPS 页面打开失败，请返回课程页重试。";
+                    }
+                }));
                 return;
             }
         }

@@ -40,6 +40,7 @@ public sealed record ChaoxingSyncSummary(int Courses, int CoursesRead, int Tasks
 {
     public int DetailsUnavailable { get; init; }
     public int DetailsRequireAction { get; init; }
+    public int DetailsRequirePreview { get; init; }
     public int? SelectedCourses { get; init; }
 }
 
@@ -93,6 +94,15 @@ public static class ChaoxingSyncParser
 
     public static bool IsWorkActionRedirect(Uri source, Uri target) => SameWork(
         WorkListParser.ParseDetailLocation(source.OriginalString), WorkListParser.ParseActionLocation(target.OriginalString));
+
+    public static bool IsWorkPreviewRedirect(Uri source, Uri target)
+    {
+        var original = WorkListParser.ParseDetailLocation(source.OriginalString);
+        var preview = WorkListParser.ParsePreviewLocation(target.OriginalString);
+        return original is not null && preview is { AnswerId: null } && Query(target) is { Count: 5 }
+            && original.CourseId == preview.CourseId && original.ClassId == preview.ClassId
+            && original.Cpi == preview.Cpi && original.WorkId == preview.WorkId;
+    }
 
     private static bool SameWork(WorkTaskLocation? original, WorkTaskLocation? redirected) =>
         original is not null && redirected is not null
@@ -279,12 +289,13 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
 
     public async Task<ChaoxingSyncSummary> RunAsync(IProgress<ChaoxingSyncProgress>? progress, CancellationToken cancellation, bool catalogOnly = false)
     {
+        catalogOnly |= !store.LoadCourseRecording("chaoxing").SelectionConfirmed;
         requests = 0;
         var problems = new List<ChaoxingSyncProblem>();
         var courses = new Dictionary<string, ChaoxingCourse>(StringComparer.Ordinal);
         var rowsByKey = new Dictionary<string, WorkListTask>(StringComparer.Ordinal);
         var coursesRead = 0; var added = 0; var updated = 0; var detailCount = 0; var deferred = 0;
-        var detailUnavailable = 0; var detailRequireAction = 0;
+        var detailUnavailable = 0; var detailRequireAction = 0; var detailRequirePreview = 0;
         var loginRequired = false; var catalogCovered = true;
         recordingRevision = store.LoadCourseRecording("chaoxing").Revision;
         var selectedCourses = 0;
@@ -395,9 +406,10 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
                 try
                 {
                     var page = await Fetch(row.Location!.PageUri, cancellation);
-                    if (page.Outcome == "detail_requires_user_action")
+                    if (page.Outcome is "detail_requires_user_action" or "detail_requires_preview")
                     {
-                        detailRequireAction++;
+                        if (page.Outcome == "detail_requires_preview") detailRequirePreview++;
+                        else detailRequireAction++;
                         await Task.Run(() => store.RecordDetailCheck(row.Location, DateTimeOffset.UtcNow, cancellation, recordingRevision), cancellation);
                         continue;
                     }
@@ -419,7 +431,7 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
                     detailCount++;
                 }
                 catch (SyncFailure failure) when (failure.Code != "SYNC001" && failure.Code != "SYNC008")
-                { Problem(failure.Code, task.CourseName, "部分任务时间未读取，已保留列表任务。" ); }
+                { Problem(failure.Code, task.CourseName, "部分任务详情时间未读取：" + failure.Message + " 列表任务和已有日期已保留。"); }
                 catch (TaskValidationException failure) when (failure.Code == "LINK003")
                 { /* A task deleted during synchronization is not recreated by its detail response. */ }
             }
@@ -434,7 +446,7 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
         store.CheckCourseRecordingRevision("chaoxing", recordingRevision, cancellation);
         return new(courses.Count, coursesRead, rowsByKey.Count, added, updated, detailCount, deferred,
             loginRequired, catalogCovered, problems.Distinct().ToArray())
-            { DetailsUnavailable = detailUnavailable, DetailsRequireAction = detailRequireAction, SelectedCourses = selectedCourses };
+            { DetailsUnavailable = detailUnavailable, DetailsRequireAction = detailRequireAction, DetailsRequirePreview = detailRequirePreview, SelectedCourses = selectedCourses };
     }
 
     private async Task<ChaoxingPage> Fetch(Uri address, CancellationToken cancellation)

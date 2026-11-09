@@ -43,7 +43,7 @@ internal static class Program
         Environment.SetEnvironmentVariable("TEMP", runRoot); Environment.SetEnvironmentVariable("TMP", runRoot);
         RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
         app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        store = new TaskStore(Path.Combine(runRoot, "tasks.db"));
+        store = FixtureTaskStore.Create(Path.Combine(runRoot, "tasks.db"), pendingPlatforms: ["yuketang", "changjiang"]);
         store.SaveSettings(new(false, true) { LastSyncOutcome = "chaoxing-untouched" });
         dashboard = new(store, runRoot, () => connectionClicks.Add("chaoxing"), () => app.Shutdown(), opened.Add)
         { Title = "学习任务聚合 · 雨课堂离线桌面验收" };
@@ -74,6 +74,12 @@ internal static class Program
             Check(services.Values.All(service => !service.IsRunning), "unconnected services remain idle");
             ((Button)dashboard.FindName("RainConnectionButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             ((Button)dashboard.FindName("ChangjiangConnectionButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await WaitAsync(() => app.Windows.OfType<CourseSelectionWindow>().Count() == 2);
+            foreach (var manager in app.Windows.OfType<CourseSelectionWindow>().ToArray())
+            {
+                await WaitAsync(() => manager.FindName("RecordingCourseList") is ListBox { ItemsSource: not null });
+                ((Button)manager.FindName("RecordingConnectionButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }
             Check(connectionClicks.SequenceEqual(new[] { "yuketang", "changjiang" }), "platform connection buttons target correct service");
 
             foreach (var platform in RainPlatform.All)
@@ -81,13 +87,17 @@ internal static class Program
                 var service = services[platform.Id]; var fixture = sessions[platform.Id];
                 var loginRequired = await RunAsync(service, service.ConnectionOpened);
                 Check(loginRequired.LoginRequired && store.LoadTasks().Count == (platform.Id == "yuketang" ? 0 : 2), "expired session keeps other platform tasks");
-                Check(store.LoadPlatformSettings(platform.Id).LastSyncOutcome == "login_required", "independent login-required outcome is persisted");
+                Check(store.LoadCourseRecording(platform.Id).LastCatalogRefresh?.Outcome == "login_required", "independent login-required catalog outcome is persisted");
                 Check(((TextBlock)dashboard.FindName(platform.Id == "yuketang" ? "RainSyncStatusText" : "ChangjiangSyncStatusText")).Text.Contains("RAIN001", StringComparison.Ordinal), "login-required banner is visible");
                 Check(((Expander)dashboard.FindName("PlatformSyncExpander")).IsExpanded
                     && ((TextBlock)dashboard.FindName("SyncOverviewText")).Text.Contains(platform.Name, StringComparison.Ordinal),
                     "a login problem expands the selected platform warning without hiding task rows");
                 fixture.LoggedIn = true;
-                var loggedIn = await RunAsync(service, () => service.LoginNavigationCompleted(platform.IndexUri(platform.DefaultHost).AbsoluteUri));
+                var catalog = await RunAsync(service, () => service.LoginNavigationCompleted(platform.IndexUri(platform.DefaultHost).AbsoluteUri));
+                Check(catalog.Courses == 1 && catalog.CoursesRead == 0 && catalog.Tasks == 0, "login returns course catalog without task requests");
+                var selection = store.LoadCourseRecording(platform.Id);
+                store.SaveCourseRecording(platform.Id, false, selection.Courses.Select(course => course.Key).ToArray(), true, selection.Revision, DateTimeOffset.UtcNow);
+                var loggedIn = await RunAsync(service, () => _ = service.RecordingCoursesChangedAsync());
                 Check(loggedIn.CoursesRead == 1 && loggedIn.Tasks == 2 && loggedIn.Added == 2 && loggedIn.Problems.Count == 0, "official login automatically imports both task types");
                 await WaitAsync(() => ((DataGrid)dashboard.FindName("TaskTable")).Items.Count == store.LoadTasks().Count);
                 Check(((DataGrid)dashboard.FindName("TaskTable")).Items.Cast<TaskDashboardWindow.TaskDisplayRow>()
@@ -97,6 +107,7 @@ internal static class Program
                 Check(Browser(platform.Id).CoreWebView2 is not null && Browser(platform.Id).Visibility == Visibility.Hidden, "hidden isolated session host is ready");
                 service.ConnectionClosed();
             }
+            foreach (var manager in app.Windows.OfType<CourseSelectionWindow>().ToArray()) manager.Close();
             Check(store.LoadTasks().Count == 4 && store.LoadTasks().Select(task => task.SourceKey).Distinct().Count() == 4, "same task IDs remain isolated by platform");
             Check(store.LoadSettings().LastSyncOutcome == "chaoxing-untouched", "rain does not overwrite chaoxing sync result");
             var rainBrowser = Browser("yuketang"); var cjBrowser = Browser("changjiang");
@@ -119,7 +130,7 @@ internal static class Program
             var beforeRequests = rainSession.Requests;
             var settings = store.LoadPlatformSettings("yuketang") with { AutomaticSyncEnabled = false };
             store.SavePlatformSettings("yuketang", settings); rainService.SettingsChanged(false);
-            rainService.ConnectionOpened(); rainService.StartAutomatic();
+            rainService.StartAutomatic();
             await Task.Delay(200);
             Check(rainSession.Requests == beforeRequests, "per-platform automatic switch stops login polling");
             Check(((TextBlock)dashboard.FindName("RainSyncStatusText")).Text.Contains("关闭", StringComparison.Ordinal), "per-platform disabled warning stays visible");
@@ -130,7 +141,7 @@ internal static class Program
             store.SaveSettings(store.LoadSettings() with { AutomaticSyncEnabled = false });
             foreach (var service in services.Values) service.SettingsChanged(false);
             var allBefore = sessions.Values.Sum(session => session.Requests);
-            foreach (var service in services.Values) { service.StartAutomatic(); service.ConnectionOpened(); }
+            foreach (var service in services.Values) { service.ConnectionClosed(); service.StartAutomatic(); }
             await Task.Delay(200);
             Check(sessions.Values.Sum(session => session.Requests) == allBefore, "global automatic switch stops all platform requests");
             store.SaveSettings(store.LoadSettings() with { AutomaticSyncEnabled = true });
@@ -175,7 +186,7 @@ internal static class Program
         }
         catch (Exception error)
         {
-            failure = error.GetType().Name; WriteReport(); app.Shutdown(1);
+            failure = error.GetType().Name + ": " + error.Message + "\n" + error.StackTrace; WriteReport(); app.Shutdown(1);
         }
     }
 
@@ -224,6 +235,7 @@ internal static class Program
         combo.SelectedItem = "pro.yuketang.cn";
         await WaitAsync(() => service.Host == "pro.yuketang.cn" && browser.CoreWebView2.Source == "https://pro.yuketang.cn/web");
         Check(service.Host == "pro.yuketang.cn" && store.LoadPlatformSettings("changjiang").Host == "changjiang.yuketang.cn", "standard and pro host selector does not affect changjiang");
+        await PlatformConnectionTestData.ConnectionPopupChecks.VerifyAsync(browser.CoreWebView2, service.Host, Check);
         window.Close();
         await Task.Delay(100);
     }
@@ -247,7 +259,7 @@ internal static class Program
                 "minimum dashboard size keeps " + name + " within visible layout");
         }
         tableHeights["minimumExpandedInitial"] = table.ActualHeight;
-        var dock = (DockPanel)dashboard.Content;
+        var dock = (Panel)dashboard.Content;
         foreach (var (element, index) in dock.Children.Cast<FrameworkElement>().Select((element, index) => (element, index)))
         {
             layoutHeights[$"dock{index}:{element.GetType().Name}"] = element.ActualHeight;
@@ -353,7 +365,8 @@ internal static class Program
             && Rows().Count(row => row.Task.PlatformId == "changjiang") == 2
             && Rows().Count(row => row.Task.PlatformId == "mooc") == 1,
             "one default table aggregates learning rain changjiang and manually maintained tasks");
-        Check(((TextBlock)dashboard.FindName("AggregationTitleText")).Text.Contains("共 7 条", StringComparison.Ordinal)
+        Check(((TextBlock)dashboard.FindName("AggregationTitleText")).Text == "全部任务"
+            && ((TextBlock)dashboard.FindName("ToolbarCountText")).Text == "7 项"
             && new[] { "学习通 2 条", "雨课堂 2 条", "长江雨课堂 2 条", "中国大学 MOOC 1 条" }
                 .All(text => ((TextBlock)dashboard.FindName("AggregationSummaryText")).Text.Contains(text, StringComparison.Ordinal)),
             "unified task total and source counts account for every platform");
@@ -487,8 +500,14 @@ internal static class Program
         var completion = new TaskCompletionSource<RainSyncSummary>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Finished(RainSyncSummary result) { if (expected is null || expected(result)) completion.TrySetResult(result); }
         service.Completed += Finished;
+        void Catalog(RainSyncSummary result)
+        {
+            if (result.LoginRequired || !store.LoadCourseRecording(service.Platform.Id).SelectionConfirmed) { Finished(result); return; }
+            dashboard.Dispatcher.BeginInvoke(new Action(async () => await service.RecordingCoursesChangedAsync()));
+        }
+        service.CatalogCompleted += Catalog;
         try { start(); var result = await completion.Task.WaitAsync(TimeSpan.FromSeconds(35)); await Task.Delay(100); return result; }
-        finally { service.Completed -= Finished; }
+        finally { service.Completed -= Finished; service.CatalogCompleted -= Catalog; }
     }
 
     private static async Task WaitAsync(Func<bool> ready)

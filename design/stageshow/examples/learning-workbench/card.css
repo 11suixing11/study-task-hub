@@ -1,0 +1,34 @@
+.lw-study {
+  & .ss-stage { overflow: hidden; background: #f5f6f8; border-radius: 16px; }
+  .lw-window {
+    position: absolute; top: 24px; left: 104px; width: 840px; height: 650px;
+    border-radius: 12px; background: var(--ss-surface); box-shadow: var(--ss-shadow-hero);
+  }
+  .lw-window .ss-window__body { display: flex; }
+  .lw-sidebar { flex: none; width: 192px; padding: 20px 12px; border-right: 1px solid var(--ss-line); background: var(--ss-canvas); }
+  .lw-sidebar > .lw-label { display: block; margin: 0 12px 12px; }
+  .lw-main { flex: 1; min-width: 0; padding: 24px; }
+  .lw-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .lw-heading > .ss-button { margin-left: auto; }
+  .lw-title { font-size: 24px; line-height: 32px; font-weight: 600; color: var(--ss-text-strong); }
+  .lw-nav, .lw-task { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--ss-text-strong); }
+  .lw-label, .lw-due { font-size: 11px; line-height: 15px; color: var(--ss-text); }
+  .lw-section { font-size: 14px; line-height: 19px; font-weight: 600; color: var(--ss-text-strong); }
+  .lw-summary { background: #315be8; border-color: transparent; color: white; }
+  .lw-number { display: flex; align-items: center; gap: 12px; }
+  .lw-count { font-size: 36px; line-height: 42px; font-weight: 600; color: white; }
+  .lw-count-label { font-size: 14px; line-height: 20px; color: white; }
+  .lw-summary-detail { font-size: 11px; line-height: 16px; color: #e2eaff; }
+  .lw-list-heading { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin: 20px 12px 8px; }
+  .lw-list { display: flex; flex-direction: column; }
+  .lw-detail { position: absolute; bottom: 24px; left: 24px; width: 248px; background: white; }
+  .lw-detail-head { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+  .lw-detail > .ss-button { align-self: flex-start; }
+  & [data-layout="compact"] {
+    .lw-window { left: 24px; width: 310px; height: 650px; }
+    .lw-main { padding: 16px; }
+    .lw-title { font-size: 22px; line-height: 30px; }
+    .lw-heading { margin-bottom: 12px; }
+    .lw-list-heading { margin-top: 16px; }
+  }
+}

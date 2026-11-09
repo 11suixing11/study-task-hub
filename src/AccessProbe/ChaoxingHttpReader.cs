@@ -57,6 +57,7 @@ public sealed class ChaoxingHttpReader : IChaoxingPageReader, IDisposable
                     if (next.Scheme == Uri.UriSchemeHttp && ProbePolicy.TryGetHttpsNavigation(next.OriginalString, out var https)) next = new Uri(https);
                     // The platform may route an unfinished work into answering. Preserve list metadata without entering it.
                     if (ChaoxingSyncParser.IsWorkActionRedirect(current, next)) return new("detail_requires_user_action", status, current, "");
+                    if (ChaoxingSyncParser.IsWorkPreviewRedirect(current, next)) return new("detail_requires_preview", status, current, "");
                     if (!ChaoxingSyncParser.IsReadAddress(next) || !ChaoxingSyncParser.IsCourseRedirect(current, next)
                         || !ChaoxingSyncParser.IsWorkRedirect(current, next) || redirects == 5)
                         return new("unsupported_redirect", status, current, "");
@@ -118,7 +119,7 @@ public sealed class ChaoxingHttpReader : IChaoxingPageReader, IDisposable
                     if (TaskNavigationRules.Destination(address, target) is not { } destination)
                         return new("unsupported_redirect", "none");
                     // These are final user destinations. Do not GET them inside the aggregator.
-                    if (destination is "answer" or "view" or "submitted") return new("ready", destination, target.OriginalString);
+                    if (destination is "answer" or "view" or "submitted" or "preview") return new("ready", destination, target.OriginalString);
                     current = target;
                     continue;
                 }

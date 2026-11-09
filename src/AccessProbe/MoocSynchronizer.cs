@@ -12,6 +12,7 @@ public sealed class MoocSynchronizer(TaskStore store, IMoocMetadataReader reader
 
     public async Task<MoocSyncSummary> RunAsync(IProgress<string>? progress = null, CancellationToken cancellation = default, bool catalogOnly = false)
     {
+        catalogOnly |= !store.LoadCourseRecording("mooc").SelectionConfirmed;
         var problems = new List<MoocSyncProblem>(); var courses = new Dictionary<string, MoocCourse>(StringComparer.Ordinal);
         var allTasks = new Dictionary<string, MoocTask>(StringComparer.Ordinal);
         var coursesRead = 0; var added = 0; var updated = 0; var duplicates = 0; var requests = 0; var pagesRead = 0;

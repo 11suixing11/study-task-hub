@@ -10,20 +10,24 @@ public sealed class RainHttpReader : IRainMetadataReader, IDisposable
     private readonly RainPlatform platform;
     private readonly string host;
     private readonly HttpClient client;
-    private readonly CookieContainer cookies = new();
+    private sealed record ResponseCookie(ChaoxingSessionCookie Cookie, ChaoxingSessionCookie? ProfileBefore);
+    private readonly Dictionary<string, ResponseCookie> responseCookies = new(StringComparer.Ordinal);
     private readonly Func<Uri, CancellationToken, Task<IReadOnlyList<Cookie>>> readCookies;
     private readonly bool applyRequestSpacing;
+    private readonly Func<Uri, IReadOnlyList<Cookie>, IReadOnlyList<ChaoxingSessionCookie>, CancellationToken, Task>? saveResponseCookies;
     private DateTimeOffset nextRequestAt;
     private bool rateLimited;
 
     public RainHttpReader(RainPlatform platform, string host,
-        Func<Uri, CancellationToken, Task<IReadOnlyList<Cookie>>> readCookies, HttpMessageHandler? testHandler = null)
+        Func<Uri, CancellationToken, Task<IReadOnlyList<Cookie>>> readCookies, HttpMessageHandler? testHandler = null,
+        Func<Uri, IReadOnlyList<Cookie>, IReadOnlyList<ChaoxingSessionCookie>, CancellationToken, Task>? saveResponseCookies = null)
     {
         this.platform = platform; this.host = platform.CheckHost(host); this.readCookies = readCookies;
+        this.saveResponseCookies = saveResponseCookies;
         applyRequestSpacing = testHandler is null;
         var handler = testHandler ?? new HttpClientHandler
         {
-            AllowAutoRedirect = false, UseCookies = true, CookieContainer = cookies,
+            AllowAutoRedirect = false, UseCookies = false,
             AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli
         };
         client = new(handler) { Timeout = TimeSpan.FromSeconds(25) };
@@ -43,10 +47,29 @@ public sealed class RainHttpReader : IRainMetadataReader, IDisposable
         {
             cancellation.ThrowIfCancellationRequested();
             var applicable = await readCookies(address, cancellation);
-            foreach (var cookie in applicable)
-                if (!cookie.Expired && !cookies.GetCookies(address).Cast<Cookie>().Any(existing => existing.Name == cookie.Name
-                    && existing.Domain == cookie.Domain && existing.Path == cookie.Path)) cookies.Add(address, cookie);
+            cancellation.ThrowIfCancellationRequested();
+            var profile = applicable.Select(ChaoxingSessionCookie.FromCookie).Where(cookie => RainSessionStore.IsValid(platform, cookie))
+                .DistinctBy(cookie => cookie.Key).ToDictionary(cookie => cookie.Key, StringComparer.Ordinal);
+            var outgoing = new Dictionary<string, ChaoxingSessionCookie>(profile, StringComparer.Ordinal);
+            foreach (var item in responseCookies.ToArray())
+            {
+                if (!item.Value.Cookie.AppliesTo(address)) continue;
+                profile.TryGetValue(item.Key, out var current);
+                if (current != item.Value.ProfileBefore) { responseCookies.Remove(item.Key); continue; }
+                outgoing[item.Key] = item.Value.Cookie;
+            }
+            var cookies = new CookieContainer(512, 512, 32768);
+            foreach (var cookie in outgoing.Values.Where(cookie => !cookie.IsExpired(DateTimeOffset.UtcNow) && cookie.AppliesTo(address)))
+            {
+                var scoped = cookie.ToCookie();
+                if (!cookie.Domain.StartsWith('.'))
+                    scoped = new Cookie(cookie.Name, cookie.Value, cookie.Path)
+                    { Secure = cookie.Secure, HttpOnly = cookie.HttpOnly, Expires = scoped.Expires };
+                cookies.Add(new Uri("https://" + cookie.Domain.TrimStart('.') + "/"), scoped);
+            }
             using var request = new HttpRequestMessage(HttpMethod.Get, address);
+            var cookieHeader = cookies.GetCookieHeader(address);
+            if (cookieHeader.Length > 0) request.Headers.TryAddWithoutValidation("Cookie", cookieHeader);
             // University and CSRF values are copied only from the selected profile, never fabricated or logged.
             var currentCookies = cookies.GetCookies(address).Cast<Cookie>().ToArray();
             var university = new[] { "uv-id", "uv_id", "university-id", "university_id" }
@@ -60,7 +83,13 @@ public sealed class RainHttpReader : IRainMetadataReader, IDisposable
                 await Task.Delay(delay, cancellation);
             nextRequestAt = DateTimeOffset.UtcNow.AddMilliseconds(150);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
+            cancellation.ThrowIfCancellationRequested();
             var status = (int)response.StatusCode;
+            var renewed = response.Headers.TryGetValues("Set-Cookie", out var headers)
+                ? ChaoxingResponseCookies.Parse(address, headers, DateTimeOffset.UtcNow, cookie => RainSessionStore.IsValid(platform, cookie)) : [];
+            if (saveResponseCookies is not null) await saveResponseCookies(address, applicable, renewed, cancellation);
+            cancellation.ThrowIfCancellationRequested();
+            foreach (var cookie in renewed) responseCookies[cookie.Key] = new(cookie, profile.GetValueOrDefault(cookie.Key));
             if (status == 401) return new("login_required", status);
             if (status == 403) return new("forbidden", status);
             if (status == 429) { rateLimited = true; return new("rate_limited", status); }

@@ -1,170 +1,358 @@
 <Window x:Class="AccessProbe.TaskDashboardWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+ xmlns:local="clr-namespace:AccessProbe"
  xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
- Title="学习任务聚合 · 全部平台任务" Width="1360" Height="930" MinWidth="1180" MinHeight="800"
- WindowStartupLocation="CenterScreen" Background="#F3F6FB" FontFamily="Microsoft YaHei UI" FontSize="13">
+ Icon="{x:Static local:ProductIcons.AppImage}" Title="学习任务聚合" Width="1320" Height="860" MinWidth="1100" MinHeight="700"
+ WindowStartupLocation="CenterScreen" Background="{DynamicResource CanvasBrush}" FontFamily="{DynamicResource AppFontFamily}" FontSize="13"
+ UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
  <Window.Resources>
-  <Style TargetType="Button">
-   <Setter Property="Padding" Value="14,8"/><Setter Property="Margin" Value="0,0,8,0"/>
-   <Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#CFD8E6"/>
-   <Setter Property="Foreground" Value="#22334D"/><Setter Property="Cursor" Value="Hand"/>
-   <Setter Property="Template">
-    <Setter.Value><ControlTemplate TargetType="Button">
-     <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-      BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
-      <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-     </Border>
-     <ControlTemplate.Triggers>
-      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.8"/></Trigger>
-      <Trigger Property="IsEnabled" Value="False"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.42"/></Trigger>
-     </ControlTemplate.Triggers>
-    </ControlTemplate></Setter.Value>
-   </Setter>
-  </Style>
-  <Style TargetType="ComboBox"><Setter Property="MinHeight" Value="34"/><Setter Property="Margin" Value="0,0,10,0"/><Setter Property="Padding" Value="7,5"/></Style>
-  <Style TargetType="DataGrid">
-   <Setter Property="BorderThickness" Value="0"/><Setter Property="Background" Value="White"/>
-   <Setter Property="GridLinesVisibility" Value="Horizontal"/><Setter Property="HorizontalGridLinesBrush" Value="#EEF1F6"/>
-   <Setter Property="RowHeight" Value="46"/><Setter Property="ColumnHeaderHeight" Value="42"/>
-   <Setter Property="RowHeaderWidth" Value="0"/><Setter Property="AlternatingRowBackground" Value="#FAFBFD"/>
-  </Style>
-  <Style TargetType="DataGridColumnHeader">
-   <Setter Property="Background" Value="#EFF3F9"/><Setter Property="Foreground" Value="#51627B"/>
-   <Setter Property="Padding" Value="10,8"/><Setter Property="BorderThickness" Value="0"/><Setter Property="FontWeight" Value="SemiBold"/>
-  </Style>
-  <Style TargetType="DataGridCell"><Setter Property="Padding" Value="10,8"/><Setter Property="BorderThickness" Value="0"/></Style>
+  <ResourceDictionary>
+   <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="FluentTheme.xaml"/></ResourceDictionary.MergedDictionaries>
+   <Style x:Key="PlatformCard" TargetType="ui:Button" BasedOn="{StaticResource TextButton}">
+    <Setter Property="Padding" Value="9,4"/><Setter Property="Margin" Value="0,1"/><Setter Property="Height" Value="44"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
+    <Setter Property="MouseOverBackground" Value="{StaticResource SidebarHoverBrush}"/><Setter Property="PressedBackground" Value="{StaticResource SidebarHoverBrush}"/>
+   </Style>
+   <Style x:Key="SidebarNavigation" TargetType="ui:Button" BasedOn="{StaticResource TextButton}">
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="9,5"/>
+    <Setter Property="Margin" Value="0,1"/><Setter Property="Height" Value="32"/><Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
+    <Setter Property="MouseOverBackground" Value="{StaticResource SidebarHoverBrush}"/><Setter Property="PressedBackground" Value="{StaticResource SidebarHoverBrush}"/>
+    <Style.Triggers><Trigger Property="Tag" Value="selected">
+     <Setter Property="Background" Value="{StaticResource SidebarSelectionBrush}"/>
+     <Setter Property="Foreground" Value="White"/><Setter Property="PressedForeground" Value="White"/>
+     <Setter Property="MouseOverBackground" Value="#005BCE"/><Setter Property="PressedBackground" Value="#004BB4"/><Setter Property="FontWeight" Value="SemiBold"/>
+    </Trigger></Style.Triggers>
+   </Style>
+   <Style x:Key="SidebarCategoryLabel" TargetType="TextBlock">
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/>
+   </Style>
+   <Style x:Key="SidebarCountBadge" TargetType="Border">
+    <Setter Property="CornerRadius" Value="5"/><Setter Property="Padding" Value="7,1"/>
+    <Setter Property="MinWidth" Value="26"/><Setter Property="VerticalAlignment" Value="Center"/>
+    <Style.Triggers><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}" Value="selected"><Setter Property="Background" Value="White"/></DataTrigger></Style.Triggers>
+   </Style>
+   <Style x:Key="SidebarActiveCount" TargetType="Border" BasedOn="{StaticResource SidebarCountBadge}"><Setter Property="Background" Value="{StaticResource PrimarySoftBrush}"/></Style>
+   <Style x:Key="SidebarSoonCount" TargetType="Border" BasedOn="{StaticResource SidebarCountBadge}"><Setter Property="Background" Value="{StaticResource WarningSoftBrush}"/></Style>
+   <Style x:Key="SidebarOverdueCount" TargetType="Border" BasedOn="{StaticResource SidebarCountBadge}"><Setter Property="Background" Value="{StaticResource DangerSoftBrush}"/></Style>
+   <Style x:Key="SidebarCompleteCount" TargetType="Border" BasedOn="{StaticResource SidebarCountBadge}"><Setter Property="Background" Value="{StaticResource SuccessSoftBrush}"/></Style>
+   <Style x:Key="ToolbarButton" TargetType="ui:Button" BasedOn="{StaticResource TextButton}">
+    <Setter Property="Width" Value="32"/><Setter Property="Height" Value="30"/><Setter Property="Padding" Value="6"/>
+    <Setter Property="Margin" Value="2,0"/><Setter Property="FontSize" Value="18"/>
+   </Style>
+   <Style x:Key="ToolbarPrimaryButton" TargetType="ui:Button" BasedOn="{StaticResource ToolbarButton}">
+    <Setter Property="Appearance" Value="Primary"/><Setter Property="Foreground" Value="White"/>
+    <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/><Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+    <Setter Property="MouseOverBackground" Value="#005BCE"/><Setter Property="PressedBackground" Value="#004BB4"/>
+    <Setter Property="PressedForeground" Value="White"/>
+   </Style>
+   <Style x:Key="TaskLink" TargetType="ui:Button" BasedOn="{StaticResource TextButton}">
+    <Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="MinHeight" Value="0"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
+    <Setter Property="MouseOverBackground" Value="Transparent"/><Setter Property="PressedBackground" Value="Transparent"/>
+    <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{StaticResource PrimaryBrush}"/></Trigger></Style.Triggers>
+   </Style>
+   <Style x:Key="TaskRow" TargetType="DataGridRow" BasedOn="{StaticResource MacDataGridRow}"/>
+  </ResourceDictionary>
  </Window.Resources>
- <DockPanel Margin="24">
-  <StackPanel DockPanel.Dock="Top">
-   <DockPanel Margin="0,0,0,8">
-    <StackPanel>
-     <TextBlock Text="学习任务聚合" FontSize="26" FontWeight="SemiBold" Foreground="#172B49"/>
-     <TextBlock Text="集中看任务，及时提醒，一键回到原平台" Foreground="#62728A" Margin="0,4,0,0"/>
+ <Grid>
+  <Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="220"/><ColumnDefinition Width="*"/><ColumnDefinition x:Name="DetailsColumn" Width="300"/></Grid.ColumnDefinitions>
+  <Grid.RowDefinitions><RowDefinition Height="56"/><RowDefinition Height="*"/><RowDefinition Height="26"/></Grid.RowDefinitions>
+  <Border Grid.RowSpan="2" x:Name="SidebarPanel" Background="{DynamicResource SidebarMaterialBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0">
+   <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Height="56" Margin="20,0,12,0" VerticalAlignment="Top">
+     <local:ProductIcon Key="app" Tile="True" Width="34" Height="34" VerticalAlignment="Center" Margin="0,0,10,0"/>
+     <TextBlock Text="聚合平台" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
     </StackPanel>
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-     <Button x:Name="SyncButton" Content="同步所有平台" Click="SyncNow" ToolTip="刷新学习通和已连接的雨课堂、长江雨课堂、中国大学 MOOC，合并显示全部任务" Background="#245AC3" Foreground="White" BorderBrush="#245AC3"/>
-     <Button Content="连接学习通" Click="OpenConnection"/>
-     <Button x:Name="RainConnectionButton" Content="连接雨课堂" Click="OpenRainConnection"/>
-     <Button x:Name="ChangjiangConnectionButton" Content="连接长江雨课堂" Click="OpenChangjiangConnection"/>
-     <Button x:Name="MoocConnectionButton" Content="连接 MOOC" Click="OpenMoocConnection" ToolTip="连接中国大学 MOOC，登录后自动采集"/>
-     <Button Content="设置与平台" Click="OpenSettings"/>
-    </StackPanel>
-   </DockPanel>
-   <Expander x:Name="PlatformSyncExpander" IsExpanded="False" HorizontalContentAlignment="Stretch" Margin="0,0,0,10">
-    <Expander.Header>
-     <DockPanel>
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="14,0,0,0">
-       <Button x:Name="StopSyncButton" Content="停止" Click="StopSync" Visibility="Collapsed" Padding="10,4"/>
-       <Button Content="同步详情" Click="ShowSyncDetails" Padding="10,4" Margin="0"/>
-      </StackPanel>
-      <TextBlock x:Name="SyncOverviewText" Text="平台连接与同步" Foreground="#62728A" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"/>
-     </DockPanel>
-    </Expander.Header>
-    <ScrollViewer MaxHeight="96" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <Border DockPanel.Dock="Bottom" Margin="18,8,18,14" Padding="0,10,0,0" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
+     <StackPanel Orientation="Horizontal"><local:ProductIcon Key="saved" Width="14" Height="14" Foreground="{StaticResource MutedBrush}" Margin="0,0,6,0"/>
+      <TextBlock Text="登录信息自动保存" Foreground="{StaticResource MutedBrush}" FontSize="11"/>
+     </StackPanel>
+    </Border>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="10,8,10,0">
      <StackPanel>
-     <Border x:Name="SyncBanner" Background="#EAF1FC" CornerRadius="6" Padding="12,10" Margin="0,0,0,8">
-      <TextBlock x:Name="SyncStatusText" Text="学习通将在后台检查课程与任务；首次连接时完成一次官方登录。" Foreground="#245AC3" TextWrapping="Wrap"/>
-     </Border>
-     <Grid>
-      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-      <Border x:Name="RainSyncBanner" Grid.Column="0" Background="#EAF1FC" CornerRadius="6" Padding="12,10" Margin="0,0,8,0">
-       <TextBlock x:Name="RainSyncStatusText" Text="雨课堂尚未连接；完成一次官方登录后自动采集。" Foreground="#245AC3" TextWrapping="Wrap"/>
-      </Border>
-      <Border x:Name="ChangjiangSyncBanner" Grid.Column="1" Background="#EAF1FC" CornerRadius="6" Padding="12,10">
-       <TextBlock x:Name="ChangjiangSyncStatusText" Text="长江雨课堂尚未连接；完成一次官方登录后自动采集。" Foreground="#245AC3" TextWrapping="Wrap"/>
-      </Border>
-     </Grid>
-     <Border x:Name="MoocSyncBanner" Background="#EAF1FC" CornerRadius="6" Padding="12,10" Margin="0,8,0,0">
-      <TextBlock x:Name="MoocSyncStatusText" Text="中国大学 MOOC 尚未连接；完成一次官方登录后自动采集。" Foreground="#245AC3" TextWrapping="Wrap"/>
-     </Border>
+      <TextBlock Text="任务" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}" Margin="9,0,0,6"/>
+      <ui:Button x:Name="WorkspaceHomeButton" Click="ViewAllTasks" Style="{StaticResource SidebarNavigation}" AutomationProperties.Name="全部任务">
+       <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <local:ProductIcon Key="tasks" Tile="True" Width="24" Height="24" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="1" Text="全部任务" Style="{StaticResource SidebarCategoryLabel}"/>
+       </Grid>
+      </ui:Button>
+      <StackPanel x:Name="TaskMetricsRow">
+       <ui:Button x:Name="ActiveTasksButton" Click="FilterActive" Style="{StaticResource SidebarNavigation}" ToolTip="查看全部平台的待办任务">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="todo" Tile="True" Width="24" Height="24" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <TextBlock Grid.Column="1" Text="待办" Style="{StaticResource SidebarCategoryLabel}"/>
+         <Border Grid.Column="2" Style="{StaticResource SidebarActiveCount}"><TextBlock x:Name="ActiveCountText" Text="0" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource PrimaryBrush}" HorizontalAlignment="Center"/></Border>
+        </Grid>
+       </ui:Button>
+       <ui:Button x:Name="SoonTasksButton" Click="FilterSoon" Style="{StaticResource SidebarNavigation}" ToolTip="查看全部平台的即将到期任务">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="soon" Tile="True" Width="24" Height="24" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <TextBlock Grid.Column="1" Text="即将到期" Style="{StaticResource SidebarCategoryLabel}"/>
+         <Border Grid.Column="2" Style="{StaticResource SidebarSoonCount}"><TextBlock x:Name="SoonCountText" Text="0" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource WarningBrush}" HorizontalAlignment="Center"/></Border>
+        </Grid>
+       </ui:Button>
+       <ui:Button x:Name="OverdueTasksButton" Click="FilterOverdue" Style="{StaticResource SidebarNavigation}" ToolTip="查看全部平台的已逾期任务">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="overdue" Tile="True" Width="24" Height="24" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <TextBlock Grid.Column="1" Text="已逾期" Style="{StaticResource SidebarCategoryLabel}"/>
+         <Border Grid.Column="2" Style="{StaticResource SidebarOverdueCount}"><TextBlock x:Name="OverdueCountText" Text="0" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource DangerBrush}" HorizontalAlignment="Center"/></Border>
+        </Grid>
+       </ui:Button>
+       <ui:Button x:Name="CompletedTasksButton" Click="FilterCompleted" Style="{StaticResource SidebarNavigation}" ToolTip="查看全部平台的已完成任务">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="completed" Tile="True" Width="24" Height="24" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <TextBlock Grid.Column="1" Text="已完成" Style="{StaticResource SidebarCategoryLabel}"/>
+         <Border Grid.Column="2" Style="{StaticResource SidebarCompleteCount}"><TextBlock x:Name="CompleteCountText" Text="0" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" HorizontalAlignment="Center"/></Border>
+        </Grid>
+       </ui:Button>
+      </StackPanel>
+      <TextBlock Text="课程平台" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}" Margin="9,0,0,5" ToolTip="点击平台管理登录、课程和同步"/>
+      <StackPanel x:Name="PlatformActionPanel">
+       <ui:Button x:Name="ChaoxingConnectionButton" Tag="chaoxing" Click="OpenPlatformManager" Style="{StaticResource PlatformCard}" AutomationProperties.Name="学习通平台管理">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="chaoxing" Tile="True" Width="26" Height="26" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="学习通" FontSize="13"/>
+          <TextBlock x:Name="ChaoxingPlatformSummary" Text="登录与课程选择" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+         </StackPanel><Ellipse Grid.Column="2" x:Name="ChaoxingPlatformIndicator" Width="5" Height="5" Fill="{StaticResource MutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" ToolTip="{Binding Text, ElementName=ChaoxingPlatformSummary}"/>
+        </Grid>
+       </ui:Button>
+       <ui:Button x:Name="RainConnectionButton" Tag="yuketang" Click="OpenPlatformManager" Style="{StaticResource PlatformCard}" AutomationProperties.Name="雨课堂平台管理">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="yuketang" Tile="True" Width="26" Height="26" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="雨课堂" FontSize="13"/>
+          <TextBlock x:Name="RainPlatformSummary" Text="登录与课程选择" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+         </StackPanel><Ellipse Grid.Column="2" x:Name="RainPlatformIndicator" Width="5" Height="5" Fill="{StaticResource MutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" ToolTip="{Binding Text, ElementName=RainPlatformSummary}"/>
+        </Grid>
+       </ui:Button>
+       <ui:Button x:Name="ChangjiangConnectionButton" Tag="changjiang" Click="OpenPlatformManager" Style="{StaticResource PlatformCard}" AutomationProperties.Name="长江雨课堂平台管理">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="changjiang" Tile="True" Width="26" Height="26" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="长江雨课堂" FontSize="13"/>
+          <TextBlock x:Name="ChangjiangPlatformSummary" Text="登录与课程选择" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+         </StackPanel><Ellipse Grid.Column="2" x:Name="ChangjiangPlatformIndicator" Width="5" Height="5" Fill="{StaticResource MutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" ToolTip="{Binding Text, ElementName=ChangjiangPlatformSummary}"/>
+        </Grid>
+       </ui:Button>
+       <ui:Button x:Name="MoocConnectionButton" Tag="mooc" Click="OpenPlatformManager" Style="{StaticResource PlatformCard}" AutomationProperties.Name="中国大学 MOOC平台管理">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="mooc" Tile="True" Width="26" Height="26" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="中国大学 MOOC" FontSize="13"/>
+          <TextBlock x:Name="MoocPlatformSummary" Text="登录与课程选择" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+         </StackPanel><Ellipse Grid.Column="2" x:Name="MoocPlatformIndicator" Width="5" Height="5" Fill="{StaticResource MutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" ToolTip="{Binding Text, ElementName=MoocPlatformSummary}"/>
+        </Grid>
+       </ui:Button>
+       <ui:Button x:Name="XuetangConnectionButton" Tag="xuetang" Click="OpenPlatformManager" Style="{StaticResource PlatformCard}" AutomationProperties.Name="学堂在线平台管理">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="xuetang" Tile="True" Width="26" Height="26" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="学堂在线" FontSize="13"/>
+          <TextBlock x:Name="XuetangPlatformSummary" Text="登录与课程选择" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+         </StackPanel><Ellipse Grid.Column="2" x:Name="XuetangPlatformIndicator" Width="5" Height="5" Fill="{StaticResource MutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" ToolTip="{Binding Text, ElementName=XuetangPlatformSummary}"/>
+        </Grid>
+       </ui:Button>
+       <ui:Button x:Name="ZhihuishuConnectionButton" Tag="zhihuishu" Click="OpenPlatformManager" Style="{StaticResource PlatformCard}" AutomationProperties.Name="智慧树平台管理">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="zhihuishu" Tile="True" Width="26" Height="26" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="智慧树" FontSize="13"/>
+          <TextBlock x:Name="ZhihuishuPlatformSummary" Text="登录与课程选择" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+         </StackPanel><Ellipse Grid.Column="2" x:Name="ZhihuishuPlatformIndicator" Width="5" Height="5" Fill="{StaticResource MutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" ToolTip="{Binding Text, ElementName=ZhihuishuPlatformSummary}"/>
+        </Grid>
+       </ui:Button>
+       <ui:Button x:Name="UcampusConnectionButton" Tag="ucampus" Click="OpenPlatformManager" Style="{StaticResource PlatformCard}" AutomationProperties.Name="U 校园平台管理">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="ucampus" Tile="True" Width="26" Height="26" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="U 校园" FontSize="13"/>
+          <TextBlock x:Name="UcampusPlatformSummary" Text="登录与课程选择" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+         </StackPanel><Ellipse Grid.Column="2" x:Name="UcampusPlatformIndicator" Width="5" Height="5" Fill="{StaticResource MutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" ToolTip="{Binding Text, ElementName=UcampusPlatformSummary}"/>
+        </Grid>
+       </ui:Button>
+       <ui:Button x:Name="PtaConnectionButton" Tag="pta" Click="OpenPlatformManager" Style="{StaticResource PlatformCard}" AutomationProperties.Name="PTA平台管理">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="pta" Tile="True" Width="26" Height="26" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+         <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="PTA" FontSize="13"/>
+          <TextBlock x:Name="PtaPlatformSummary" Text="登录与课程选择" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+         </StackPanel><Ellipse Grid.Column="2" x:Name="PtaPlatformIndicator" Width="5" Height="5" Fill="{StaticResource MutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" ToolTip="{Binding Text, ElementName=PtaPlatformSummary}"/>
+        </Grid>
+       </ui:Button>
+       <ui:Button x:Name="FifConnectionButton" Content="FiF" Tag="fif" Visibility="Collapsed" IsEnabled="False"/>
+      </StackPanel>
      </StackPanel>
     </ScrollViewer>
-   </Expander>
-   <DockPanel Margin="0,0,0,10">
-    <Button x:Name="ShowAllTasksButton" DockPanel.Dock="Right" Content="查看全部任务" Click="ViewAllTasks" Padding="14,8" Margin="10,0,8,0" Background="#245AC3" Foreground="White" BorderBrush="#245AC3"/>
-    <Button x:Name="ChooseRecordingCoursesButton" DockPanel.Dock="Right" Content="选择记录课程" Click="ChooseRecordingCourses" Padding="14,8" ToolTip="按平台勾选需要采集和提醒的课程"/>
-    <StackPanel>
-     <TextBlock x:Name="AggregationTitleText" Text="统一任务清单" FontSize="20" FontWeight="SemiBold" Foreground="#172B49"/>
-     <TextBlock x:Name="AggregationSummaryText" Text="学习通、雨课堂、长江雨课堂和中国大学 MOOC 的任务汇总显示在下方" Foreground="#62728A" TextWrapping="Wrap" Margin="0,4,0,0"/>
+   </DockPanel>
+  </Border>
+  <Border Grid.Column="1" Grid.ColumnSpan="2" Background="{DynamicResource ToolbarMaterialBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
+   <Grid Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <ui:Button x:Name="SidebarToggleButton" Click="ToggleSidebar" Style="{StaticResource ToolbarButton}" VerticalAlignment="Center" ToolTip="隐藏侧栏 (Ctrl+Shift+L)" AutomationProperties.Name="隐藏侧栏"><ui:Button.Icon><local:ProductIcon Key="sidebar" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,12,0">
+     <TextBlock x:Name="AggregationTitleText" Text="全部任务" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="360" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+     <Border Background="{StaticResource PrimarySoftBrush}" CornerRadius="6" Padding="8,3" Margin="10,2,0,0" VerticalAlignment="Center"><TextBlock x:Name="ToolbarCountText" Text="0 项" Foreground="{StaticResource PrimaryBrush}" FontSize="11" FontWeight="SemiBold"/></Border>
     </StackPanel>
-   </DockPanel>
-   <UniformGrid Columns="4" Margin="0,0,0,10">
-    <Button x:Name="ActiveTasksButton" Click="FilterActive" Background="White" ToolTip="查看全部平台的待办及状态待核对任务"><StackPanel><TextBlock x:Name="ActiveCountText" Text="0" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="待办 / 被打回 / 待核对"/></StackPanel></Button>
-    <Button x:Name="OverdueTasksButton" Click="FilterOverdue" Background="White" ToolTip="查看全部平台的逾期任务"><StackPanel><TextBlock x:Name="OverdueCountText" Text="0" FontSize="24" FontWeight="SemiBold" Foreground="#C33D3D"/><TextBlock Text="已逾期"/></StackPanel></Button>
-    <Button x:Name="SoonTasksButton" Click="FilterSoon" Background="White" ToolTip="查看全部平台 24 小时内到期的任务"><StackPanel><TextBlock x:Name="SoonCountText" Text="0" FontSize="24" FontWeight="SemiBold" Foreground="#AF700F"/><TextBlock Text="24 小时内到期"/></StackPanel></Button>
-    <Button x:Name="CompletedTasksButton" Click="FilterCompleted" Background="White" ToolTip="查看全部平台已完成或已提交的任务"><StackPanel><TextBlock x:Name="CompleteCountText" Text="0" FontSize="24" FontWeight="SemiBold" Foreground="#25865A"/><TextBlock Text="已完成 / 已提交"/></StackPanel></Button>
-   </UniformGrid>
-   <DockPanel Margin="0,0,0,8">
-    <Button DockPanel.Dock="Right" Content="＋ 新增任务" Click="AddTask" Background="#245AC3" Foreground="White" BorderBrush="#245AC3"/>
-    <StackPanel Orientation="Horizontal">
-     <TextBox x:Name="SearchBox" Width="230" Height="34" Padding="9,6" Margin="0,0,12,0" TextChanged="FilterChanged" ToolTip="搜索任务、课程、平台或备注" AutomationProperties.Name="搜索任务"/>
-     <ComboBox x:Name="StateFilter" Width="160" SelectionChanged="FilterChanged" AutomationProperties.Name="任务状态筛选"/>
-     <ComboBox x:Name="PlatformFilter" Width="150" SelectionChanged="FilterChanged" ToolTip="可选：仅查看某个平台；默认汇总全部平台" AutomationProperties.Name="平台筛选"/>
-     <ComboBox x:Name="SortFilter" Width="125" SelectionChanged="FilterChanged" AutomationProperties.Name="排序"/>
+    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+     <ui:Button x:Name="SyncButton" Click="SyncNow" Style="{StaticResource ToolbarButton}" Foreground="{StaticResource PrimaryBrush}" ToolTip="同步所有平台 (F5)" AutomationProperties.Name="同步所有平台"><ui:Button.Icon><local:ProductIcon Key="sync" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+     <ui:Button x:Name="ChooseRecordingCoursesButton" Click="ChooseRecordingCourses" Style="{StaticResource ToolbarButton}" ToolTip="管理记录课程" AutomationProperties.Name="管理记录课程"><ui:Button.Icon><local:ProductIcon Key="courses" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+     <ui:Button x:Name="AddTaskButton" Click="AddTask" Style="{StaticResource ToolbarPrimaryButton}" ToolTip="新增任务 (Ctrl+N)" AutomationProperties.Name="新增任务"><ui:Button.Icon><local:ProductIcon Key="add" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+     <Border Width="1" Height="18" Background="{DynamicResource LineBrush}" Margin="9,0"/>
+     <ui:Button x:Name="DetailsToggleButton" Click="ToggleDetails" Style="{StaticResource ToolbarButton}" ToolTip="隐藏详情 (Ctrl+Shift+I)" AutomationProperties.Name="隐藏详情"><ui:Button.Icon><local:ProductIcon Key="inspector" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+     <ui:Button x:Name="OpenSettingsButton" Click="OpenSettings" Style="{StaticResource ToolbarButton}" ToolTip="设置" AutomationProperties.Name="设置"><ui:Button.Icon><local:ProductIcon Key="settings" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
     </StackPanel>
-   </DockPanel>
-   <TextBlock x:Name="FilterCountText" Margin="0,0,0,6" Foreground="#62728A" TextWrapping="Wrap"/>
-   <WrapPanel Margin="0,0,0,8">
-    <Button x:Name="GoButton" Content="做题 / 提交 ↗" Click="GoTask"/>
-    <Button x:Name="EditButton" Content="编辑" Click="EditTask"/>
-    <Button x:Name="CompleteButton" Content="标记完成" Click="CompleteTask"/>
-    <Button x:Name="ReturnButton" Content="标记被打回" Click="ReturnTask"/>
-    <Button x:Name="IgnoreButton" Content="忽略" Click="IgnoreTask"/>
-    <Button x:Name="RestoreButton" Content="恢复未完成" Click="RestoreTask"/>
-    <Button x:Name="ExtensionButton" Content="复制延期申请" Click="CopyExtension"/>
-    <Button x:Name="DeleteButton" Content="删除" Click="DeleteTask" Foreground="#B43B3B"/>
-   </WrapPanel>
-  </StackPanel>
-  <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
-   <Expander x:Name="SelectedDetailsExpander" Header="所选任务详情 · 采集时间、进度、原文时间与备注" IsExpanded="False" HorizontalContentAlignment="Stretch" Foreground="#53657F">
-    <Border Background="White" CornerRadius="7" Padding="10" Margin="0,6,0,0">
-     <ScrollViewer MaxHeight="46" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-      <TextBlock x:Name="SelectedDetails" Text="选中任务可查看采集时间、平台状态、原文时间和备注。" TextWrapping="Wrap" Foreground="#53657F"/>
-     </ScrollViewer>
-    </Border>
-   </Expander>
-   <TextBlock x:Name="ResultText" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="#225B44"/>
-   <DockPanel Margin="0,8,0,0">
-    <TextBlock x:Name="RuntimeText" Text="本地数据库加载中…" Foreground="#62728A" TextWrapping="Wrap"/>
-    <Button DockPanel.Dock="Right" Content="退出程序" Click="ExitApplication" Padding="10,4" Margin="10,0,0,0"/>
-   </DockPanel>
-  </StackPanel>
-  <Border Background="White" CornerRadius="8" ClipToBounds="True">
-   <Grid>
-    <DataGrid x:Name="TaskTable" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False"
-      SelectionMode="Single" SelectionChanged="TaskSelected" ClipboardCopyMode="None" AutomationProperties.Name="全部平台统一任务清单">
-     <DataGrid.Columns>
-      <DataGridTemplateColumn Header="任务（点击直达）" Width="2*">
-       <DataGridTemplateColumn.CellTemplate>
-        <DataTemplate>
-         <Button Click="GoTask" IsEnabled="{Binding CanOpen}" ToolTip="{Binding OpenHint}"
-             Style="{x:Null}" Padding="0" Margin="0" BorderThickness="0" Background="Transparent"
-             HorizontalContentAlignment="Left" Foreground="#245AC3" Cursor="Hand">
-          <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" TextDecorations="Underline"/>
-         </Button>
-        </DataTemplate>
-       </DataGridTemplateColumn.CellTemplate>
-      </DataGridTemplateColumn>
-      <DataGridTextColumn Header="课程" Binding="{Binding Course}" Width="1.1*"/>
-      <DataGridTextColumn Header="来源平台" Binding="{Binding Platform}" Width="0.9*"/>
-      <DataGridTextColumn Header="截止时间" Binding="{Binding Deadline}" Width="1.3*"/>
-      <DataGridTextColumn Header="优先级" Binding="{Binding Priority}" Width="0.8*"/>
-      <DataGridTextColumn Header="我的状态" Binding="{Binding State}" Width="0.9*"/>
-      <DataGridTextColumn Header="平台状态" Binding="{Binding PlatformState}" Width="1.2*" MinWidth="140">
-       <DataGridTextColumn.ElementStyle>
-        <Style TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="ToolTip" Value="{Binding PlatformState}"/></Style>
-       </DataGridTextColumn.ElementStyle>
-      </DataGridTextColumn>
-     </DataGrid.Columns>
-    </DataGrid>
-    <TextBlock x:Name="EmptyText" Text="还没有任务。连接学习通、雨课堂、长江雨课堂或中国大学 MOOC 后，任务会自动同步到这里；也可新增任务。"
-     VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="#718199" TextWrapping="Wrap" MaxWidth="500" FontSize="16" IsHitTestVisible="False"/>
-    <wv:WebView2 x:Name="SessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
-    <wv:WebView2 x:Name="RainSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
-    <wv:WebView2 x:Name="ChangjiangSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
-    <wv:WebView2 x:Name="MoocSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
    </Grid>
   </Border>
- </DockPanel>
+  <Border Grid.Row="1" Grid.Column="1" Background="{DynamicResource SurfaceBrush}">
+   <DockPanel x:Name="TaskWorkspacePanel" Margin="22,18,22,16">
+    <StackPanel DockPanel.Dock="Top">
+     <Grid x:Name="TaskHeadingRow" Margin="0,0,0,12">
+      <TextBlock x:Name="AggregationSummaryText" Text="各平台的任务，汇总在这里。" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+     </Grid>
+     <Grid x:Name="TaskSearchRow" Margin="0,0,0,10">
+      <ui:TextBox x:Name="SearchBox" TextChanged="FilterChanged" PlaceholderText="搜索任务、课程或备注" ToolTip="搜索任务、课程、平台或备注 (Ctrl+F)" AutomationProperties.Name="搜索任务" Background="{DynamicResource SurfaceBrush}" BorderBrush="{StaticResource InputLineBrush}"><ui:TextBox.Icon><local:ProductIcon Key="search" Width="15" Height="15" Foreground="{StaticResource MutedBrush}"/></ui:TextBox.Icon></ui:TextBox>
+     </Grid>
+     <Grid x:Name="TaskFiltersRow" Margin="0,0,0,10">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="148"/><ColumnDefinition Width="144"/><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+      <ComboBox x:Name="StateFilter" SelectionChanged="FilterChanged" AutomationProperties.Name="任务状态筛选"/>
+      <ComboBox Grid.Column="1" x:Name="PlatformFilter" SelectionChanged="FilterChanged" ToolTip="按来源平台筛选，默认显示全部平台" AutomationProperties.Name="平台筛选"/>
+      <ComboBox Grid.Column="2" x:Name="SortFilter" SelectionChanged="FilterChanged" AutomationProperties.Name="排序"/>
+      <ui:Button Grid.Column="3" x:Name="ShowAllTasksButton" Content="查看全部任务" Click="ViewAllTasks" Style="{StaticResource TextButton}" HorizontalAlignment="Right" Padding="6,4" FontSize="11" Margin="0"/>
+     </Grid>
+     <Expander x:Name="PlatformSyncExpander" Style="{StaticResource MacDisclosure}" IsExpanded="False" HorizontalContentAlignment="Stretch" Margin="0,0,0,10">
+      <Expander.Header><DockPanel LastChildFill="True">
+       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0">
+        <ui:Button x:Name="StopSyncButton" Content="停止" Click="StopSync" Visibility="Collapsed" Padding="10,3" MinHeight="28"/>
+        <ui:Button x:Name="SyncDetailsButton" Content="同步详情" Click="ShowSyncDetails" Style="{StaticResource TextButton}" Padding="10,3" MinHeight="28" Margin="0"/>
+       </StackPanel>
+       <TextBlock x:Name="SyncOverviewText" Text="同步状态" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+      </DockPanel></Expander.Header>
+      <ScrollViewer x:Name="PlatformSyncScroller" MaxHeight="88" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+       <Border x:Name="SyncBanner" Background="{DynamicResource SubtleBrush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,6"><TextBlock x:Name="SyncStatusText" Text="学习通：连接平台后读取课程，保存选择后同步任务。" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/></Border>
+       <Border x:Name="RainSyncBanner" Background="{DynamicResource SubtleBrush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,6"><TextBlock x:Name="RainSyncStatusText" Text="雨课堂：连接平台后读取课程，保存选择后同步任务。" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/></Border>
+       <Border x:Name="ChangjiangSyncBanner" Background="{DynamicResource SubtleBrush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,6"><TextBlock x:Name="ChangjiangSyncStatusText" Text="长江雨课堂：连接平台后读取课程，保存选择后同步任务。" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/></Border>
+       <Border x:Name="MoocSyncBanner" Background="{DynamicResource SubtleBrush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,6"><TextBlock x:Name="MoocSyncStatusText" Text="中国大学 MOOC：连接平台后读取课程，保存选择后同步任务。" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/></Border>
+       <Border x:Name="XuetangSyncBanner" Background="{DynamicResource SubtleBrush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,6"><TextBlock x:Name="XuetangSyncStatusText" Text="学堂在线：连接平台后读取课程，保存选择后同步任务。" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/></Border>
+       <Border x:Name="ZhihuishuSyncBanner" Background="{DynamicResource SubtleBrush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,6"><TextBlock x:Name="ZhihuishuSyncStatusText" Text="智慧树：连接平台后读取课程，保存选择后同步任务。" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/></Border>
+       <Border x:Name="UcampusSyncBanner" Background="{DynamicResource SubtleBrush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,6"><TextBlock x:Name="UcampusSyncStatusText" Text="U 校园：连接平台后读取课程，保存选择后同步任务。" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/></Border>
+       <Border x:Name="PtaSyncBanner" Background="{DynamicResource SubtleBrush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,6"><TextBlock x:Name="PtaSyncStatusText" Text="PTA：连接平台后读取课程，保存选择后同步任务。" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/></Border>
+       <Border x:Name="FifSyncBanner" Background="{DynamicResource SubtleBrush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,6" Visibility="Collapsed"><TextBlock x:Name="FifSyncStatusText" Text="FiF：连接平台后读取课程，保存选择后同步任务。" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/></Border>
+      </StackPanel></ScrollViewer>
+     </Expander>
+     <TextBlock x:Name="FilterCountText" Margin="0,0,0,10" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap"/>
+    </StackPanel>
+    <ScrollViewer DockPanel.Dock="Bottom" MaxHeight="40" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><TextBlock x:Name="ResultText" TextWrapping="Wrap" Foreground="{StaticResource SuccessBrush}" FontSize="12"/></ScrollViewer>
+    <Grid>
+     <DataGrid x:Name="TaskTable" RowStyle="{StaticResource TaskRow}" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" CanUserResizeRows="False" SelectionMode="Single" SelectionUnit="FullRow" SelectionChanged="TaskSelected" ClipboardCopyMode="None" AutomationProperties.Name="全部平台统一任务清单" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+      <DataGrid.Columns>
+       <DataGridTemplateColumn Header="任务 / 课程" Width="*" MinWidth="200"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+        <Grid VerticalAlignment="Center" ToolTip="{Binding Title}"><Grid.ColumnDefinitions><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+         <local:ProductIcon Key="{Binding PlatformIconKey}" Tile="True" Width="26" Height="26" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+         <StackPanel Grid.Column="1" VerticalAlignment="Center">
+          <ui:Button Click="GoTask" IsEnabled="{Binding CanOpen}" ToolTip="{Binding OpenHint}" Style="{StaticResource TaskLink}"><TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" FontSize="13" FontWeight="Medium"/></ui:Button>
+          <TextBlock Text="{Binding CourseCaption}" ToolTip="{Binding CourseCaption}" TextTrimming="CharacterEllipsis" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,3,0,0"/>
+         </StackPanel>
+        </Grid>
+       </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+       <DataGridTemplateColumn Header="截止" Width="140"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+        <StackPanel ToolTip="{Binding Deadline}"><TextBlock Text="{Binding ShortDeadline}" Foreground="{Binding PriorityColor}" FontSize="12"/><TextBlock Text="{Binding DeadlineContext}" ToolTip="{Binding DeadlineContext}" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
+       </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+       <DataGridTemplateColumn Header="状态" Width="96"><DataGridTemplateColumn.CellTemplate><DataTemplate><Border Background="{Binding StateBackground}" CornerRadius="6" Padding="7,4" HorizontalAlignment="Left" VerticalAlignment="Center"><StackPanel Orientation="Horizontal"><local:ProductIcon Key="{Binding StateIconKey}" Foreground="{Binding StateColor}" Width="14" Height="14" Margin="0,0,5,0" VerticalAlignment="Center"/><TextBlock Text="{Binding State}" Foreground="{Binding StateColor}" FontSize="11" FontWeight="SemiBold"/></StackPanel></Border></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+      </DataGrid.Columns>
+     </DataGrid>
+     <Border x:Name="EmptyStatePanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center"
+      Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="14" Padding="24,20" MaxWidth="440" Margin="16,20">
+      <StackPanel>
+       <local:ProductIcon x:Name="EmptyStateIcon" Key="document" Tile="True" Width="52" Height="52" HorizontalAlignment="Center" Margin="0,0,0,14" Foreground="{StaticResource PrimaryBrush}"/>
+       <TextBlock x:Name="EmptyStateTitle" Text="从一门课程开始" FontSize="18" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,8"/>
+       <TextBlock x:Name="EmptyText" Text="登录平台并选择课程后，任务会显示在这里。也可以新增手动任务。" Foreground="{StaticResource MutedBrush}"
+        TextWrapping="Wrap" TextAlignment="Center" FontSize="12" LineHeight="20" IsHitTestVisible="False"/>
+       <WrapPanel HorizontalAlignment="Center" Margin="0,16,0,0">
+        <ui:Button x:Name="EmptyAddTaskButton" Content="新增任务" Click="AddTask" Style="{StaticResource PrimaryButton}" Margin="0,0,6,0" Padding="10,5">
+         <ui:Button.Icon><local:ProductIcon Key="add" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon>
+        </ui:Button>
+        <ui:Button x:Name="EmptyCoursesButton" Content="选择记录课程" Click="ChooseRecordingCourses" Style="{StaticResource TextButton}" Margin="0" Padding="10,5">
+         <ui:Button.Icon><local:ProductIcon Key="courses" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon>
+        </ui:Button>
+        <ui:Button x:Name="EmptyResetFiltersButton" Content="查看全部任务" Click="ViewAllTasks" Style="{StaticResource PrimaryButton}" Margin="0" Padding="12,5" Visibility="Collapsed">
+         <ui:Button.Icon><local:ProductIcon Key="tasks" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon>
+        </ui:Button>
+       </WrapPanel>
+      </StackPanel>
+     </Border>
+    </Grid>
+   </DockPanel>
+  </Border>
+  <Border Grid.Row="1" Grid.Column="2" x:Name="TaskDetailPanel" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1,0,0,0">
+   <DockPanel Margin="20,18,20,16">
+    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,20"><local:ProductIcon DockPanel.Dock="Right" Key="info" Width="17" Height="17" Foreground="{StaticResource MutedBrush}"/><TextBlock Text="任务详情" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold"/></DockPanel>
+    <Border DockPanel.Dock="Bottom" Margin="0,14,0,0" Padding="0,14,0,0" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
+     <StackPanel>
+      <ui:Button x:Name="GoButton" Content="打开官方任务" Click="GoTask" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8"><ui:Button.Icon><local:ProductIcon Key="open" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+      <ui:Button x:Name="CompleteButton" Content="标记完成" Click="CompleteTask" Style="{StaticResource SuccessButton}" Margin="0,0,0,8"><ui:Button.Icon><local:ProductIcon Key="completed" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+      <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+       <ui:Button x:Name="EditButton" Content="编辑任务" Click="EditTask" Margin="0,0,8,0" FontSize="12"><ui:Button.Icon><local:ProductIcon Key="edit" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+       <ui:Button Grid.Column="1" x:Name="MoreTaskActionsButton" Content="更多操作" Click="ShowMoreTaskActions" Margin="0" FontSize="12"><ui:Button.Icon><local:ProductIcon Key="more" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+      </Grid>
+      <TextBlock Text="手动标记只更新本地清单；提交状态以原平台为准。" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" FontSize="11" LineHeight="16" Margin="0,12,0,0"/>
+     </StackPanel>
+    </Border>
+    <ScrollViewer x:Name="DetailContentScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+     <StackPanel>
+      <Border x:Name="SelectedPlatformBadge" Background="{StaticResource SubtleBrush}" CornerRadius="6" Padding="5,4,8,4" HorizontalAlignment="Left" Margin="0,0,0,10"><StackPanel Orientation="Horizontal"><local:ProductIcon x:Name="SelectedPlatformIcon" Key="tasks" Tile="True" Width="22" Height="22" Margin="0,0,6,0"/><TextBlock x:Name="SelectedPlatformText" Text="全部平台" Foreground="{StaticResource MutedBrush}" FontSize="11" VerticalAlignment="Center"/></StackPanel></Border>
+      <TextBlock x:Name="SelectedTaskTitleText" Text="选择任务以查看详情" Foreground="{StaticResource InkBrush}" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="28"/>
+      <TextBlock x:Name="SelectedCourseText" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,7,0,18"/>
+      <Border x:Name="SelectedDeadlineCard" Background="{StaticResource PrimarySoftBrush}" CornerRadius="8" Padding="10,14" Margin="0,0,0,18">
+       <StackPanel><StackPanel Orientation="Horizontal"><local:ProductIcon Key="soon" Width="14" Height="14" Foreground="{StaticResource MutedBrush}" Margin="0,0,6,0"/><TextBlock Text="截止时间" Foreground="{StaticResource MutedBrush}" FontSize="11"/></StackPanel>
+        <TextBlock x:Name="SelectedDeadlineText" Text="选中任务后显示" TextWrapping="Wrap" FontSize="17" FontWeight="Medium" Margin="0,7,0,4"/>
+        <TextBlock x:Name="SelectedPriorityText" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap"/>
+       </StackPanel>
+      </Border>
+      <Grid Margin="0,0,0,18">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+       <TextBlock Text="我的状态" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
+       <Border Grid.Column="1" x:Name="SelectedStateBadge" CornerRadius="4" Padding="6,3" HorizontalAlignment="Right"><StackPanel Orientation="Horizontal"><local:ProductIcon x:Name="SelectedStateIcon" Key="soon" Width="14" Height="14" Margin="0,0,5,0" Foreground="{Binding Foreground, ElementName=SelectedStateText}"/><TextBlock x:Name="SelectedStateText" Text="—" FontSize="11"/></StackPanel></Border>
+       <TextBlock Grid.Row="1" Text="平台记录" FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="0,12,0,0"/>
+       <TextBlock Grid.Row="1" Grid.Column="1" x:Name="SelectedPlatformStateText" Text="—" TextWrapping="Wrap" TextAlignment="Right" FontSize="12" Margin="0,12,0,0"/>
+       <TextBlock Grid.Row="2" Text="最近更新" FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="0,12,0,0"/>
+       <TextBlock Grid.Row="2" Grid.Column="1" x:Name="SelectedCollectedText" Text="—" TextWrapping="Wrap" TextAlignment="Right" FontSize="11" Margin="0,12,0,0"/>
+       <TextBlock Grid.Row="3" Text="记录来源" FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="0,12,0,0"/>
+       <TextBlock Grid.Row="3" Grid.Column="1" x:Name="SelectedSourceText" Text="—" TextWrapping="Wrap" TextAlignment="Right" FontSize="11" Margin="0,12,0,0"/>
+      </Grid>
+      <Border Height="1" Background="{DynamicResource LineBrush}" Margin="0,0,0,16"/>
+      <TextBlock Text="学习备注" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+      <TextBlock x:Name="SelectedNoteText" Text="选中任务可查看备注。" Foreground="{StaticResource InkBrush}" TextWrapping="Wrap" FontSize="13" LineHeight="20" Margin="0,8,0,18"/>
+      <Expander x:Name="SelectedDetailsExpander" Header="采集依据与完整详情" IsExpanded="False" Style="{StaticResource MacDisclosure}" Foreground="{StaticResource MutedBrush}" FontSize="11">
+       <ScrollViewer x:Name="SelectedDetailsScroller" Margin="0,10,0,0" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled"><TextBlock x:Name="SelectedDetails" Text="选中任务可查看采集时间、平台状态、原文时间和备注。" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" FontSize="11" LineHeight="18"/></ScrollViewer>
+      </Expander>
+     </StackPanel>
+    </ScrollViewer>
+   </DockPanel>
+  </Border>
+  <Border Grid.Row="2" Grid.ColumnSpan="3" Background="{DynamicResource ToolbarMaterialBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
+   <DockPanel Margin="18,0,12,0">
+    <ui:Button DockPanel.Dock="Right" Content="退出程序" Click="ExitApplication" Style="{StaticResource TextButton}" FontSize="11" Padding="8,1" MinHeight="24" Margin="12,0,0,0"/>
+    <TextBlock x:Name="RuntimeText" Text="本地数据库加载中…" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="11" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+   </DockPanel>
+  </Border>
+  <Popup x:Name="TaskActionsPopup" PlacementTarget="{Binding ElementName=MoreTaskActionsButton}" Placement="Top" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade" PreviewKeyDown="TaskActionsKeyDown">
+   <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="6" Margin="0,0,0,6">
+    <StackPanel Button.Click="CloseTaskActions">
+     <StackPanel.Resources><Style TargetType="ui:Button" BasedOn="{StaticResource TextButton}"><Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Foreground" Value="#202632"/><Setter Property="Margin" Value="0,1"/><Setter Property="MinWidth" Value="168"/></Style></StackPanel.Resources>
+     <ui:Button x:Name="ReturnButton" Content="标记被打回" Click="ReturnTask"><ui:Button.Icon><local:ProductIcon Key="returned" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+     <ui:Button x:Name="IgnoreButton" Content="忽略任务" Click="IgnoreTask"><ui:Button.Icon><local:ProductIcon Key="ignored" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+     <ui:Button x:Name="RestoreButton" Content="恢复未完成" Click="RestoreTask"><ui:Button.Icon><local:ProductIcon Key="sync" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+     <ui:Button x:Name="ExtensionButton" Content="复制延期申请" Click="CopyExtension"><ui:Button.Icon><local:ProductIcon Key="copy" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+     <Border Height="1" Background="{DynamicResource LineBrush}" Margin="8,4"/>
+     <ui:Button x:Name="DeleteButton" Content="删除任务" Click="DeleteTask" Foreground="{StaticResource DangerBrush}"><ui:Button.Icon><local:ProductIcon Key="delete" Width="18" Height="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/></ui:Button.Icon></ui:Button>
+    </StackPanel>
+   </Border>
+  </Popup>
+  <wv:WebView2 x:Name="SessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+  <wv:WebView2 x:Name="RainSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+  <wv:WebView2 x:Name="ChangjiangSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+  <wv:WebView2 x:Name="MoocSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+  <wv:WebView2 x:Name="XuetangSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+  <wv:WebView2 x:Name="ZhihuishuSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+  <wv:WebView2 x:Name="UcampusSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+  <wv:WebView2 x:Name="PtaSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+  <wv:WebView2 x:Name="FifSessionBrowser" Width="1" Height="1" Visibility="Hidden" IsHitTestVisible="False"/>
+ </Grid>
 </Window>

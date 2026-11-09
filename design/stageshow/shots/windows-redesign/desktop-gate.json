@@ -1,0 +1,33 @@
+{
+  "status": "inconclusive",
+  "mode": "motion",
+  "stages": [
+    {
+      "key": "stage-1",
+      "label": "ss-fit lw-workbench",
+      "coverage": {
+        "status": "inconclusive",
+        "frames": 577,
+        "durationMs": 6232.199999928474,
+        "medianMs": 9.100000023841858,
+        "maxGapMs": 169.89999997615814,
+        "skippedGaps": 24,
+        "cameraFrames": 0,
+        "reasons": [
+          "24 sampling gap(s) exceeded 15ms; motion during those gaps was not judged"
+        ],
+        "framingSamples": 6,
+        "layout": {
+          "controls": 34,
+          "paddedContainers": 5,
+          "compositionCrops": 0
+        }
+      },
+      "findings": [],
+      "manual": []
+    }
+  ],
+  "errors": [],
+  "manualReviewRequired": true,
+  "exitCode": 2
+}

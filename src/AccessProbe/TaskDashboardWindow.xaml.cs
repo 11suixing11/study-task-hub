@@ -25,6 +25,7 @@ public partial class TaskDashboardWindow : Window
     private ReminderService? reminders;
     private ChaoxingSyncService? sync;
     private MoocSyncService? moocSync;
+    private XuetangSyncService? xuetangSync;
     private ChaoxingSyncSummary? latestSync;
     private readonly Dictionary<string, RainSyncService> rainServices = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> rainRunning = new(StringComparer.Ordinal);
@@ -39,10 +40,17 @@ public partial class TaskDashboardWindow : Window
     {
         this.store = store; projectRoot = root; this.openConnection = openConnection; this.exit = exit;
         taskNavigation = new TaskNavigationService(store,
-            (address, token) => sync is null ? Task.FromResult(new TaskLinkResolution("session_unavailable", "none"))
-                : sync.ResolveTaskAddressAsync(address, token),
+            (address, token) => MetadataTaskNavigation.ParseUcampus(address.AbsoluteUri) is not null
+                ? metadataServices.TryGetValue("ucampus", out var ucampus) ? ucampus.ResolveTaskAddressAsync(address, token)
+                    : Task.FromResult(new TaskLinkResolution("session_unavailable", "none"))
+                : sync is null ? Task.FromResult(new TaskLinkResolution("session_unavailable", "none")) : sync.ResolveTaskAddressAsync(address, token),
             openExternal ?? (address => Process.Start(new ProcessStartInfo(address) { UseShellExecute = true })));
         InitializeComponent();
+        Width = Math.Max(MinWidth, Math.Min(Width, SystemParameters.WorkArea.Width));
+        Height = Math.Max(MinHeight, Math.Min(Height, SystemParameters.WorkArea.Height));
+        ConfigureShortcuts();
+        SizeChanged += (_, _) => UpdateCompactLayout();
+        Loaded += (_, _) => UpdateCompactLayout();
         StateFilter.ItemsSource = new[] { "待办（含待核对）", "全部状态", "未完成", "已完成", "已忽略", "被打回", "已逾期", "24 小时内到期", "待核对" };
         StateFilter.SelectedIndex = 1;
         PlatformFilter.ItemsSource = new[] { "全部平台" }.Concat(PlatformCatalog.Sites.Select(site => site.Name)).ToArray();
@@ -56,6 +64,75 @@ public partial class TaskDashboardWindow : Window
         Loaded += (_, _) => RefreshTasks();
         Closing += OnClosing;
         Closed += (_, _) => { permitClose = true; taskOpenCancellation?.Cancel(); store.Changed -= StoreChanged; refreshTimer.Stop(); };
+    }
+
+    private void UpdateCompactLayout()
+    {
+        var compact = ActualHeight < 880;
+        PlatformSyncScroller.MaxHeight = compact ? 72 : 96;
+        SidebarColumn.Width = new GridLength(SidebarPanel.Visibility == Visibility.Visible ? 220 : 0);
+        DetailsColumn.Width = new GridLength(TaskDetailPanel.Visibility != Visibility.Visible ? 0 : ActualWidth < 1180 ? 256 : ActualWidth < 1280 ? 280 : 300);
+        TaskWorkspacePanel.Margin = compact ? new Thickness(18, 14, 18, 14) : new Thickness(22, 18, 22, 16);
+        TaskHeadingRow.Margin = new Thickness(0, 0, 0, compact ? 10 : 12);
+        TaskMetricsRow.Margin = new Thickness(0, 0, 0, compact ? 18 : 24);
+        PlatformSyncExpander.Margin = new Thickness(0, 0, 0, 8);
+        TaskSearchRow.Margin = new Thickness(0, 0, 0, 10);
+        TaskFiltersRow.Margin = new Thickness(0, 0, 0, 8);
+        FilterCountText.Margin = new Thickness(0, 0, 0, 10);
+    }
+
+    private void ConfigureShortcuts()
+    {
+        AddShortcut(System.Windows.Input.Key.F, System.Windows.Input.ModifierKeys.Control, () => { SearchBox.Focus(); SearchBox.SelectAll(); });
+        AddShortcut(System.Windows.Input.Key.N, System.Windows.Input.ModifierKeys.Control, () => AddTask(AddTaskButton, new RoutedEventArgs()));
+        AddShortcut(System.Windows.Input.Key.F5, System.Windows.Input.ModifierKeys.None, () => SyncNow(SyncButton, new RoutedEventArgs()), () => SyncButton.IsEnabled);
+        AddShortcut(System.Windows.Input.Key.L, System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift,
+            () => ToggleSidebar(SidebarToggleButton, new RoutedEventArgs()));
+        AddShortcut(System.Windows.Input.Key.I, System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift,
+            () => ToggleDetails(DetailsToggleButton, new RoutedEventArgs()));
+    }
+
+    private void AddShortcut(System.Windows.Input.Key key, System.Windows.Input.ModifierKeys modifiers, Action action, Func<bool>? canExecute = null)
+    {
+        var command = new System.Windows.Input.RoutedCommand();
+        CommandBindings.Add(new System.Windows.Input.CommandBinding(command, (_, args) => { action(); args.Handled = true; },
+            (_, args) => { args.CanExecute = canExecute?.Invoke() ?? true; args.Handled = true; }));
+        InputBindings.Add(new System.Windows.Input.KeyBinding(command, key, modifiers));
+    }
+
+    private void ToggleSidebar(object sender, RoutedEventArgs args)
+    {
+        if (SidebarPanel.IsKeyboardFocusWithin) SidebarToggleButton.Focus();
+        SidebarPanel.Visibility = SidebarPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        var label = SidebarPanel.Visibility == Visibility.Visible ? "隐藏侧栏" : "显示侧栏";
+        SidebarToggleButton.ToolTip = label + " (Ctrl+Shift+L)";
+        System.Windows.Automation.AutomationProperties.SetName(SidebarToggleButton, label);
+        UpdateCompactLayout();
+    }
+
+    private void ToggleDetails(object sender, RoutedEventArgs args)
+    {
+        TaskActionsPopup.IsOpen = false;
+        if (TaskDetailPanel.IsKeyboardFocusWithin) DetailsToggleButton.Focus();
+        TaskDetailPanel.Visibility = TaskDetailPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        var label = TaskDetailPanel.Visibility == Visibility.Visible ? "隐藏详情" : "显示详情";
+        DetailsToggleButton.ToolTip = label + " (Ctrl+Shift+I)";
+        System.Windows.Automation.AutomationProperties.SetName(DetailsToggleButton, label);
+        UpdateCompactLayout();
+    }
+
+    private void UpdateTaskNavigation()
+    {
+        var title = StateFilter.SelectedIndex switch { 0 => "待办", 3 => "已完成", 6 => "已逾期", 7 => "即将到期", _ => "全部任务" };
+        AggregationTitleText.Text = title;
+        Title = title + " · 聚合平台";
+        foreach (var (button, state) in new[] { (WorkspaceHomeButton, 1), (ActiveTasksButton, 0),
+            (SoonTasksButton, 7), (OverdueTasksButton, 6), (CompletedTasksButton, 3) })
+        {
+            var selected = StateFilter.SelectedIndex == state;
+            button.Tag = selected ? "selected" : null;
+            System.Windows.Automation.AutomationProperties.SetHelpText(button, selected ? "当前任务分类" : "显示此分类的全部平台任务");
+        }
     }
 
     public void AttachReminders(ReminderService service)
@@ -78,10 +155,12 @@ public partial class TaskDashboardWindow : Window
             SyncBanner.Background = new SolidColorBrush(warning ? Color.FromRgb(255, 240, 239) : Color.FromRgb(234, 241, 252));
             chaoxingRunning = running;
             chaoxingWarning = warning;
+            UpdatePlatformStatus("chaoxing", message, running, warning);
             if (warning) PlatformSyncExpander.IsExpanded = true;
             UpdateSyncControls();
         };
         service.Completed += summary => { latestSync = summary; RefreshTasks(); };
+        service.CourseSelectionRequired += () => PromptCourseSelection("chaoxing");
     }
 
     public void AttachRainSync(RainSyncService service)
@@ -97,10 +176,12 @@ public partial class TaskDashboardWindow : Window
             banner.Background = new SolidColorBrush(warning ? Color.FromRgb(255, 240, 239) : Color.FromRgb(234, 241, 252));
             rainRunning[service.Platform.Id] = running;
             rainWarnings[service.Platform.Id] = warning;
+            UpdatePlatformStatus(service.Platform.Id, message, running, warning);
             if (warning) PlatformSyncExpander.IsExpanded = true;
             UpdateSyncControls();
         };
         service.Completed += _ => RefreshTasks();
+        service.CourseSelectionRequired += () => PromptCourseSelection(service.Platform.Id);
     }
 
     private void UpdateSyncControls()
@@ -127,10 +208,12 @@ public partial class TaskDashboardWindow : Window
             MoocSyncStatusText.Foreground = warning ? Brushes.Firebrick : new SolidColorBrush(Color.FromRgb(36, 90, 195));
             MoocSyncBanner.Background = new SolidColorBrush(warning ? Color.FromRgb(255, 240, 239) : Color.FromRgb(234, 241, 252));
             rainRunning[MoocPlatform.Id] = running; rainWarnings[MoocPlatform.Id] = warning;
+            UpdatePlatformStatus("mooc", message, running, warning);
             if (warning) PlatformSyncExpander.IsExpanded = true;
             UpdateSyncControls();
         };
         service.Completed += _ => RefreshTasks();
+        service.CourseSelectionRequired += () => PromptCourseSelection("mooc");
     }
 
     public void ShowDashboard()
@@ -183,14 +266,13 @@ public partial class TaskDashboardWindow : Window
                 OverdueCountText.Text = tasks.Count(task => TaskRules.IsActive(task) && TaskRules.HasUsableDeadline(task) && task.DeadlineUtc < now).ToString();
                 SoonCountText.Text = tasks.Count(task => TaskRules.IsActive(task) && TaskRules.HasUsableDeadline(task) && task.DeadlineUtc >= now && task.DeadlineUtc <= now.AddHours(24)).ToString();
                 CompleteCountText.Text = tasks.Count(task => task.State == TaskState.Completed).ToString();
-                AggregationTitleText.Text = $"统一任务清单 · 共 {tasks.Count} 条";
-                var sources = new[] { "chaoxing", "yuketang", "changjiang", "mooc" }
-                    .Concat(PlatformCatalog.Sites.Where(site => site.Id is not ("chaoxing" or "yuketang" or "changjiang" or "mooc")
-                        && tasks.Any(task => task.PlatformId == site.Id)).Select(site => site.Id));
+                var sources = new[] { "chaoxing", "yuketang", "changjiang", "mooc", "xuetang" }.Concat(MetadataPlatform.Enabled.Select(platform => platform.Id))
+                    .Concat(tasks.Any(task => task.PlatformId == "fif") ? new[] { "fif" } : Array.Empty<string>());
                 AggregationSummaryText.Text = string.Join(" · ", sources.Select(platformId =>
                     $"{PlatformCatalog.Name(platformId)} {tasks.Count(task => task.PlatformId == platformId)} 条"))
                     + (retainedCourseTaskCount > 0 ? $" · 未选课程 {retainedCourseTaskCount} 条已隐藏并保留" : "");
                 ApplyFilters();
+                foreach (var site in PlatformCatalog.Sites.Where(site => CourseRecordingRules.SupportsAutomatic(site.Id))) UpdatePlatformCard(site.Id);
                 RuntimeText.Text = reminders is null ? "数据库已加载 · 此窗口未运行提醒服务。" : snapshot.Settings.NotificationsEnabled
                     ? "数据库已加载 · 提醒运行中。关闭窗口后保留托盘；退出程序后停止，重启会检查待发提醒。"
                     : "数据库已加载 · 通知已关闭。任务仍会保存，可在设置中开启提醒。";
@@ -245,16 +327,33 @@ public partial class TaskDashboardWindow : Window
             + (hiddenCompleted > 0 ? $"；有 {hiddenCompleted} 条已完成任务被当前筛选隐藏。" : "")
             + (retainedCourseTaskCount > 0 ? $"；未选课程 {retainedCourseTaskCount} 条已保留，可在“选择记录课程”恢复。" : "");
         TaskTable.ItemsSource = rows;
+        ToolbarCountText.Text = $"{rows.Length} 项";
+        UpdateTaskNavigation();
         TaskTable.SelectedItem = rows.FirstOrDefault(row => row.Task.Id == selectedId);
         if (TaskTable.SelectedItem is null && rows.Length > 0) TaskTable.SelectedIndex = 0;
         EmptyText.Text = tasks.Count == 0 && retainedCourseTaskCount > 0 ? "当前没有记录中的任务。未选课程的历史任务已保留，可在“选择记录课程”重新勾选恢复。"
-            : tasks.Count == 0 ? "还没有任务。连接学习通、雨课堂、长江雨课堂或中国大学 MOOC 后，任务会自动同步到这里；也可新增任务。"
+            : tasks.Count == 0 ? "清单暂未记录任务。连接平台后可同步已覆盖的任务；覆盖范围见同步详情，也可新增任务。"
             : platformTasks.Count == 0 && selectedPlatform is not null && retainedCourseTasksByPlatform.GetValueOrDefault(selectedPlatform.Id) > 0
                 ? selectedPlatform.Name + "未选课程的历史任务已隐藏并保留，可在“选择记录课程”重新勾选恢复。"
             : platformTasks.Count == 0 && selectedPlatform is not null ? selectedPlatform.Name + "尚未采集到任务，请查看该平台同步结果。"
             : hiddenCompleted > 0 ? $"本地已有 {tasks.Count} 条任务，其中 {hiddenCompleted} 条已完成任务被当前筛选隐藏。点击“查看全部任务”可恢复全部平台和状态。"
             : "当前筛选没有任务。点击“查看全部任务”可清除搜索与筛选。";
         EmptyText.Visibility = rows.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyStatePanel.Visibility = EmptyText.Visibility;
+        var missingPlatformTasks = platformTasks.Count == 0 && selectedPlatform is not null;
+        var coursesHidden = tasks.Count == 0 && retainedCourseTaskCount > 0
+            || missingPlatformTasks && retainedCourseTasksByPlatform.GetValueOrDefault(selectedPlatform!.Id) > 0;
+        var canManageCourses = tasks.Count == 0 || missingPlatformTasks;
+        EmptyStateTitle.Text = coursesHidden ? "历史任务已保留"
+            : tasks.Count == 0 ? "从一门课程开始"
+            : missingPlatformTasks ? "暂未采集到任务"
+            : search.Length > 0 ? "没有匹配的任务" : "当前分类没有任务";
+        EmptyStateIcon.Key = coursesHidden ? "courses" : missingPlatformTasks ? selectedPlatform!.Id
+            : tasks.Count == 0 ? "document" : search.Length > 0 ? "search" : "tasks";
+        EmptyStateIcon.Tile = EmptyStateIcon.Key != "search" && EmptyStateIcon.Key != "courses";
+        EmptyAddTaskButton.Visibility = canManageCourses && !coursesHidden ? Visibility.Visible : Visibility.Collapsed;
+        EmptyCoursesButton.Visibility = canManageCourses ? Visibility.Visible : Visibility.Collapsed;
+        EmptyResetFiltersButton.Visibility = canManageCourses ? Visibility.Collapsed : Visibility.Visible;
         UpdateSelection();
     }
 
@@ -262,7 +361,30 @@ public partial class TaskDashboardWindow : Window
 
     private void UpdateSelection()
     {
-        var task = (TaskTable.SelectedItem as TaskDisplayRow)?.Task;
+        var row = TaskTable.SelectedItem as TaskDisplayRow;
+        var task = row?.Task;
+        SelectedTaskTitleText.Text = task?.Title ?? "选择任务以查看详情";
+        SelectedPlatformText.Text = row?.Platform ?? "全部平台";
+        SelectedPlatformIcon.Key = row?.PlatformIconKey ?? "tasks";
+        SelectedPlatformText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(row?.PlatformColor ?? "#69696F"));
+        SelectedPlatformBadge.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(row?.PlatformBackground ?? "#F5F5F7"));
+        SelectedCourseText.Text = row?.Course ?? "状态、时间和备注会显示在这里。";
+        SelectedDeadlineText.Text = row?.Deadline ?? "选中任务后显示";
+        SelectedDeadlineText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(row?.PriorityColor ?? "#5E6B80"));
+        SelectedDeadlineCard.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(row?.PriorityBackground ?? "#E4EEFF"));
+        SelectedPriorityText.Text = row is null ? "" : row.Priority == "—" ? row.State : row.Priority;
+        SelectedStateText.Text = row?.State ?? "—";
+        SelectedStateIcon.Key = row?.StateIconKey ?? "soon";
+        SelectedStateIcon.Visibility = row is null ? Visibility.Collapsed : Visibility.Visible;
+        SelectedStateText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(row?.StateColor ?? "#687386"));
+        SelectedStateBadge.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(row?.StateBackground ?? "#F0F2F5"));
+        SelectedPlatformStateText.Text = task is null ? "—" : !TaskRules.IsCollected(task) ? "手动记录"
+            : string.IsNullOrWhiteSpace(task.PlatformStatusText) ? "未读取" : task.PlatformStatusText;
+        SelectedCollectedText.Text = task is null ? "—" : (task.CollectedAtUtc ?? task.UpdatedAtUtc).ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+        SelectedSourceText.Text = task is null ? "—" : !TaskRules.IsCollected(task) ? "手动录入"
+            : task.Overrides.HasFlag(TaskOverrides.State) ? "平台采集 · 手动状态" : "平台采集";
+        SelectedNoteText.Text = task is null ? "选中任务可查看备注。" : task.Notes.Length > 0 ? task.Notes : "暂无备注，可在「编辑任务」中添加。";
+        MoreTaskActionsButton.IsEnabled = task is not null;
         GoButton.IsEnabled = task is not null && TaskRules.IsSafeLink(task.Link) && taskOpenCancellation is null;
         GoButton.Content = taskOpenCancellation is not null ? "正在打开…" : task is null ? "做题 / 提交 ↗" : TaskNavigationRules.ActionName(task);
         GoButton.ToolTip = "在系统浏览器打开所选任务；也可点击列表中的任务名称。";
@@ -295,6 +417,21 @@ public partial class TaskDashboardWindow : Window
         SelectedDetails.Text = string.Join("\n", lines);
     }
 
+    private void ShowMoreTaskActions(object sender, RoutedEventArgs args)
+    {
+        TaskActionsPopup.IsOpen = !TaskActionsPopup.IsOpen;
+        if (TaskActionsPopup.IsOpen)
+            Dispatcher.BeginInvoke(() => new[] { ReturnButton, IgnoreButton, RestoreButton, ExtensionButton, DeleteButton }.FirstOrDefault(button => button.IsEnabled)?.Focus());
+    }
+
+    private void CloseTaskActions(object sender, RoutedEventArgs args) => TaskActionsPopup.IsOpen = false;
+
+    private void TaskActionsKeyDown(object sender, System.Windows.Input.KeyEventArgs args)
+    {
+        if (args.Key != System.Windows.Input.Key.Escape) return;
+        TaskActionsPopup.IsOpen = false; MoreTaskActionsButton.Focus(); args.Handled = true;
+    }
+
     private void FilterActive(object sender, RoutedEventArgs args) => ShowTasks(0);
     private void FilterOverdue(object sender, RoutedEventArgs args) => ShowTasks(6);
     private void FilterSoon(object sender, RoutedEventArgs args) => ShowTasks(7);
@@ -303,6 +440,7 @@ public partial class TaskDashboardWindow : Window
     private void OpenRainConnection(object sender, RoutedEventArgs args) => PlatformConnectionRequested?.Invoke("yuketang");
     private void OpenChangjiangConnection(object sender, RoutedEventArgs args) => PlatformConnectionRequested?.Invoke("changjiang");
     private void OpenMoocConnection(object sender, RoutedEventArgs args) => PlatformConnectionRequested?.Invoke(MoocPlatform.Id);
+    private void OpenXuetangConnection(object sender, RoutedEventArgs args) => PlatformConnectionRequested?.Invoke(XuetangPlatform.Id);
     private void ViewAllTasks(object sender, RoutedEventArgs args) => ShowTasks(1);
     private void ShowTasks(int stateIndex)
     {
@@ -321,12 +459,14 @@ public partial class TaskDashboardWindow : Window
     }
     private async void SyncNow(object sender, RoutedEventArgs args)
     {
-        if (sync is null && rainServices.Count == 0 && moocSync is null) { ShowError("SYNC002", "后台同步尚未就绪，请重新启动程序。"); return; }
+        if (sync is null && rainServices.Count == 0 && moocSync is null && xuetangSync is null && metadataServices.Count == 0) { ShowError("SYNC002", "后台同步尚未就绪，请重新启动程序。"); return; }
         ShowTasks(1);
         var runs = rainServices.Values.Where(service => store.LoadPlatformSettings(service.Platform.Id).Connected)
             .Select(service => service.StartAsync(true)).ToList();
         if (sync is not null) runs.Add(sync.StartAsync(true));
         if (moocSync is not null && store.LoadMoocSettings().Connected) runs.Add(moocSync.StartAsync(true));
+        if (xuetangSync is not null && store.LoadXuetangSettings().Connected) runs.Add(xuetangSync.StartAsync(true));
+        runs.AddRange(metadataServices.Values.Where(service => store.LoadMetadataSettings(service.Platform.Id).Connected).Select(service => service.StartAsync(true)));
         await Task.WhenAll(runs);
         UpdateSyncControls();
     }
@@ -334,7 +474,9 @@ public partial class TaskDashboardWindow : Window
     {
         sync?.Cancel();
         moocSync?.Cancel();
+        xuetangSync?.Cancel();
         foreach (var service in rainServices.Values) service.Cancel();
+        foreach (var service in metadataServices.Values) service.Cancel();
     }
     private void ShowSyncDetails(object sender, RoutedEventArgs args)
     {
@@ -349,7 +491,10 @@ public partial class TaskDashboardWindow : Window
                 stack.Children.Add(new TextBlock { Text = $"本轮 {summary.DetailsUnavailable} 条详情显示提交提示，平台未提供作答时间；已保留列表信息。",
                     TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 0, 0, 8) });
             if (summary.DetailsRequireAction > 0)
-                stack.Children.Add(new TextBlock { Text = $"本轮 {summary.DetailsRequireAction} 条详情转入作答页面，已保留列表信息；可通过“前往作业”自行查看。",
+                stack.Children.Add(new TextBlock { Text = $"本轮 {summary.DetailsRequireAction} 条详情转入作答页面，已保留列表信息；可点击任务名称在官网查看。",
+                    TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 0, 0, 8) });
+            if (summary.DetailsRequirePreview > 0)
+                stack.Children.Add(new TextBlock { Text = $"本轮 {summary.DetailsRequirePreview} 条任务转入官网预览入口，列表任务和日期已保留；可点击任务名称在官网继续查看。",
                     TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 0, 0, 8) });
             foreach (var problem in summary.Problems)
                 stack.Children.Add(new TextBlock { Text = problem.Code + "：" + (problem.Course.Length > 0 ? problem.Course + " — " : "") + problem.Message,
@@ -370,9 +515,9 @@ public partial class TaskDashboardWindow : Window
                     stack.Children.Add(new TextBlock { Text = problem.Code + "：" + (problem.Course.Length > 0 ? problem.Course + " — " : "") + problem.Message,
                         Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
             }
-            else stack.Children.Add(new TextBlock { Text = connection.Connected ? "已启用连接，等待官方登录或首次同步。" : "尚未连接。完成官方登录后自动采集。", Foreground = Brushes.DimGray, Margin = new Thickness(0, 8, 0, 8) });
+            else stack.Children.Add(new TextBlock { Text = connection.Connected ? "已启用连接，登录后先确认课程选择。" : "尚未连接。登录后保存 Cookie 并获取课程列表，保存选择后采集。", Foreground = Brushes.DimGray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) });
         }
-        stack.Children.Add(new TextBlock { Text = "已连接平台在启动后及运行期间每 30 分钟同步。手动修改保留；缺失或无法确认的元数据会显示。雨课堂题目进度与提交记录分别标明，截止时间按北京时间读取。其余四个平台仍可手动录入。", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 16, 0, 0) });
+        stack.Children.Add(new TextBlock { Text = "已连接平台在启动后及运行期间每 30 分钟检查。手动修改保留；缺失或无法确认的元数据会显示。各平台覆盖范围见下方说明。", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 16, 0, 0) });
         var moocSettings = store.LoadMoocSettings();
         stack.Children.Add(new TextBlock { Text = "中国大学 MOOC 同步详情", FontSize = 21, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 22, 0, 10) });
         stack.Children.Add(new TextBlock { Text = "上次检查：" + (moocSettings.LastSyncAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "尚未检查") });
@@ -385,7 +530,20 @@ public partial class TaskDashboardWindow : Window
                 stack.Children.Add(new TextBlock { Text = problem.Code + "：" + (problem.Course.Length > 0 ? problem.Course + " — " : "") + problem.Message,
                     Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
         }
-        else stack.Children.Add(new TextBlock { Text = moocSettings.Connected ? "已启用连接，等待官方登录或首次同步。" : "尚未连接。完成官方登录后自动采集。", Foreground = Brushes.DimGray, Margin = new Thickness(0, 8, 0, 8) });
+        else stack.Children.Add(new TextBlock { Text = moocSettings.Connected ? "已启用连接，登录后先确认课程选择。" : "尚未连接。登录后保存 Cookie 并获取课程列表，保存选择后采集。", Foreground = Brushes.DimGray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) });
+        AddXuetangSyncDetails(stack);
+        AddMetadataSyncDetails(stack);
+        stack.Children.Add(new TextBlock { Text = "课程列表刷新", FontSize = 21, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 22, 0, 10) });
+        foreach (var site in PlatformCatalog.Sites.Where(site => CourseRecordingRules.SupportsAutomatic(site.Id)))
+        {
+            var recording = store.LoadCourseRecording(site.Id);
+            var warning = recording.LastCatalogRefresh is { Outcome: not "completed" };
+            stack.Children.Add(new TextBlock
+            {
+                Text = site.Name + "：" + CourseRecordingRules.CatalogRefreshText(recording), TextWrapping = TextWrapping.Wrap,
+                Foreground = warning ? Brushes.Firebrick : Brushes.DimGray, Margin = new Thickness(0, 0, 0, 8)
+            });
+        }
         new Window { Owner = this, Title = "各平台同步详情", Width = 820, Height = 680, Content = new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } }.Show();
     }
     private void ExitApplication(object sender, RoutedEventArgs args) => exit();
@@ -413,7 +571,7 @@ public partial class TaskDashboardWindow : Window
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         taskOpenCancellation = cancellation;
         UpdateSelection();
-        ShowSuccess("正在确认这条任务的官方做题 / 提交入口…");
+        ShowSuccess("正在读取并核对这条任务的官方入口…");
         try
         {
             var result = await taskNavigation.OpenAsync(row.Task.Id, cancellation.Token);
@@ -476,34 +634,7 @@ public partial class TaskDashboardWindow : Window
                 store.SaveSettings(settings); AutomaticSyncSettingChanged?.Invoke(settings.AutomaticSyncEnabled);
             });
             stack.Children.Add(autoSync);
-            foreach (var platform in RainPlatform.All)
-            {
-                var row = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
-                var current = store.LoadPlatformSettings(platform.Id);
-                var platformSync = new CheckBox { Content = "自动同步" + platform.Name, IsChecked = current.AutomaticSyncEnabled,
-                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-                platformSync.Click += (_, _) => RunAction(() =>
-                {
-                    var updated = store.LoadPlatformSettings(platform.Id) with { AutomaticSyncEnabled = platformSync.IsChecked == true };
-                    store.SavePlatformSettings(platform.Id, updated);
-                    if (rainServices.TryGetValue(platform.Id, out var service)) service.SettingsChanged(updated.AutomaticSyncEnabled && store.LoadSettings().AutomaticSyncEnabled);
-                });
-                row.Children.Add(platformSync);
-                var connect = new Button { Content = "连接" + platform.Name, Padding = new Thickness(12, 5, 12, 5) };
-                connect.Click += (_, _) => PlatformConnectionRequested?.Invoke(platform.Id); row.Children.Add(connect);
-                stack.Children.Add(row);
-            }
-            var moocRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
-            var moocAuto = new CheckBox { Content = "自动同步中国大学 MOOC", IsChecked = store.LoadMoocSettings().AutomaticSyncEnabled,
-                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-            moocAuto.Click += (_, _) => RunAction(() =>
-            {
-                var updated = store.LoadMoocSettings() with { AutomaticSyncEnabled = moocAuto.IsChecked == true };
-                store.SaveMoocSettings(updated); moocSync?.SettingsChanged(updated.AutomaticSyncEnabled && store.LoadSettings().AutomaticSyncEnabled);
-            });
-            moocRow.Children.Add(moocAuto);
-            var moocConnect = new Button { Content = "连接中国大学 MOOC", Padding = new Thickness(12, 5, 12, 5) };
-            moocConnect.Click += (_, _) => PlatformConnectionRequested?.Invoke(MoocPlatform.Id); moocRow.Children.Add(moocConnect); stack.Children.Add(moocRow);
+            stack.Children.Add(new TextBlock { Text = "各平台的登录、选课与同步设置，请点击首页左侧的平台名称进行管理。", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 0, 0, 16) });
             var enabled = new CheckBox { Content = "开启任务提醒（手动任务也会提醒）", IsChecked = store.LoadSettings().NotificationsEnabled, Margin = new Thickness(0, 0, 0, 10) };
             stack.Children.Add(enabled);
             enabled.Click += (_, _) => RunAction(() =>
@@ -518,26 +649,13 @@ public partial class TaskDashboardWindow : Window
             };
             stack.Children.Add(test);
             stack.Children.Add(new TextBlock { Text = "关闭首页后保留托盘并继续提醒。点击“退出程序”会停止提醒；下次启动会补查当前仍适用的待发计划。Windows 是否显示通知，需用测试提醒核对。", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 0, 0, 18) });
-            var table = new DataGrid { ItemsSource = PlatformCatalog.Sites, IsReadOnly = true, AutoGenerateColumns = false, CanUserAddRows = false, Height = 235 };
-            foreach (var (label, field, width) in new[] { ("平台", "Name", 140.0), ("官方域名", "Domain", 190.0), ("当前接入范围", "Status", 350.0) })
-                table.Columns.Add(new DataGridTextColumn { Header = label, Binding = new System.Windows.Data.Binding(field), Width = width });
-            stack.Children.Add(table);
-            var courseButtons = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
-            foreach (var platform in PlatformCatalog.Sites)
-            {
-                var courses = new Button { Content = platform.Name + " · 选择记录课程", Tag = platform.Id,
-                    Margin = new Thickness(0, 0, 8, 8), Padding = new Thickness(12, 7, 12, 7) };
-                courses.Click += ChooseRecordingCourses; courseButtons.Children.Add(courses);
-            }
-            stack.Children.Add(courseButtons);
-            stack.Children.Add(new TextBlock { Text = "点击任务名称或“做题 / 提交”，直接在系统浏览器打开对应官方页面；已提交任务进入查看或提交记录。浏览器沿用自己的登录状态。学习通采集会话用于确认入口，登录失效和未读取的课程会在首页提示。", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 12, 0, 18) });
             var history = new Button { Content = "查看提醒记录", HorizontalAlignment = HorizontalAlignment.Left };
             history.Click += (_, _) => ShowReminderHistory();
             stack.Children.Add(history);
             stack.Children.Add(new TextBlock { Text = "免责声明", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 18, 0, 7) });
             stack.Children.Add(new TextBlock { Text = TaskRules.Disclaimer, TextWrapping = TextWrapping.Wrap });
             var readme = new Button { Content = "打开使用与故障说明", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 16, 0, 0) };
-            readme.Click += (_, _) => RunAction(() => Process.Start(new ProcessStartInfo(Path.Combine(projectRoot, "README.md")) { UseShellExecute = true }));
+            readme.Click += (_, _) => RunAction(() => Process.Start(new ProcessStartInfo(ApplicationPaths.HelpPath(projectRoot)) { UseShellExecute = true }));
             stack.Children.Add(readme);
             window.Content = new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
             window.Show();
@@ -567,12 +685,36 @@ public partial class TaskDashboardWindow : Window
     {
         public string Title => Task.Title;
         public bool CanOpen => TaskRules.IsSafeLink(Task.Link);
-        public string OpenHint => TaskRules.IsActive(Task) ? "打开该任务的官方做题 / 提交页面" : "打开该任务的官方查看 / 提交记录";
+        public string OpenHint => TaskNavigationRules.OpenHint(Task);
         public string Course => Task.CourseName.Length == 0 ? "课程待补充" : Task.CourseName;
         public string Platform => PlatformCatalog.Name(Task.PlatformId);
+        public string PlatformIconKey => Task.PlatformId;
+        public string PlatformColor => ProductIcons.LabelColor(PlatformIconKey);
+        public string PlatformBackground => ProductIcons.SoftColor(PlatformIconKey);
+        public string CourseCaption => Platform + " / " + Course;
         public string Deadline => TaskRules.DeadlineName(Task);
+        public string ShortDeadline => Task.DeadlineKind == DeadlineKind.Known && Task.DeadlineUtc is { } date
+            ? (Task.DeadlineEvidence == DeadlineEvidence.RemainingTime && !Task.Overrides.HasFlag(TaskOverrides.Deadline) ? "约 " : "")
+                + date.ToLocalTime().ToString("MM-dd HH:mm")
+            : Deadline;
+        public string DeadlineContext => Task.DeadlineEvidence == DeadlineEvidence.InferredYear && !Task.Overrides.HasFlag(TaskOverrides.Deadline)
+            ? "年份推定 · " + Priority
+            : Task.DeadlineEvidence == DeadlineEvidence.RemainingTime && !Task.Overrides.HasFlag(TaskOverrides.Deadline)
+                ? "剩余时长估算 · " + Priority : Priority;
         public string Priority => TaskRules.IsActive(Task) ? "P" + TaskRules.Priority(Task, Now) + " " + (TaskRules.Priority(Task, Now) switch { 0 => "逾期", 1 => "马上到期", 2 => "临期", 3 => "不慌", _ => "待确认" }) : "—";
         public string State => TaskRules.StateName(Task.State);
+        public string StateIconKey => Task.State switch
+        {
+            TaskState.Completed => "completed",
+            TaskState.Returned => "returned",
+            TaskState.NeedsReview => "review",
+            TaskState.Ignored => "ignored",
+            _ => "soon"
+        };
         public string PlatformState => Task.PlatformStatusText.Length == 0 ? "—" : Task.PlatformStatusText;
+        public string PriorityColor => !TaskRules.IsActive(Task) ? "#5E6B80" : TaskRules.Priority(Task, Now) switch { 0 => "#C9243A", 1 or 2 => "#9A5200", _ => "#005BCE" };
+        public string PriorityBackground => !TaskRules.IsActive(Task) ? "#F5F8FF" : TaskRules.Priority(Task, Now) switch { 0 => "#FFE5EA", 1 or 2 => "#FFF0CC", _ => "#E4EEFF" };
+        public string StateColor => Task.State switch { TaskState.Completed => "#087A3A", TaskState.Returned => "#C9243A", TaskState.NeedsReview => "#9A5200", TaskState.Pending => "#005BCE", _ => "#5E6B80" };
+        public string StateBackground => Task.State switch { TaskState.Completed => "#DFF6E8", TaskState.Returned => "#FFE5EA", TaskState.NeedsReview => "#FFF0CC", TaskState.Pending => "#E4EEFF", _ => "#EDF0F5" };
     }
 }

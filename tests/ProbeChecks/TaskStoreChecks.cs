@@ -20,7 +20,7 @@ internal static class TaskStoreChecks
             catch (TaskValidationException error) { Check(error.Code == code); }
         }
         var protection = new SyntheticProtector();
-        var store = new TaskStore(path, protection);
+        var store = FixtureTaskStore.Create(path, protection);
         var manualDraft = new TaskDraft("手动任务", "mooc", "合成课程", DeadlineKind.Known, null, now.AddHours(1),
             "https://example.invalid/task?enc=SYNTHETIC-SECRET-ONLY", null, "", "演示备注", null);
         var manual = store.Create(manualDraft, now);
@@ -38,7 +38,7 @@ internal static class TaskStoreChecks
         Check(store.Get(manual.Id)!.Link == manualDraft.Link);
         Check(!JsonSerializer.Serialize(manual).Contains("SYNTHETIC-SECRET", StringComparison.Ordinal));
         Check(!Encoding.UTF8.GetString(File.ReadAllBytes(path)).Contains("SYNTHETIC-SECRET", StringComparison.Ordinal));
-        var reopened = new TaskStore(path, protection);
+        var reopened = FixtureTaskStore.Create(path, protection);
         Check(reopened.Get(manual.Id)!.Title == manual.Title);
         Check(reopened.Get(manual.Id)!.DeadlineUtc == manual.DeadlineUtc);
         manual = store.SetState(manual.Id, manual.Revision, TaskState.Completed, now);
@@ -99,7 +99,7 @@ internal static class TaskStoreChecks
         collected = store.SaveDetail(refreshed.Location!, detail, now.AddMinutes(2));
         Check(collected.DisplayedTimeText.Contains("10-25 23:59", StringComparison.Ordinal));
         Check(collected.DeadlineUtc == userDraft.DeadlineUtc && collected.State == TaskState.Completed);
-        Check(new TaskStore(path, protection).Get(collected.Id)!.State == TaskState.Completed);
+        Check(FixtureTaskStore.Create(path, protection).Get(collected.Id)!.State == TaskState.Completed);
 
         var progressTask = collected with { State = TaskState.Pending, ProgressPercent = 99m };
         Rejected(() => TaskRules.Transition(progressTask, TaskState.Completed), "TASK003");
@@ -118,12 +118,12 @@ internal static class TaskStoreChecks
             "https://example.invalid/<li>", "https://example.invalid/path\\task" })
             Rejected(() => TaskRules.Validate(manualDraft with { Link = unsafeLink }), "LINK001");
 
-        var precisionStore = new TaskStore(Path.Combine(root, "precision.db"), protection);
+        var precisionStore = FixtureTaskStore.Create(Path.Combine(root, "precision.db"), protection);
         var precise = precisionStore.Create(manualDraft with { DeadlineUtc = now.AddHours(-4).AddTicks(12345) }, now);
         var preciseDue = precisionStore.TakeDue(now);
         Check(preciseDue.Count == 1 && preciseDue[0].Plan.Kind == ReminderKind.Overdue);
         var reminderRoot = Path.Combine(root, "reminders.db");
-        var reminders = new TaskStore(reminderRoot, protection);
+        var reminders = FixtureTaskStore.Create(reminderRoot, protection);
         var timed = reminders.Create(manualDraft, now);
         var claimed = reminders.TakeDue(now);
         Check(claimed.Count == 1 && reminders.TakeDue(now).Count == 0);
@@ -134,7 +134,7 @@ internal static class TaskStoreChecks
         Check(reminders.TakeDue(now).Count == 0);
         reminders.RecordNotificationRequest([due[0].Plan.Id], true, now);
         reminders.ReleaseReminderClaims([due[0].Plan.Id]);
-        Check(new TaskStore(reminderRoot, protection).TakeDue(now).Count == 0);
+        Check(FixtureTaskStore.Create(reminderRoot, protection).TakeDue(now).Count == 0);
         var overdue = reminders.TakeDue(now.AddHours(3));
         Check(overdue.Count == 1 && overdue[0].Plan.Kind == ReminderKind.Overdue);
         reminders.RecordNotificationRequest([overdue[0].Plan.Id], false, now.AddHours(3));
@@ -144,28 +144,28 @@ internal static class TaskStoreChecks
         Check(reminders.LoadReminderHistory().Count == 3); // old requested event plus two replacement plans
         Check(reminders.TakeDue(now.AddHours(3)).Count == 0);
         reminders.SaveSettings(new(false, true));
-        Check(!new TaskStore(reminderRoot, protection).LoadSettings().NotificationsEnabled);
+        Check(!FixtureTaskStore.Create(reminderRoot, protection).LoadSettings().NotificationsEnabled);
         Check(reminders.TakeDue(now.AddDays(3)).Count == 0);
         reminders.SaveSettings(new(true, true));
-        var overdueAfterRestart = new TaskStore(reminderRoot, protection).TakeDue(now.AddDays(3));
+        var overdueAfterRestart = FixtureTaskStore.Create(reminderRoot, protection).TakeDue(now.AddDays(3));
         Check(overdueAfterRestart.Count == 1 && overdueAfterRestart[0].Plan.Kind == ReminderKind.Overdue);
         Check(reminders.LoadReminderHistory().All(item => item.Plan.TaskId == timed.Id));
         reminders.Delete(timed.Id, timed.Revision);
         Check(reminders.LoadTasks().Count == 0 && reminders.LoadReminderHistory().Count == 0);
 
         // A broken key must not erase a saved link when editing other fields.
-        var corruptView = new TaskStore(path, new BrokenProtector());
+        var corruptView = FixtureTaskStore.Create(path, new BrokenProtector());
         var corrupted = corruptView.Get(manual.Id)!;
         Check(corrupted.Link is null && corrupted.LinkIssue == "LINK002");
         corruptView.SetState(corrupted.Id, corrupted.Revision, TaskState.Completed, now);
-        Check(new TaskStore(path, protection).Get(manual.Id)!.Link == manualDraft.Link);
+        Check(FixtureTaskStore.Create(path, protection).Get(manual.Id)!.Link == manualDraft.Link);
 
         if (OperatingSystem.IsWindows())
         {
             var dpapiPath = Path.Combine(root, "dpapi.db");
-            var dpapi = new TaskStore(dpapiPath);
+            var dpapi = FixtureTaskStore.Create(dpapiPath);
             var secured = dpapi.Create(manualDraft, now);
-            Check(new TaskStore(dpapiPath).Get(secured.Id)!.Link == manualDraft.Link);
+            Check(FixtureTaskStore.Create(dpapiPath).Get(secured.Id)!.Link == manualDraft.Link);
             Check(!Encoding.UTF8.GetString(File.ReadAllBytes(dpapiPath)).Contains("SYNTHETIC-SECRET", StringComparison.Ordinal));
         }
         Check(TaskRules.ParseLocalTime("2026-10-25 23:59")!.Value.Offset == TimeSpan.Zero);
