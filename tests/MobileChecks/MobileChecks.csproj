@@ -51,5 +51,6 @@
     <Compile Include="../../src/AccessProbe.Android/MobileVault.cs" Link="MobileVault.cs" />
     <Compile Include="../../src/AccessProbe.Android/MobileSync.cs" Link="MobileSync.cs" />
     <Compile Include="../../src/AccessProbe.Android/MobileSyntheticChecks.cs" Link="MobileSyntheticChecks.cs" />
+    <Compile Include="../../src/AccessProbe.Android/MobilePasswordlessLogin.cs" Link="MobilePasswordlessLogin.cs" />
   </ItemGroup>
 </Project>

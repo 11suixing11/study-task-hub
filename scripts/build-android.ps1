@@ -1,4 +1,9 @@
-﻿param([string]$Version = '1.0.0', [int]$VersionCode = 1)
+﻿param(
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '1.1.2',
+    [ValidateRange(1,2147483647)][int]$VersionCode = 4,
+    [string]$AndroidSdkDirectory,
+    [string]$JavaSdkDirectory
+)
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $OutputEncoding=[Console]::OutputEncoding
@@ -10,11 +15,12 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT='1'; $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1'
 $env:NUGET_PACKAGES=Join-Path $taskRoot '.tools\nuget\packages'
 $env:NUGET_HTTP_CACHE_PATH=Join-Path $taskRoot '.tools\nuget\http-cache'
 $env:TEMP=Join-Path $taskRoot '.local\temp'; $env:TMP=$env:TEMP
-$taskSdk=Join-Path $env:LOCALAPPDATA 'Android\Sdk'
-$taskJdk='C:\Users\yuki\Tools\Java\jdk-21\jdk-21.0.12.1+1'
+$taskSdk=if ($AndroidSdkDirectory) { [IO.Path]::GetFullPath($AndroidSdkDirectory) } else { Join-Path $env:LOCALAPPDATA 'Android\Sdk' }
+$taskJdk=if ($JavaSdkDirectory) { [IO.Path]::GetFullPath($JavaSdkDirectory) } elseif ($env:JAVA_HOME -and (Test-Path -LiteralPath (Join-Path $env:JAVA_HOME 'bin\keytool.exe'))) { $env:JAVA_HOME } else { Join-Path $env:USERPROFILE 'Tools\Java\jdk-21\jdk-21.0.12.1+1' }
 $env:JAVA_HOME=$taskJdk
 $env:PATH=(Join-Path $taskJdk 'bin')+';'+$env:PATH
 $env:ANDROID_USER_HOME=Join-Path $taskRoot '.local\android-build-home'
+New-Item -ItemType Directory -Force -Path $env:TEMP,$env:ANDROID_USER_HOME | Out-Null
 if (-not (Test-Path -LiteralPath $taskSdk)) { throw 'Android SDK is required.' }
 if (-not (Test-Path -LiteralPath (Join-Path $taskJdk 'bin\keytool.exe'))) { throw 'JDK 21 is required.' }
 $taskKeyDirectory=Join-Path $taskRoot '.local\android-signing'
@@ -60,6 +66,6 @@ try {
     $taskHasher = [Security.Cryptography.SHA256]::Create()
     try { $taskHash = [BitConverter]::ToString($taskHasher.ComputeHash($taskStream)).Replace('-','').ToLowerInvariant() }
     finally { $taskStream.Dispose(); $taskHasher.Dispose() }
-    [IO.File]::WriteAllText((Join-Path $taskOutput 'package.json'),(@{schema=1;version=$Version;versionCode=$VersionCode;platform='android';minimumAndroid=9;minimumApi=28;targetApi=36;applicationId='cn.yuki.learningaggregator';abis=@('arm64-v8a','armeabi-v7a','x86_64');package=$taskTarget;bytes=(Get-Item -LiteralPath $taskTarget).Length;sha256=$taskHash;signature='verified';realAccountAcceptance='pending';runtimeTests='pending';builtAtUtc=[DateTimeOffset]::UtcNow.ToString('o')}|ConvertTo-Json -Depth 4),[Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $taskOutput 'package.json'),(@{schema=1;version=$Version;versionCode=$VersionCode;buildId=$taskBuildId;platform='android';minimumAndroid=9;minimumApi=28;targetApi=36;applicationId='cn.yuki.learningaggregator';abis=@('arm64-v8a','armeabi-v7a','x86_64');package=$taskTarget;bytes=(Get-Item -LiteralPath $taskTarget).Length;sha256=$taskHash;signature='verified';realAccountAcceptance='pending';runtimeTests='pending';builtAtUtc=[DateTimeOffset]::UtcNow.ToString('o')}|ConvertTo-Json -Depth 4),[Text.UTF8Encoding]::new($false))
     Write-Output ('Android APK built: '+$taskTarget)
 } finally { Remove-Item Env:\AGGREGATOR_SIGNING_PASSWORD -ErrorAction SilentlyContinue; $taskPassword=$null }

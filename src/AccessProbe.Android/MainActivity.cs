@@ -26,6 +26,7 @@ public sealed partial class MainActivity : Activity
     private TextView status = null!;
     private CancellationTokenSource? work;
     private WebView? web;
+    private OfficialLoginClient? loginClient;
     private string? loginPlatform;
     private string? selectedPlatform;
     private bool busy;
@@ -45,14 +46,26 @@ public sealed partial class MainActivity : Activity
         {
             _ = RunSelfTest(); return;
         }
+        if (Intent?.GetStringExtra("synthetic_qr_test") is { } qrMode)
+        {
+            if (Build.Hardware is not ("ranchu" or "goldfish")) { Finish(); return; }
+            syntheticUi = true; WebView.SetDataDirectorySuffix("synthetic-qr");
+            OpenSyntheticUi(); CleanupOrphanedLoginQr(); _ = RunQrChecks(qrMode); return;
+        }
+        if (Intent?.GetBooleanExtra("synthetic_login_test", false) == true)
+        {
+            if (Build.Hardware is not ("ranchu" or "goldfish")) { Finish(); return; }
+            syntheticUi = true; WebView.SetDataDirectorySuffix("synthetic-login");
+            _ = RunLoginNavigationChecks(); return;
+        }
         if (Intent?.GetBooleanExtra("synthetic_ui_test", false) == true)
         {
             if (Build.Hardware is not ("ranchu" or "goldfish")) { Finish(); return; }
             syntheticUi = true;
-            OpenSyntheticUi(); Dashboard(); return;
+            OpenSyntheticUi(); CleanupOrphanedLoginQr(); Dashboard(); return;
         }
         var protector = new AndroidDataProtector(); store = MobileData.Open(this, protector); vault = new(store, protector); sync = new(store, vault);
-        Dashboard(); ScheduleReminders();
+        CleanupOrphanedLoginQr(); Dashboard(); ScheduleReminders();
         if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu && CheckSelfPermission(Android.Manifest.Permission.PostNotifications) != Permission.Granted)
             RequestPermissions([Android.Manifest.Permission.PostNotifications], 301);
         periodic = new(); _ = ForegroundSyncLoop(periodic.Token);
@@ -120,9 +133,30 @@ public sealed partial class MainActivity : Activity
         if (syntheticUi) { status.Text = "隔离验收模式：官网登录由独立测试数据代替。"; return; }
         if (busy) { status.Text = "请先停止当前同步。"; return; }
         loginLifetime?.Cancel(); loginLifetime?.Dispose(); loginLifetime = new();
-        loginPlatform = platform; Layout("连接 " + PlatformCatalog.Name(platform), "请在官网本人登录；确认后读取课程。", () => CloseLogin(platform));
+        CreateLoginPage(platform);
+        var loginWeb = web!;
+        try
+        {
+            status.Text = "正在恢复已保存的登录…";
+            if (vault.Load(platform) is { } saved) await MobilePlatforms.RestoreBrowserAsync(saved);
+            else if (store.LoadPlatformSessionInfo(platform).State == "expired") await MobilePlatforms.ClearBrowserAsync(platform, null);
+            if (!alive || web != loginWeb) return;
+            web!.LoadUrl(MobilePlatforms.Login(platform).AbsoluteUri); status.Text = "请完成官方登录；确认后会自动保存并读取课程。";
+            _ = MonitorLogin(platform, loginLifetime.Token);
+        }
+        catch { if (alive && web == loginWeb) { status.Text = "登录环境恢复未完成，请重新打开连接窗口。"; } }
+    }
+    private void CreateLoginPage(string platform)
+    {
+        loginPlatform = platform; Layout("连接 " + PlatformCatalog.Name(platform), "官方确认后保存登录并读取课程。", () => CloseLogin(platform));
+        if (MobilePasswordlessLogin.SupportsQr(platform))
+        {
+            Pair(page, "官网扫码登录", async () => await PrepareOfficialQr(platform), "保存登录二维码", async () => await SaveOfficialQr(platform, false), true);
+            Button(page, "保存并打开" + MobilePasswordlessLogin.AppName(platform), async () => await SaveOfficialQr(platform, true), false);
+            Text(page, "在官方 App 的扫一扫中选相册，识别二维码并确认；返回后自动检查登录。", 12);
+        }
+        else Text(page, MobilePasswordlessLogin.Guidance(platform), 13);
         Button(page, "登录完成并读取课程", async () => await CaptureLogin(platform));
-        Button(page, "打开官方登录", () => web?.LoadUrl(MobilePlatforms.Login(platform).AbsoluteUri), false);
         if (platform == "mooc") Button(page, "打开官网首页", () => web?.LoadUrl(MoocPlatform.Home.AbsoluteUri), false);
         if (platform == "xuetang") Text(page, "点击学堂在线官网右上角“登录”打开表单。", 13);
         web = new WebView(this); web.Settings.JavaScriptEnabled = true; web.Settings.DomStorageEnabled = true;
@@ -132,24 +166,17 @@ public sealed partial class MainActivity : Activity
         web.Settings.SetSupportMultipleWindows(true); web.Settings.JavaScriptCanOpenWindowsAutomatically = true;
         web.Settings.UserAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
         Android.Webkit.CookieManager.Instance!.SetAcceptCookie(true); Android.Webkit.CookieManager.Instance.SetAcceptThirdPartyCookies(web, true);
-        web.SetWebViewClient(new OfficialLoginClient(platform, message => RunOnUiThread(() => status.Text = message)));
+        loginClient = new OfficialLoginClient(platform, message => RunOnUiThread(() => status.Text = message), LoginPageStarted);
+        web.SetWebViewClient(loginClient);
         web.SetWebChromeClient(new OfficialLoginChromeClient(this, platform, address => web?.LoadUrl(address), message => status.Text = message));
         page.AddView(web, new LinearLayout.LayoutParams(-1, Dp(650)));
-        var loginWeb = web;
-        try
-        {
-            status.Text = "正在恢复已保存的登录…";
-            if (vault.Load(platform) is { } saved) await MobilePlatforms.RestoreBrowserAsync(saved);
-            else if (store.LoadPlatformSessionInfo(platform).State == "expired") await MobilePlatforms.ClearBrowserAsync(platform, null);
-            if (!alive || web != loginWeb) return;
-            web.LoadUrl(MobilePlatforms.Login(platform).AbsoluteUri); status.Text = "请完成官方登录；确认后会自动保存并读取课程。";
-            _ = MonitorLogin(platform, loginLifetime.Token);
-        }
-        catch { if (alive && web == loginWeb) { status.Text = "登录环境恢复未完成，请重新打开连接窗口。"; } }
+        Button(page, "重新打开官方登录", () => { DeleteSavedLoginQr(); loginClient?.ResetNavigation(); web?.LoadUrl(MobilePlatforms.Login(platform).AbsoluteUri); }, false);
+        if (MobilePasswordlessLogin.SupportsQr(platform)) Text(page, "二维码过期时请在官网刷新后重新保存。不支持相册识别时可用另一台设备扫码；也可选择官网短信登录。退出连接页时会清理本应用保存的二维码。", 12);
     }
     private void CloseLogin(string platform)
     {
-        loginLifetime?.Cancel(); web?.StopLoading(); web?.Destroy(); web = null; loginPlatform = null; Platform(platform);
+        qrNavigationRevision++; DeleteSavedLoginQr(); awaitingOfficialApp = false; pendingQrSave = null;
+        loginLifetime?.Cancel(); web?.StopLoading(); web?.Destroy(); web = null; loginClient = null; loginPlatform = null; Platform(platform);
     }
     private async Task MonitorLogin(string platform, CancellationToken cancellation)
     {
@@ -209,13 +236,14 @@ public sealed partial class MainActivity : Activity
             pageToken is null ? null : cookieBinding, cookies.Select(cookie => cookie.Key).ToArray()));
         Android.Webkit.CookieManager.Instance!.Flush();
         busy = true; work = new(TimeSpan.FromMinutes(10));
+        status.Text = "正在确认官网会话并读取课程…";
         try
         {
             var result = await System.Threading.Tasks.Task.Run(() => sync.RunAsync(platform, true, cancellation: work.Token), work.Token);
             if (!alive || web != loginWeb) return;
             if (result.LoginRequired || !result.AccountVerified)
             {
-                status.Text = result.LoginRequired ? "官网仍要求登录，请完成登录后等待返回课程主页。" : string.Join("、", result.Codes) + " " + result.Message;
+                status.Text = string.Join("、", result.Codes) + " " + (result.LoginRequired ? "官网仍要求登录，请完成登录后等待返回课程主页。" : result.Message);
                 return;
             }
             CloseLogin(platform); status.Text = result.CatalogCovered ? "登录已保存，请勾选课程后点击“保存选择并采集”。" : result.Message;
@@ -232,7 +260,11 @@ public sealed partial class MainActivity : Activity
     };
     private Task<string> Evaluate(string script)
     {
-        var result = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously); web!.EvaluateJavascript(script, new ScriptResult(value => result.TrySetResult(value))); return result.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        return Evaluate(web!, script);
+    }
+    private static Task<string> Evaluate(WebView target, string script)
+    {
+        var result = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously); target.EvaluateJavascript(script, new ScriptResult(value => result.TrySetResult(value))); return result.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
     private void TaskDetail(string id)
     {
@@ -283,9 +315,14 @@ public sealed partial class MainActivity : Activity
         else if (rootPage != "tasks") Dashboard();
         else MoveTaskToBack(true);
     }
-    protected override void OnResume() { base.OnResume(); resumed = true; }
+    protected override void OnResume()
+    {
+        base.OnResume(); resumed = true;
+        if (awaitingOfficialApp && loginPlatform is { } platform)
+        { awaitingOfficialApp = false; _ = ResumeOfficialAppLogin(platform); }
+    }
     protected override void OnPause() { resumed = false; base.OnPause(); }
-    protected override void OnDestroy() { alive = false; loginLifetime?.Cancel(); loginLifetime?.Dispose(); periodic?.Cancel(); periodic?.Dispose(); work?.Cancel(); web?.Destroy(); base.OnDestroy(); }
+    protected override void OnDestroy() { alive = false; DeleteSavedLoginQr(); loginLifetime?.Cancel(); loginLifetime?.Dispose(); periodic?.Cancel(); periodic?.Dispose(); work?.Cancel(); web?.Destroy(); base.OnDestroy(); }
 
     private async Task RunSelfTest()
     {
@@ -323,12 +360,28 @@ internal sealed class ScriptResult(Action<string> callback) : Java.Lang.Object, 
     public void OnReceiveValue(Java.Lang.Object? value) => callback(value?.ToString() ?? "null");
 }
 
-internal sealed class OfficialLoginClient(string platform, Action<string> message) : WebViewClient
+internal class OfficialLoginClient(string platform, Action<string> message, Action started) : WebViewClient
 {
+    private readonly HttpsUpgradeChain httpsUpgrades = new();
+    public void ResetNavigation() => httpsUpgrades.Reset();
+    public override void OnPageStarted(WebView? view, string? url, Bitmap? favicon) { started(); base.OnPageStarted(view, url, favicon); }
     public override bool ShouldOverrideUrlLoading(WebView? view, IWebResourceRequest? request)
     {
         var address = request?.Url?.ToString() ?? "";
         var allowed = request?.IsForMainFrame == true ? MobilePlatforms.Allowed(platform, address) : MobilePlatforms.FrameAllowed(platform, address);
+        if (allowed) return false;
+        if (request?.IsForMainFrame == true && platform == "chaoxing" && view is not null
+            && ProbePolicy.TryGetHttpsNavigation(address, out var upgraded))
+        {
+            if (request.HasGesture) httpsUpgrades.Reset();
+            if (httpsUpgrades.TrySchedule(upgraded))
+            {
+                message("正在打开扫码确认后的官方页面…");
+                view.Post(() => { if (view.Handle != IntPtr.Zero) view.LoadUrl(upgraded); });
+            }
+            else message("官方页面反复跳回旧链接，请重新打开官方登录后重试。");
+            return true;
+        }
         if (!allowed && request?.IsForMainFrame == true) message("该登录跳转尚未适配，请返回官方登录后重试。");
         return !allowed;
     }
@@ -358,6 +411,7 @@ internal sealed class OfficialLoginChromeClient(Context context, string platform
             var address = request.Url?.ToString() ?? "";
             if (address == "about:blank") return false;
             if (MobilePlatforms.Allowed(platform, address)) navigate(address);
+            else if (platform == "chaoxing" && ProbePolicy.TryGetHttpsNavigation(address, out var upgraded)) navigate(upgraded);
             else message("该登录弹窗跳转尚未适配，请返回官方登录后重试。");
             view?.StopLoading(); view?.Post(() => view.Destroy()); return true;
         }

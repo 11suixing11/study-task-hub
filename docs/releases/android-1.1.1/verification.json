@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "platform": "android",
+  "version": "1.1.1",
+  "versionCode": 2,
+  "buildId": "20261110-071939-acfa5e71",
+  "builtAtUtc": "2026-11-10T07:20:37.268461+00:00",
+  "package": "聚合平台-1.1.1-android.apk",
+  "bytes": 67121080,
+  "sha256": "a7ca87e10a3900be65f5f57129f2c8b3da1f08b87f57ace606b7d6627940ff68",
+  "applicationId": "cn.yuki.learningaggregator",
+  "minimumAndroid": 9,
+  "minimumApi": 28,
+  "targetApi": 36,
+  "abis": [
+    "arm64-v8a",
+    "armeabi-v7a",
+    "x86_64"
+  ],
+  "signature": "verified_apk_v3",
+  "certificateSha256": "6e113bcf7c8ea5390ea7d725f2f7ecde8cfecce3612c348ed9ee490b478af30b",
+  "sameSignatureUpgradeFrom": "1.0.0",
+  "verification": {
+    "scope": "isolated_Android_15_emulator_and_local_synthetic_checks",
+    "sharedMobileChecks": 40,
+    "nativeSyntheticChecks": 40,
+    "restartChecks": 4,
+    "upgradeChecks": 4,
+    "uiChecks": 17,
+    "installation": "passed_on_emulator",
+    "visualAcceptance": "passed_on_emulator",
+    "upgradePreservesData": true,
+    "keystore": true,
+    "applicationCrashCount": 0,
+    "productionDataAccessed": false,
+    "officialNetworkAccessed": false,
+    "physicalDeviceAcceptance": "pending",
+    "realAccountAcceptance": "pending"
+  },
+  "delivery": {
+    "destination": "桌面/聚合平台安装包",
+    "githubReleaseUploaded": false
+  },
+  "knownLimitations": [
+    "Windows 与 Android 独立保存任务及登录，不提供跨设备同步。",
+    "官方 SSO 会话过期仍需本人登录；PTA 失效删除归档与提前关闭漏存尚未修复。",
+    "真机各官网登录、课程完整性、官方任务页及实际通知仍待验收。"
+  ]
+}

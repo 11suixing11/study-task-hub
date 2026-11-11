@@ -1,0 +1,81 @@
+{
+  "platform": "android",
+  "version": "1.1.2",
+  "versionCode": 3,
+  "buildId": "20261111-010947-98d75578",
+  "builtAtUtc": "2026-11-11T01:10:30.526379+00:00",
+  "package": "聚合平台-1.1.2-android.apk",
+  "bytes": 67174484,
+  "sha256": "2655cd49b5cbef469317abee270996bc2c8712198c03964e6ff84542dbb2af22",
+  "applicationId": "cn.yuki.learningaggregator",
+  "minimumAndroid": 9,
+  "minimumApi": 28,
+  "targetApi": 36,
+  "abis": [
+    "arm64-v8a",
+    "armeabi-v7a",
+    "x86_64"
+  ],
+  "signature": "verified_apk_v3",
+  "certificateSha256": "6e113bcf7c8ea5390ea7d725f2f7ecde8cfecce3612c348ed9ee490b478af30b",
+  "schema": 1,
+  "sameSigningCertificateAsVersion": "1.1.1",
+  "loginMethod": "official_website_QR_assisted_passwordless_login",
+  "nativeOneTapAuthorization": "not_integrated",
+  "verification": {
+    "scope": "isolated_Android_15_emulator_and_local_synthetic_checks",
+    "sharedMobileChecks": 47,
+    "nativeSyntheticChecks": 47,
+    "restartChecks": 4,
+    "finalSameVersionInstallChecks": 4,
+    "uiChecks": 17,
+    "qrAutomaticChecks": 27,
+    "qrAppHandoffChecks": 6,
+    "qrAbruptTerminationCleanupChecks": 2,
+    "qrSavedImageDecodeChecks": 2,
+    "qrLayoutChecks": 7,
+    "installation": "passed_on_emulator",
+    "visualAcceptance": "passed_on_emulator",
+    "upgradeDataPreservation": "passed_along_two_step_chain",
+    "directOldToFinalInstallTested": false,
+    "keystore": true,
+    "applicationCrashCount": 0,
+    "zipAlignment16kb": "passed",
+    "native64bitLoadAlignment16kb": "passed",
+    "privateFilesExcluded": true,
+    "productionDataAccessed": false,
+    "officialNetworkAccessed": false,
+    "physicalDeviceAcceptance": "pending",
+    "realAccountAcceptance": "pending",
+    "officialAppGalleryRecognitionAcceptance": "pending",
+    "android9PermissionCallbacks": "passed_on_emulator",
+    "android9RealPermissionDialogAndStorageAcceptance": "pending",
+    "physical16kbPageDeviceAcceptance": "pending"
+  },
+  "licenses": {
+    "dependencyPackages": 9,
+    "licenseAndNoticeFiles": 13,
+    "matchesFinalRestore": true
+  },
+  "upgradeValidation": {
+    "chain": [
+      "1.1.1",
+      "1.1.2_intermediate",
+      "1.1.2_final"
+    ],
+    "intermediateApkSha256": "dc9b1bbb40a4dbda9bb7063ee2ec04a6e7daa6a0640741e26a0b113e7e8848ec",
+    "report": "upgrade-chain.json"
+  },
+  "delivery": {
+    "destination": "桌面/聚合平台安装包",
+    "githubReleaseUploaded": false
+  },
+  "knownLimitations": [
+    "官网扫码辅助仍需本人在官方 App 确认；原生一键应用授权未接入。",
+    "真实官方 App 相册识别、本人账号扫码到选课采集尚待真机验收。",
+    "Android 9 仅测试权限回调逻辑，真实系统弹窗和保存路径未实测。",
+    "Windows 与 Android 分别保存任务及登录，没有跨设备同步。",
+    "官方 SSO 也过期时仍需本人重新登录；PTA 失效删除归档和提前关闭漏存尚未修复。",
+    "真实课程完整性、最终官方任务页面、通知及 16 KB 页大小真机仍待验收。"
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "schema": 2,
+  "platform": "windows-x64",
+  "version": "1.1.2",
+  "buildId": "20261111-060027-e533c14f",
+  "verifiedAtUtc": "2026-11-11T07:17:39.240691+00:00",
+  "runtimeVersion": "10.0.13",
+  "selfContained": true,
+  "publisherSignature": "not_signed",
+  "setup": {
+    "file": "聚合平台-1.1.2-Setup-win-x64.exe",
+    "releaseAsset": "StudyTaskHub-1.1.2-Setup-win-x64.exe",
+    "bytes": 59113574,
+    "sha256": "604190c52f220000519c2cabea992155bce64b0189de02190731fb4addf7f325"
+  },
+  "portable": {
+    "file": "聚合平台-1.1.2-便携版-win-x64.zip",
+    "releaseAsset": "StudyTaskHub-1.1.2-Portable-win-x64.zip",
+    "bytes": 81075944,
+    "sha256": "be4413b013a4aef1bfb5bc0158ed96b0dc9e2b4e786c333ded655690029efa30",
+    "files": 523,
+    "payloadFiles": 520,
+    "allFilesHashMatched": true,
+    "zipCrcPassed": true,
+    "startup": "passed_in_isolation"
+  },
+  "verification": {
+    "outcome": "passed",
+    "projects": 11,
+    "businessChecks": 2996,
+    "desktopAndRestartChecks": 1157,
+    "pythonChecks": 40,
+    "dashboardUiChecks": 77,
+    "data": "synthetic_only",
+    "officialNetworkAccessed": false,
+    "productionDataAccessed": false,
+    "productionDataModified": false,
+    "installation": "passed_with_isolated_TestInstallation_variant",
+    "releaseSetupDirectInstallationAcceptance": "not_tested",
+    "upgrade111To112": "passed_with_isolated_installer_variants",
+    "upgradePreviousScriptScope": "1.1.1_payload_with_current_installer_script",
+    "importAndEncryptedArchives": "passed_in_isolation",
+    "profilePreservationAndExclusionFromImport": "passed_in_isolation",
+    "conflictingImportDoesNotOverwrite": true,
+    "uninstallPreservesData": true,
+    "embeddedIconFramesMatch": true,
+    "iconFrameCount": 10,
+    "visualAcceptance": "pending",
+    "realAccountAcceptance": "pending",
+    "officialWindowAcceptance": "pending"
+  },
+  "licenses": {
+    "dependencyPackages": 10,
+    "licenseAndNoticeSources": 21,
+    "sourceHashesMatched": true
+  },
+  "releaseUrl": "https://github.com/11suixing11/study-task-hub/releases/tag/v1.1.2",
+  "knownLimitations": [
+    "交付 Setup 本身未直接安装实测，安装与升级使用同脚本、同 payload 的隔离测试变体。",
+    "新版真实账号、最终官方任务窗口与目视验收待完成，不继承 1.1.1 的真实 U 校园验收结论。",
+    "PTA 失效删除归档与提前关闭漏存的既有问题仍待修复。"
+  ]
+}

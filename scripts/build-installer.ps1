@@ -1,4 +1,4 @@
-﻿param([string]$ReleaseVersion, [string]$PackageVersion = '1.1.1')
+﻿param([string]$ReleaseVersion, [string]$PackageVersion = '1.1.2')
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
@@ -24,7 +24,7 @@ $ErrorActionPreference = 'Continue'
 & (Join-Path $env:DOTNET_ROOT 'dotnet.exe') publish (Join-Path $taskRoot 'src\AccessProbe\AccessProbe.csproj') --configuration Release --runtime win-x64 --self-contained true --output $taskPayload --artifacts-path (Join-Path $taskWork 'build') --disable-build-servers --configfile (Join-Path $taskRoot 'NuGet.Config') -p:NuGetAudit=false -p:PublishTrimmed=false -p:RuntimeFrameworkVersion=10.0.13 ('-p:Version=' + $PackageVersion) -v:minimal 2>&1 | Out-File -LiteralPath (Join-Path $taskOutput 'publish.log') -Encoding UTF8
 $taskExitCode = $LASTEXITCODE; $ErrorActionPreference = 'Stop'
 if ($taskExitCode -ne 0) { throw 'Self-contained Windows publish failed.' }
-[IO.File]::WriteAllText((Join-Path $taskPayload 'installed-app.json'), (@{schema=1;version=$ReleaseVersion;application='LearningTaskAggregator'} | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $taskPayload 'installed-app.json'), (@{schema=1;version=$ReleaseVersion;packageVersion=$PackageVersion;application='LearningTaskAggregator'} | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
 Copy-Item -LiteralPath (Join-Path $taskRoot 'packaging\windows\使用说明.txt') -Destination $taskPayload
 & python (Join-Path $taskRoot 'scripts\collect-windows-licenses.py') --payload $taskPayload
 if ($LASTEXITCODE -ne 0) { throw 'Published dependency license collection failed.' }

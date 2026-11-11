@@ -29,6 +29,35 @@ public static class MobileSyntheticChecks
             return new("passed", checks, store.LoadTasks().Count, true);
         }
 
+        var qrDocuments = new[]
+        {
+            ("chaoxing", "https://passport2.chaoxing.com/login?refer=synthetic"),
+            ("ucampus", "https://sso.unipus.cn/sso/login.html?service=synthetic"),
+            ("zhihuishu", "https://login.zhihuishu.com/"),
+            ("yuketang", "https://www.yuketang.cn/web"),
+            ("changjiang", "https://changjiang.yuketang.cn/web/"),
+            ("xuetang", "https://www.xuetangx.com/")
+        };
+        Check(qrDocuments.All(item => MobilePasswordlessLogin.IsQrDocument(item.Item1, item.Item2)), "official passwordless login pages accepted");
+        Check(new[] { "http://passport2.chaoxing.com/login", "https://passport2.chaoxing.com.example.com/login",
+            "https://example.com/login", "https://passport2.chaoxing.com:444/login", "https://user@passport2.chaoxing.com/login",
+            "https://passport2.chaoxing.com/login#qr", "https://passport2.chaoxing.com/account", "https://passport2.chaoxing.com/%2flogin" }
+            .All(address => !MobilePasswordlessLogin.IsQrDocument("chaoxing", address)), "QR capture rejects spoofed origins and unrelated pages");
+        Check(!MobilePasswordlessLogin.IsQrDocument("ucampus", qrDocuments[0].Item2)
+            && !MobilePasswordlessLogin.IsQrDocument("pta", "https://pintia.cn/")
+            && !MobilePasswordlessLogin.IsQrDocument("chaoxing", null), "QR capture stays bound to its platform");
+        const string tinyPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aV9kAAAAASUVORK5CYII=";
+        Check(MobilePasswordlessLogin.DecodeImage(tinyPng) is { Length: > 16 }, "PNG image transport decoded");
+        Check(MobilePasswordlessLogin.DecodeImage("https://passport2.chaoxing.com/createqr") is null
+            && MobilePasswordlessLogin.DecodeImage("data:image/svg+xml;base64,PHN2Zz4=") is null
+            && MobilePasswordlessLogin.DecodeImage("data:image/png;base64,invalid!") is null
+            && MobilePasswordlessLogin.DecodeImage("data:image/png;base64,AQID") is null, "untrusted and malformed image transports rejected");
+        Check(MobilePasswordlessLogin.DecodeImage(tinyPng.Replace("image/png", "image/jpeg", StringComparison.Ordinal)) is null
+            && MobilePasswordlessLogin.DecodeImage("data:image/png;base64," + Convert.ToBase64String(new byte[32])) is null,
+            "image bytes must match their declared format");
+        Check(MobilePasswordlessLogin.DecodeImage("data:image/png;base64," + new string('A', 1400000)) is null,
+            "oversized QR image rejected before allocation");
+
         var encrypted = protector.Protect(Secret);
         Check(protector.Unprotect(encrypted) == Secret, "encryption round trip");
         Check(!Encoding.UTF8.GetString(encrypted).Contains(Secret, StringComparison.Ordinal), "ciphertext contains no cookie pairs");

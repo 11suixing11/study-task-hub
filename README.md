@@ -2,15 +2,19 @@
 
 提供 Windows 安装版与独立 Android 手机版。Windows 使用 C# / .NET 10 / WPF / WebView2 / SQLite，Android 使用原生界面、系统 WebView 和本机 SQLite。已接入学习通、雨课堂、长江雨课堂、中国大学 MOOC、学堂在线、智慧树、旧版 U 校园和 PTA 的官方登录后任务采集；各平台覆盖范围见下方说明。首页统一显示已选课程的全平台、全状态任务，支持统计和同步。FiF 按要求停止适配，保留手动任务与历史数据。
 
-GitHub 下载：[Windows 1.1.1 发布与安装包](https://github.com/11suixing11/study-task-hub/releases/tag/v1.1.1)。安装程序 `StudyTaskHub-1.1.1-Setup-win-x64.exe`、便携 ZIP、中文使用说明和 SHA256 校验文件均在 Release 附件中。源码仓库不包含本地任务库、Cookie、浏览器 profile、开发 SDK 或构建产物。
+GitHub 下载：[1.1.2 发布与安装包](https://github.com/11suixing11/study-task-hub/releases/tag/v1.1.2)。附件提供 Android APK、Windows 安装 EXE 与便携 ZIP、中文使用说明、验证摘要和 SHA256 校验。源码仓库不包含本地任务库、Cookie、浏览器 profile、开发 SDK 或构建产物。
+
+2026-11-11 Android 更新到 1.1.2 登录跳转修复版（VersionCode 4），支持 Android 9+，沿用旧版签名。学习通扫码确认后的旧 HTTP 地址等价升级为 HTTPS，并补齐课程域名与路径作用域的会话读取。官网二维码辅助入口保存当前二维码并打开官方 App，本人确认后返回读取课程。16 项登录跳转与会话检查、47 项共享与 47 项原生检查、重启、最终 APK 重复安装及二维码流程检查通过，见 [Android 验证摘要](docs/releases/android-1.1.2/verification.json)。真实手机扫码后课程读取尚未复验；截图目视验收待完成。
+
+扫码辅助支持学习通、旧版 U 校园、智慧树、雨课堂、长江雨课堂与学堂在线，仍需本人官方确认；真实官方 App 相册识别及真实账号流程待真机验收。原生一键授权未接入，平台会话由官网建立，再加密保存到本应用。操作与接入核查见 [Android 应用授权](docs/Android应用授权.md)。
 
 2026-11-09 登录复核确认，官方票据到期后仍可能需要本人重新登录；本地保存 Cookie 无法延长官网会话。PTA 失效后删除归档、重新登录后提前关闭窗口可能漏存的问题仍待修复，见 [当前登录问题](docs/登录状态已知问题.md)。
 
-2026-11-07 发布 Windows 1.1.1：修复 U 校园与智慧树的登录保存、短期令牌失效和官方 SSO 续期，新增 U 校园普通课件单元截止与必学进度。未完成必学项按最早截止排列首页优先级，不生成每日学习计划。沿用 macOS 三栏布局、鲜艳语义色、Fluent 开源图标和原创蓝紫主图标。桌面“聚合平台安装包”提供“聚合平台-1.1.1-Setup-win-x64.exe”和“聚合平台-1.1.1-便携版-win-x64.zip”，历史 1.1.0 保留。可查看 [主图标设计](docs/ui-redesign/App-Icon.md)、[界面调整说明](docs/ui-redesign/macOS-Refinement.md)与 [37 枚图标总览](design/icons/图标设计总览.png)。
+Windows 同步更新为 1.1.2，构建 `20261111-060027-e533c14f`，包含最新桌面源码和统一托盘主图标，沿用 1.1.1 的 U 校园与智慧树官方续期、单元截止和必学进度。桌面“聚合平台安装包”提供“聚合平台-1.1.2-Setup-win-x64.exe”和“聚合平台-1.1.2-便携版-win-x64.zip”。macOS 三栏布局、Fluent 图标和原创蓝紫主图标延续，见 [主图标设计](docs/ui-redesign/App-Icon.md)、[界面调整](docs/ui-redesign/macOS-Refinement.md)与 [图标总览](design/icons/图标设计总览.png)。
 
-本版完整回归通过：11 个项目零警告、零错误，2,996 项业务、1,162 项桌面与重启、40 项 Python 检查，其中首页 77 项。两平台官方续期、Cookie 回存、关闭窗口前保存和跨进程恢复均通过；隔离安装、旧记录导入、覆盖升级、卸载保留数据及 607 个便携文件解压校验与启动通过。程序和安装向导的嵌入图标与交付 ICO 十档逐帧一致。实际产品只读验证已恢复 U 校园既有登录，采集 3 门课程、30 个单元（20 个限时、2 个必学未完成），正式库和 profile 未改写。智慧树旧版已清空的凭据无法重建，需要首次本人登录，真实账号续期仍待验收。范围与报告见 [开发进度](docs/开发进度.md)。
+Windows 完整回归通过 11 个项目、2,996 项业务、1,157 项桌面与重启、40 项 Python 检查，其中首页 77 项。安装、旧记录与加密归档导入、1.1.1→1.1.2 升级和卸载保留数据使用同脚本、同 payload 的隔离测试安装器验证；交付 Setup 本身未直接安装实测。便携 ZIP 共 523 个文件，哈希、CRC 与隔离启动通过，程序和安装器的十档嵌入图标一致。新版真实账号与目视验收待完成，见 [公开 Windows 摘要](docs/releases/v1.1.2/windows-verification.json)和 [开发进度](docs/开发进度.md)。
 
-Windows 1.1.1 安装包与便携包的已验证构建为 `20261106-184644-b9a71520`，可从 [GitHub Release](https://github.com/11suixing11/study-task-hub/releases/tag/v1.1.1) 下载。最新源码另包含托盘主图标统一，项目内最近完整验证构建为 `20261106-193620-910cd4a7`。便携版完整解压后运行“启动聚合平台.cmd”，默认与安装版共用当前 Windows 用户的数据目录。旧项目记录可通过安装向导导入。Android 1.0.0、五份历史预览及专用入口在本地交付目录保留；“启动macOS风格预览.cmd”仍打开开源图标演示版。安装、旧记录导入和手机版流程见 [安装与手机版](docs/安装与手机版.md)。此前 [Stageshow 预览](docs/ui-redesign/REHEARSAL.md)保留为设计参考。
+便携版完整解压后运行“启动聚合平台.cmd”，默认与安装版共用当前 Windows 用户的数据目录。旧项目记录可通过安装向导导入；升级前在旧版点击“退出程序”。手机覆盖安装后重新打开官方登录，保存新的二维码、本人扫码确认，再读取课程。Windows 1.1.1、Android 1.1.1 与内部版本号 3 的 APK、说明和验证记录保留，历史预览及专用入口继续可用。Root 提取功能延期。安装流程见 [安装与手机版](docs/安装与手机版.md)，历史设计参考见 [Stageshow 预览](docs/ui-redesign/REHEARSAL.md)。
 
 2026-11-03 已完成七个平台的 Cookie 仓库存储、默认复用、过期重登更新，以及先列课程再定向采集的流程改造。各平台操作集中到可缩放、可收起课程区的独立管理窗口；仅维护当前使用者的每个平台登录，没有多用户选项。构建和验收状态见 [开发进度](docs/开发进度.md)。
 
@@ -30,11 +34,11 @@ Windows 1.1.1 安装包与便携包的已验证构建为 `20261106-184644-b9a715
 
 Windows 安装版支持 Windows 10 1809 及以上的 64 位系统，已包含 .NET 运行环境；系统缺少 WebView2 时由安装向导联网安装。开发用的独立 SDK 与依赖位于项目 `.tools` 目录，首次构建需联网还原 NuGet 依赖。桌面构建检查使用 Python 3.9 或更高版本，安装和启动程序无需 Python。Android 安装版包含自己的运行环境，需可用的系统 Android WebView。
 
-手机版直接在手机完成官方登录、勾选课程并同步任务。Cookie 使用 Android Keystore 加密保存，重启默认复用，明确失效时引导重新登录；Windows 与手机分别保存登录和任务，没有跨设备同步服务。手机版前台每 30 分钟检查已选课程，后台仅按系统调度检查已有提醒，可能延迟。真实手机的官方登录、课程完整性和最终任务页面仍需本人核对。
+手机版在手机完成官网扫码或其他官方登录、勾选课程并同步任务。扫码辅助入口可保存二维码并打开官方 App，确认后返回读取课程。Cookie 使用 Android Keystore 加密保存，重启默认复用，明确失效时引导重新登录；Windows 与手机分别保存登录和任务，没有跨设备同步服务。手机版前台每 30 分钟检查已选课程，后台仅按系统调度检查已有提醒，可能延迟。真实手机的官方登录、相册识别、课程完整性和最终任务页面仍需本人核对。
 
 ## 第一次使用
 
-下列首页名称对应 Windows 1.1.1 正式版。
+下列首页名称对应 Windows 1.1.2 正式版。
 
 1. 点击左侧本人课程所在的平台，打开该平台的管理窗口，再点击“连接平台”完成官方扫码或账号登录。已接入学习通、雨课堂、长江雨课堂、中国大学 MOOC、学堂在线、智慧树、旧版 U 校园与 PTA；雨课堂可选择标准站点 `www.yuketang.cn` 或专业版 `pro.yuketang.cn`。
    学堂在线进入官网首页后，点击官网右上角“登录”打开官方弹窗；页面空白或错位时，在连接窗口点击“打开官方登录”刷新页面缓存，Cookie 和登录存储保留。
@@ -150,7 +154,7 @@ Windows 安装版支持 Windows 10 1809 及以上的 64 位系统，已包含 .N
 ## 构建与验证
 
 <!-- PLATFORM_ERRORS_CURRENT_START -->
-当前桌面发布 `20261106-184644-b9a71520`（Windows 1.1.1）通过全部 11 项目构建，零警告、零错误；2,996 项业务、1,162 项桌面与跨进程、40 项 Python 检查，其中首页 77 项、两平台桌面 254 项、重启 136 项。见 [发布验证](artifacts/releases/20261106-184644-b9a71520/verification/verification.json)、[安装验证](artifacts/installers/20261106-184644-b9a71520/verification/installation-checks.json)、[图标检查](artifacts/installers/20261106-184644-b9a71520/verification/icon-package-checks.json)、[便携启动](artifacts/installers/20261106-184644-b9a71520/verification/portable-startup-checks.json)与 [交付核对](artifacts/installers/20261106-184644-b9a71520/verification/delivery-checks.json)。[U 校园实际产品只读采集](artifacts/installers/20261106-184644-b9a71520/verification/ucampus-product-readonly-checks.json)已通过，智慧树真实账号续期及最终官网页面仍待验收。Android 共享源码编译和 40 项移动检查通过，交付 APK 仍为原 1.0.0，历史安装证据见 [手机构建清单](artifacts/android/package.json)。1.1.0 的 26 项品牌界面检查保留为历史设计证据。
+当前 Windows 1.1.2 构建 `20261111-060027-e533c14f` 通过 11 个项目、2,996 项业务、1,157 项桌面与重启、40 项 Python 检查，其中首页 77 项。安装与升级通过同脚本、同 payload 的隔离 TestInstallation 变体验证，交付 Setup 未直接安装实测；便携包的 523 个文件校验与隔离启动通过。见 [公开回归报告](docs/releases/v1.1.2/packaged-build-verification.json)、[安装范围](docs/releases/v1.1.2/installation-checks.json)和 [Windows 摘要](docs/releases/v1.1.2/windows-verification.json)。Android 1.1.2 VersionCode 4 的 16 项登录跳转与会话、47 项共享与 47 项原生、4 项重启、4 项最终 APK 重复安装、17 项页面、28 项二维码流程、6 项替身 App 跳转、2 项遗留清理和 7 项布局指标通过，见 [手机摘要](docs/releases/android-1.1.2/verification.json)。新版真实账号、真机和目视验收仍待完成；1.1.1 及早期设计证据保留历史范围。
 <!-- PLATFORM_ERRORS_CURRENT_END -->
 
 在项目根目录 PowerShell 中执行：

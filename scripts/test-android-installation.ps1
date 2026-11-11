@@ -1,4 +1,4 @@
-﻿param([string]$Serial = 'emulator-5560', [string]$ExpectedAvd = 'aggregator-install-test', [string]$Version = '1.0.0')
+﻿param([string]$Serial = 'emulator-5560', [string]$ExpectedAvd = 'aggregator-install-test', [string]$Version = '1.1.2')
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
@@ -11,7 +11,9 @@ if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid package version.' }
 $taskApk = Join-Path $taskRoot ('artifacts\android\聚合平台-' + $Version + '-android.apk')
 $taskEvidence = Join-Path $taskRoot 'artifacts\android\verification'
 $taskRun = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
-$taskProgress = Join-Path $taskRoot '.local\packaging-20261105\android-installation-progress.json'
+$taskProgressRoot = Join-Path $taskRoot '.local\android-installation-runs'
+New-Item -ItemType Directory -Force -Path $taskProgressRoot | Out-Null
+$taskProgress = Join-Path $taskProgressRoot 'android-installation-progress.json'
 $taskRunRoot = Join-Path $taskEvidence $taskRun
 
 function Save-TaskProgress($value) {
@@ -80,7 +82,7 @@ try {
     Save-TaskProgress @{outcome='running';stage='native-synthetic-checks';serial=$Serial;run=$taskRun}
     $null = Invoke-TaskAdb @('shell','am','start','-W','-n',$taskComponent,'--ez','synthetic_self_test','true')
     $taskSynthetic = Read-TaskReport 'synthetic-checks'
-    if ($taskSynthetic.Checks -ne 34 -or $taskSynthetic.Tasks -ne 2) { throw 'Native synthetic checks are incomplete.' }
+    if ($taskSynthetic.Checks -ne 47 -or $taskSynthetic.Tasks -ne 2) { throw 'Native synthetic checks are incomplete.' }
     $null = Invoke-TaskAdb @('shell','am','force-stop',$taskPackage)
     $null = Invoke-TaskAdb @('shell','rm','-f',($taskPrevious + '/self-test.json'))
     $null = Invoke-TaskAdb @('shell','am','start','-W','-n',$taskComponent,'--ez','synthetic_self_test','true','--ez','synthetic_restart_check','true')

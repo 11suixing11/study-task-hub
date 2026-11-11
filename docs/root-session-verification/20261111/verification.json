@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "recordedAtUtc": "2026-11-11T05:10:06.751156+00:00",
+  "scope": "one_user_owned_root_Android_16_device_with_two_official_apps",
+  "device": {
+    "model": "PLQ110",
+    "android": "16",
+    "api": 36,
+    "rootAvailableDuringTest": true,
+    "adbConnectedAtSummary": false
+  },
+  "platforms": [
+    {
+      "platform": "chaoxing",
+      "appVersion": "7.0.6",
+      "outcome": "session_reuse_verified",
+      "source": "official_app_WebView_Cookies",
+      "plainCookiesAcceptedByExistingReader": 89,
+      "portalHttpStatus": 200,
+      "catalogHttpStatus": 200,
+      "coursesRead": 19,
+      "redirectedToLogin": false,
+      "accountMatchIndependentlyVerified": false,
+      "tokenValuesPersisted": false,
+      "verification": "existing_product_HTTP_reader_on_computer_not_in_APK",
+      "integratedIntoAndroidRelease": false,
+      "permanenceOrRenewalVerified": false
+    },
+    {
+      "platform": "ucampus",
+      "appVersion": "3.0.2.6",
+      "outcome": "runtime_validation_pending",
+      "webViewCookieRows": 2,
+      "webViewCookieDomains": [
+        "dict.unipus.cn",
+        "bbs.unipus.cn"
+      ],
+      "courseOrSSOCookieFound": false,
+      "nativePreferenceFilesInspected": 6,
+      "nativePreferenceFormat": "encrypted_container_not_plain_XML",
+      "rootReadAccessVerified": true,
+      "nativeSessionDecryptOrReuseVerified": false,
+      "runtimeAppWasRunning": false,
+      "lastBlockingCondition": "authorized_phone_ADB_disconnected"
+    },
+    {
+      "platform": "zhihuishu",
+      "outcome": "app_not_installed",
+      "sessionReuseVerified": false
+    }
+  ],
+  "officialNetworkAccessed": true,
+  "officialNetworkScope": [
+    "chaoxing_portal_and_course_catalog"
+  ],
+  "credentialValuesLogged": false,
+  "credentialValuesPersisted": false,
+  "officialAppFilesModifiedByTask": false,
+  "apkOrProductionApplicationModified": false,
+  "productionTaskDatabaseModifiedByTask": false,
+  "taskOrAnswerContentAccessed": false,
+  "unmatchedFastbootDevice": {
+    "product": "vermeer",
+    "matchesAuthorizedPhone": false,
+    "rebootOrFlashAttempted": false
+  },
+  "notes": [
+    "Root 文件读取权限不保证会话可解密或服务器可接受。",
+    "学习通本次只确认登录与课程目录，未验证任务采集、长期续期、账号独立比对或手机内导入功能。"
+  ],
+  "currentFeatureStatus": "deferred_by_user",
+  "acceptedAsVersionCode4RealAccountVerification": false
+}

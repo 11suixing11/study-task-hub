@@ -23,11 +23,15 @@ public static class MobilePlatforms
         "xuetang" => XuetangPlatform.IsLoginNavigation(address),
         _ => MetadataPlatform.Get(platform).IsLoginNavigation(address)
     };
-    public static bool FrameAllowed(string platform, string address) => platform is "ucampus" or "zhihuishu" or "pta"
-        ? MetadataPlatform.Get(platform).IsLoginFrameNavigation(address) : Allowed(platform, address);
+    public static bool FrameAllowed(string platform, string address) => platform switch
+    {
+        "xuetang" => XuetangPlatform.IsLoginFrameNavigation(address),
+        "ucampus" or "zhihuishu" or "pta" => MetadataPlatform.Get(platform).IsLoginFrameNavigation(address),
+        _ => Allowed(platform, address)
+    };
     public static IReadOnlyList<string> CookieOrigins(string platform) => platform switch
     {
-        "chaoxing" => ["https://chaoxing.com/", "https://i.chaoxing.com/", "https://passport2.chaoxing.com/", "https://mooc1.chaoxing.com/", "https://mooc2.chaoxing.com/", "https://i.xuexitong.com/", "https://mooc1-api.chaoxing.com/"],
+        "chaoxing" => ["https://chaoxing.com/", "https://i.chaoxing.com/", "https://i.mooc.chaoxing.com/", "https://passport2.chaoxing.com/", "https://mooc1.chaoxing.com/", "https://mooc2.chaoxing.com/", "https://mooc2-ans.chaoxing.com/", "https://mooc2-ans.chaoxing.com/mooc2-ans/", "https://i.xuexitong.com/", "https://mooc1-api.chaoxing.com/"],
         "yuketang" => ["https://www.yuketang.cn/", "https://yuketang.cn/", "https://pro.yuketang.cn/"],
         "changjiang" => ["https://changjiang.yuketang.cn/", "https://yuketang.cn/"],
         "mooc" => ["https://www.icourse163.org/", "https://icourse163.org/"],
@@ -47,7 +51,7 @@ public static class MobilePlatforms
             {
                 var separator = pair.IndexOf('='); if (separator < 1) continue;
                 var name = pair[..separator].Trim(); var value = pair[(separator + 1)..].Trim();
-                var path = address.AbsolutePath == "/sso/" ? "/sso" : "/";
+                var path = address.AbsolutePath is "/sso/" or "/mooc2-ans/" ? address.AbsolutePath.TrimEnd('/') : "/";
                 // WebView exposes request-cookie pairs, not Domain/Expires attributes. Keep host-only cookies;
                 // server validation still decides expiry, and HTTP Set-Cookie retains exact subsequent scope.
                 var cookie = new MetadataSessionCookie(name, value, address.IdnHost, path, true, true, null);

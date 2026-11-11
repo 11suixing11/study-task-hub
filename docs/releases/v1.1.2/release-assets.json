@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "version": "1.1.2",
+  "files": [
+    {
+      "file": "Android-1.1.2-README.txt",
+      "bytes": 3876,
+      "sha256": "59bc4885a737835fc4b73642e49d8950600d25696aacaf6a8eeb7db97c88c9a7"
+    },
+    {
+      "file": "StudyTaskHub-1.1.2-Android-Licenses.zip",
+      "bytes": 80875,
+      "sha256": "aff0131ec8a5f53de3d6ba9f4b333b50ff9ff1aff1d82447289128d2a0b9956d"
+    },
+    {
+      "file": "StudyTaskHub-1.1.2-Android.apk",
+      "bytes": 67194964,
+      "sha256": "ef9ffa7dd0ff8806874b183d238f6509b707194a3fb4ef7f0a75b9dc710a0254"
+    },
+    {
+      "file": "StudyTaskHub-1.1.2-Portable-win-x64.zip",
+      "bytes": 81075944,
+      "sha256": "be4413b013a4aef1bfb5bc0158ed96b0dc9e2b4e786c333ded655690029efa30"
+    },
+    {
+      "file": "StudyTaskHub-1.1.2-Setup-win-x64.exe",
+      "bytes": 59113574,
+      "sha256": "604190c52f220000519c2cabea992155bce64b0189de02190731fb4addf7f325"
+    },
+    {
+      "file": "StudyTaskHub-1.1.2-verification.json",
+      "bytes": 7420,
+      "sha256": "656912f0d77614aeab2e8873b5a36de68960f0c39b14eb0b8bef145ec120714f"
+    },
+    {
+      "file": "Windows-1.1.2-README.txt",
+      "bytes": 3582,
+      "sha256": "0e621eeac80bc537b657e70002ea151e573d1bd25b99d895e46b691c0a8f875f"
+    }
+  ]
+}

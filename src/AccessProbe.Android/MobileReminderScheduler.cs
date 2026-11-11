@@ -34,7 +34,7 @@ public static class MobileReminderScheduler
                 using var open = new Intent(context, typeof(MainActivity));
                 using var pending = PendingIntent.GetActivity(context, 8002, open, PendingIntentFlags.UpdateCurrent | PendingIntentFlags.Immutable);
                 using var builder = new Notification.Builder(context, Channel);
-                using var notification = builder.SetSmallIcon(Resource.Drawable.app_icon)!.SetContentTitle(item.Task.Title)!
+                using var notification = builder.SetSmallIcon(Resource.Drawable.ic_notification)!.SetContentTitle(item.Task.Title)!
                     .SetContentText(PlatformCatalog.Name(item.Task.PlatformId) + " · " + ReminderPlanner.KindName(item.Plan.Kind))!
                     .SetAutoCancel(true)!.SetContentIntent(pending)!.Build();
                 manager!.Notify(item.Plan.Id.GetHashCode(StringComparison.Ordinal), notification); success = true;

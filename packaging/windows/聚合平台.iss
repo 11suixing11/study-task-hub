@@ -2,7 +2,7 @@
   #error PayloadDirectory is required.
 #endif
 #ifndef PackageVersion
-  #define PackageVersion "1.1.1"
+  #define PackageVersion "1.1.2"
 #endif
 #ifndef BuildVersion
   #define BuildVersion "local"
