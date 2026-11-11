@@ -75,7 +75,7 @@ public static class PlatformCatalog
     public static readonly IReadOnlyList<PlatformSite> Sites =
     [
         new("mooc", "中国大学 MOOC", "icourse163.org", "官方手机号 / 邮箱 / 微信登录", "先选择课程，再采集作业、测验及考试；覆盖范围以同步详情为准"),
-        new("chaoxing", "学习通", "chaoxing.com / xuexitong.com", "官方扫码 / 账号登录", "先选择课程，再同步已选课程作业；覆盖范围以最近同步结果为准"),
+        new("chaoxing", "学习通", "chaoxing.com / xuexitong.com", "官方扫码 / 账号登录", "先选择课程，再同步已选课程作业与考试；已结束考试不进入清单，覆盖范围以最近同步结果为准"),
         new("changjiang", "长江雨课堂", "changjiang.yuketang.cn", "官方扫码 / 账号登录", "先选择课程，再采集作业与测验；实际覆盖范围见同步详情"),
         new("yuketang", "雨课堂", "www.yuketang.cn / pro.yuketang.cn", "官方扫码 / 账号登录", "先选择课程，再采集作业与测验；实际覆盖范围见同步详情"),
         new("ucampus", "U 校园", "u.unipus.cn", "官方登录", "先选择班课，再采集作业、测试与单元截止日期和必学进度；特殊课件的覆盖情况见同步详情"),

@@ -271,6 +271,8 @@ internal static class CourseRecordingChecks
             else if (address.AbsolutePath.Contains("stucoursemiddle", StringComparison.Ordinal)) html = "<input id='workEnc' value='SYNTHETIC'>";
             else if (address.AbsolutePath.EndsWith("/list", StringComparison.Ordinal))
                 html = "<ul id='workList'><li data='https://mooc1.chaoxing.com/mooc-ans/mooc2/work/task?courseId=101&amp;classId=201&amp;cpi=301&amp;workId=401&amp;enc=SYNTHETIC' onclick='goTask(this);'><div class='right-content'><p class='overHidden2'>任务</p><p class='status'>未交</p></div><div class='time'>剩余48小时</div></li></ul>";
+            else if (address.AbsolutePath == ChaoxingExamParser.ListPath)
+                html = "<div id='chaoxing-assignment-wrapper'><div class='null-data'>暂无考试</div></div>";
             else return Task.FromResult(new ChaoxingPage("detail_requires_user_action", 200, address, ""));
             return Task.FromResult(new ChaoxingPage("ok", 200, address, html));
         }
