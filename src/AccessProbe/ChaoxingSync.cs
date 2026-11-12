@@ -46,8 +46,6 @@ public sealed record ChaoxingSyncSummary(int Courses, int CoursesRead, int Tasks
     public int ExamsAdded { get; init; }
     public int ExamsUpdated { get; init; }
     public int Exams => ExamsAdded + ExamsUpdated;
-    // Concluded exams stay on the platform and are not imported.
-    public int ExamsSkipped { get; init; }
     // Rows the list exposed but whose title, address or course could not be confirmed.
     public int ExamsUnresolved { get; init; }
 }
@@ -332,7 +330,7 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
         var rowsByKey = new Dictionary<string, WorkListTask>(StringComparer.Ordinal);
         var coursesRead = 0; var added = 0; var updated = 0; var detailCount = 0; var deferred = 0;
         var detailUnavailable = 0; var detailRequireAction = 0; var detailRequirePreview = 0;
-        var examsAdded = 0; var examsUpdated = 0; var examsSkipped = 0; var examsUnresolved = 0; var examTasks = 0;
+        var examsAdded = 0; var examsUpdated = 0; var examsUnresolved = 0; var examTasks = 0;
         var loginRequired = false; var catalogCovered = true;
         recordingRevision = store.LoadCourseRecording("chaoxing").Revision;
         var selectedCourses = 0;
@@ -433,18 +431,15 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
                     var examList = await Task.Run(() => ChaoxingExamParser.Parse(examPage.Html, examPage.Address), cancellation);
                     if (examList.Outcome is not ("parsed" or "parsed_partial" or "empty"))
                         throw new SyncFailure("SYNC006", "考试列表结构未识别，不能确认此课程没有考试。");
-                    var courseExamsSkipped = 0;
                     var courseExamsUnresolved = examList.MissingTitles + examList.InvalidLinks;
                     var examRows = new List<ExamListTask>();
                     foreach (var row in examList.Tasks)
                     {
-                        // Concluded exams are no longer notifications; their result stays on the platform.
-                        if (ChaoxingExamParser.IsConcluded(row)) { courseExamsSkipped++; continue; }
+                        // Every listed exam is saved with its platform status; nothing is filtered out here.
                         if (row.Location is not { } examLocation || !ChaoxingExamParser.VerifyLocation(examLocation)
                             || row.Title.Length > 300) { courseExamsUnresolved++; continue; }
                         examRows.Add(row with { TimeObservedAtUtc = examObservedAt });
                     }
-                    examsSkipped += courseExamsSkipped;
                     examsUnresolved += courseExamsUnresolved;
                     examTasks += examRows.Count;
                     if (examList.PaginationUnresolved)
@@ -453,8 +448,8 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
                         Problem("SYNC006", course.Name, $"{courseExamsUnresolved} 条考试的名称、入口或课程归属无法确认，未自动保存这些条目。");
                     var examImported = await Task.Run(() => store.ImportExams(examRows, course, examObservedAt, cancellation, recordingRevision), cancellation);
                     examsAdded += examImported.Added; examsUpdated += examImported.Updated; examsUnresolved += examImported.Unresolved;
-                    if (examImported.Added + examImported.Updated + courseExamsSkipped > 0)
-                        Report($"考试列表：新增 {examsAdded} 条、更新 {examsUpdated} 条，跳过已完成、已结束或未选课程 {examsSkipped} 条。");
+                    if (examImported.Added + examImported.Updated > 0)
+                        Report($"考试列表：新增 {examsAdded} 条、更新 {examsUpdated} 条。");
                 }
                 catch (SyncFailure failure) when (failure.Code != "SYNC001" && failure.Code != "SYNC008")
                 { Problem(failure.Code, course.Name, failure.Message); }
@@ -516,7 +511,7 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
         return new(courses.Count, coursesRead, rowsByKey.Count + examTasks, added, updated, detailCount, deferred,
             loginRequired, catalogCovered, problems.Distinct().ToArray())
             { DetailsUnavailable = detailUnavailable, DetailsRequireAction = detailRequireAction, DetailsRequirePreview = detailRequirePreview, SelectedCourses = selectedCourses,
-                ExamsAdded = examsAdded, ExamsUpdated = examsUpdated, ExamsSkipped = examsSkipped, ExamsUnresolved = examsUnresolved };
+                ExamsAdded = examsAdded, ExamsUpdated = examsUpdated, ExamsUnresolved = examsUnresolved };
     }
 
     private async Task<ChaoxingPage> Fetch(Uri address, CancellationToken cancellation)

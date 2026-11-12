@@ -21,8 +21,6 @@ public sealed record ExamTaskLocation(
 public sealed record ExamListTask(string Title, string PlatformStatusText, string DisplayedTimeText, ExamTaskLocation? Location)
 {
     [JsonIgnore] public DateTimeOffset? TimeObservedAtUtc { get; init; }
-    // The platform marks a concluded exam with a finished answer state; the row itself keeps no dates.
-    [JsonIgnore] public bool Expired { get; init; }
     [JsonIgnore] public string LinkOutcome => Location is null ? "unresolved" : "observed_from_list";
 }
 
@@ -122,15 +120,6 @@ public static class ChaoxingExamParser
             || !Numeric(location.ExamId) || !Numeric(location.RelationId)) return false;
         if (Scope(location.PageUri) is not { } scope) return false;
         return scope.CourseId == location.CourseId && scope.ClassId == location.ClassId;
-    }
-
-    // A row is concluded when the platform reports a finished answer state or an elapsed window.
-    public static bool IsConcluded(ExamListTask row)
-    {
-        if (row.Expired) return true;
-        var status = row.PlatformStatusText;
-        return new[] { "已完成", "待批阅", "已批阅", "已批改", "已结束", "已过期" }
-            .Any(token => status.Contains(token, StringComparison.Ordinal));
     }
 
     // Normalizes an optional window text into the shape the metadata reader understands.

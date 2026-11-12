@@ -487,8 +487,9 @@ public partial class TaskDashboardWindow : Window
         if ((latestSync ?? settings.LastSyncSummary) is { } summary)
         {
             stack.Children.Add(new TextBlock { Text = $"已读取 {summary.CoursesRead}/{summary.SelectedCourses ?? summary.Courses} 门已选课程（发现 {summary.Courses} 门），共 {summary.Tasks} 条任务；新增 {summary.Added}、更新 {summary.Updated}，读取时间原文 {summary.DetailsSaved} 条。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) });
-            if (summary.ExamsAdded + summary.ExamsUpdated + summary.ExamsSkipped > 0)
-                stack.Children.Add(new TextBlock { Text = $"考试列表：新增 {summary.ExamsAdded} 条、更新 {summary.ExamsUpdated} 条；已结束考试或未选课程共跳过 {summary.ExamsSkipped} 条。",
+            if (summary.ExamsAdded + summary.ExamsUpdated + summary.ExamsUnresolved > 0)
+                stack.Children.Add(new TextBlock { Text = $"考试列表：新增 {summary.ExamsAdded} 条、更新 {summary.ExamsUpdated} 条"
+                    + (summary.ExamsUnresolved > 0 ? $"，{summary.ExamsUnresolved} 条名称或入口待核对。" : "。"),
                     TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
             if (summary.DetailsUnavailable > 0)
                 stack.Children.Add(new TextBlock { Text = $"本轮 {summary.DetailsUnavailable} 条详情显示提交提示，平台未提供作答时间；已保留列表信息。",

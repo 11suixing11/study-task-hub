@@ -87,8 +87,7 @@ internal static class ChaoxingSyncChecks
         Check(examList.Tasks[0].PlatformStatusText == "未开始"
             && examList.Tasks[0].Location is { ExamId: "701", RelationId: "901", CourseId: "101", ClassId: "201" });
         Check(examList.Tasks[0].DisplayedTimeText.Length == 0);
-        Check(!ChaoxingExamParser.IsConcluded(examList.Tasks[0]) && !ChaoxingExamParser.IsConcluded(examList.Tasks[1])
-            && ChaoxingExamParser.IsConcluded(examList.Tasks[2]));
+        Check(examList.Tasks[2].PlatformStatusText == "待批阅");
         Check(ChaoxingExamParser.VerifyLocation(examList.Tasks[0].Location!));
         Check(!ChaoxingExamParser.VerifyLocation(examList.Tasks[0].Location! with { CourseId = "999" }));
         Check(!ChaoxingExamParser.VerifyLocation(examList.Tasks[0].Location! with { PageUri = new(ChaoxingExamParser.ListAddress) }));
@@ -143,10 +142,13 @@ internal static class ChaoxingSyncChecks
         var examReader = new FixtureReader { ExamMode = "list" };
         var examSummary = await new ChaoxingSynchronizer(examStore, examReader, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
         Check(examSummary.Problems.Count == 0 && examSummary.Added == 2);
-        Check(examSummary.ExamsAdded == 2 && examSummary.ExamsUpdated == 0 && examSummary.ExamsSkipped == 1 && examSummary.ExamsUnresolved == 0);
-        Check(examSummary.Exams == 2 && examStore.LoadTasks().Count == 4);
+        Check(examSummary.ExamsAdded == 3 && examSummary.ExamsUpdated == 0 && examSummary.ExamsUnresolved == 0);
+        Check(examSummary.Exams == 3 && examStore.LoadTasks().Count == 5);
         var exams = examStore.LoadTasks().Where(task => task.SourceKey!.StartsWith("chaoxing-exam:", StringComparison.Ordinal)).ToArray();
-        Check(exams.Length == 2 && exams.All(task => task.Source == TaskSource.Chaoxing && task.CourseName.Contains("A &", StringComparison.Ordinal)));
+        Check(exams.Length == 3 && exams.All(task => task.Source == TaskSource.Chaoxing && task.CourseName.Contains("A &", StringComparison.Ordinal)));
+        // Every listed exam is saved with its own platform state; a concluded one is not filtered out.
+        Check(exams.Single(task => task.Title == "期中考试").State == TaskState.Pending
+            && exams.Single(task => task.Title == "已结束考试").State == TaskState.Completed);
         var midterm = exams.Single(task => task.Title == "期中考试");
         Check(midterm.PlatformStatusText == "未开始"
             && midterm.Link!.StartsWith("https://mooc1.chaoxing.com/exam-ans/mooc2/exam/exam-list?courseid=101", StringComparison.Ordinal));
@@ -156,8 +158,8 @@ internal static class ChaoxingSyncChecks
         Check(exams.All(task => task.Link!.Contains("courseid=101", StringComparison.Ordinal)));
         examReader.Addresses.Clear();
         var examRepeated = await new ChaoxingSynchronizer(examStore, examReader, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
-        Check(examRepeated.ExamsAdded == 0 && examRepeated.ExamsUpdated == 2 && examRepeated.ExamsSkipped == 1 && examStore.LoadTasks().Count == 4);
-        Check(examRepeated.Exams == 2 && examReader.Addresses.Count == 8);
+        Check(examRepeated.ExamsAdded == 0 && examRepeated.ExamsUpdated == 3 && examStore.LoadTasks().Count == 5);
+        Check(examRepeated.Exams == 3 && examReader.Addresses.Count == 8);
 
         var deniedReader = new FixtureReader { DenySecondCourse = true };
         var partial = await new ChaoxingSynchronizer(store, deniedReader, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
