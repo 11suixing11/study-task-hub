@@ -42,11 +42,11 @@ public sealed record ChaoxingSyncSummary(int Courses, int CoursesRead, int Tasks
     public int DetailsRequireAction { get; init; }
     public int DetailsRequirePreview { get; init; }
     public int? SelectedCourses { get; init; }
-    // Exams come from Chaoxing's aggregated exam list and are counted separately from work-list tasks.
+    // Exams are read from each selected course's own exam list and are counted separately from work-list tasks.
     public int ExamsAdded { get; init; }
     public int ExamsUpdated { get; init; }
     public int Exams => ExamsAdded + ExamsUpdated;
-    // Rows that are already concluded, or belong to courses outside the current selection, are not imported.
+    // Concluded exams stay on the platform and are not imported.
     public int ExamsSkipped { get; init; }
     // Rows the list exposed but whose title, address or course could not be confirmed.
     public int ExamsUnresolved { get; init; }
@@ -203,6 +203,32 @@ public static class ChaoxingSyncParser
             ("stuenc", Hidden(document, "enc") ?? ""), ("isdisplaytable", "2"));
     }
 
+    // The exam tab is a separate, per-course list signed with the course page's examEnc.
+    // It is read only as a list; the reader never opens an exam to answer it.
+    public static Uri? ReadExamListAddress(string html, ChaoxingCourse course)
+    {
+        var document = Document(html);
+        if (document is null) return null;
+        foreach (var (field, expected) in new[] { ("courseid", course.CourseId), ("clazzid", course.ClassId), ("cpi", course.Cpi) })
+        {
+            var observed = Hidden(document, field);
+            if (!string.IsNullOrEmpty(observed) && observed != expected) return null;
+        }
+        // examEnc is specifically the exam-list signature; workEnc is not a substitute.
+        var examEnc = Hidden(document, "examEnc");
+        if (string.IsNullOrWhiteSpace(examEnc) || examEnc.Length > 4096) return null;
+        var fields = new List<(string Key, string Value)>
+        {
+            ("courseid", course.CourseId), ("clazzid", course.ClassId), ("cpi", course.Cpi), ("ut", "s")
+        };
+        var timestamp = Hidden(document, "t");
+        if (!string.IsNullOrWhiteSpace(timestamp)) fields.Add(("t", timestamp));
+        fields.Add(("stuenc", Hidden(document, "enc") ?? ""));
+        fields.Add(("enc", examEnc));
+        fields.Add(("openc", Hidden(document, "openc") ?? ""));
+        return Build("https://mooc1.chaoxing.com/exam-ans/mooc2/exam/exam-list", fields.ToArray());
+    }
+
     public static (IReadOnlyList<Uri> Links, int? Expected, bool Unresolved) ReadWorkPaging(string html, Uri address)
     {
         var document = Document(html);
@@ -306,7 +332,7 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
         var rowsByKey = new Dictionary<string, WorkListTask>(StringComparer.Ordinal);
         var coursesRead = 0; var added = 0; var updated = 0; var detailCount = 0; var deferred = 0;
         var detailUnavailable = 0; var detailRequireAction = 0; var detailRequirePreview = 0;
-        var examsAdded = 0; var examsUpdated = 0; var examsSkipped = 0; var examsUnresolved = 0;
+        var examsAdded = 0; var examsUpdated = 0; var examsSkipped = 0; var examsUnresolved = 0; var examTasks = 0;
         var loginRequired = false; var catalogCovered = true;
         recordingRevision = store.LoadCourseRecording("chaoxing").Revision;
         var selectedCourses = 0;
@@ -397,53 +423,41 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
                     added += imported.Added; updated += imported.Updated; coursesRead++;
                     foreach (var row in courseRows) rowsByKey.TryAdd(row.Key, row.Value);
                     Report($"已读取 {coursesRead}/{selectedCourses} 门已选课程，新增 {added} 条、更新 {updated} 条。");
-                }
-                catch (SyncFailure failure) when (failure.Code != "SYNC001" && failure.Code != "SYNC008")
-                { Problem(failure.Code, course.Name, failure.Message); }
-            }
 
-            // The aggregated exam list is read once per run; rows carry their own course and class ids.
-            if (!catalogOnly && selected.Length > 0)
-            {
-                try
-                {
-                    Report("正在读取学习通考试列表…");
-                    store.CheckCourseRecordingRevision("chaoxing", recordingRevision, cancellation);
-                    var examPage = await Fetch(ChaoxingExamParser.ListUri, cancellation); RequirePage(examPage);
+                    // The exam list belongs to this course and is signed separately from the work list.
+                    var examAddress = await Task.Run(() => ChaoxingSyncParser.ReadExamListAddress(entry.Html, course), cancellation);
+                    if (examAddress is null)
+                        throw new SyncFailure("SYNC005", "课程页未返回可用的考试入口，不能确认此课程没有考试。");
+                    var examPage = await Fetch(examAddress, cancellation); RequirePage(examPage);
                     var examObservedAt = DateTimeOffset.UtcNow;
                     var examList = await Task.Run(() => ChaoxingExamParser.Parse(examPage.Html, examPage.Address), cancellation);
                     if (examList.Outcome is not ("parsed" or "parsed_partial" or "empty"))
-                        throw new SyncFailure("SYNC006", "考试列表结构未识别，不能确认没有考试。");
-                    examsUnresolved = examList.MissingTitles + examList.InvalidLinks;
-                    var examGroups = new Dictionary<string, (ChaoxingCourse Course, List<ExamListTask> Rows)>(StringComparer.Ordinal);
+                        throw new SyncFailure("SYNC006", "考试列表结构未识别，不能确认此课程没有考试。");
+                    var courseExamsSkipped = 0;
+                    var courseExamsUnresolved = examList.MissingTitles + examList.InvalidLinks;
+                    var examRows = new List<ExamListTask>();
                     foreach (var row in examList.Tasks)
                     {
-                        if (row.Location is not { } examLocation) { examsUnresolved++; continue; }
                         // Concluded exams are no longer notifications; their result stays on the platform.
-                        if (ChaoxingExamParser.IsConcluded(row)) { examsSkipped++; continue; }
-                        if (row.Title.Length > 300) { examsUnresolved++; continue; }
-                        var owners = courses.Values.Where(course => course.CourseId == examLocation.CourseId
-                            && course.ClassId == examLocation.ClassId).ToArray();
-                        if (owners.Length != 1) { examsUnresolved++; continue; }
-                        var owner = owners[0];
-                        if (!selected.Any(course => course.Key == owner.Key)) { examsSkipped++; continue; }
-                        if (!examGroups.TryGetValue(owner.Key, out var examGroup)) examGroups[owner.Key] = examGroup = (owner, []);
-                        examGroup.Rows.Add(row with { TimeObservedAtUtc = examObservedAt });
+                        if (ChaoxingExamParser.IsConcluded(row)) { courseExamsSkipped++; continue; }
+                        if (row.Location is not { } examLocation || !ChaoxingExamParser.VerifyLocation(examLocation)
+                            || row.Title.Length > 300) { courseExamsUnresolved++; continue; }
+                        examRows.Add(row with { TimeObservedAtUtc = examObservedAt });
                     }
-                    foreach (var examGroup in examGroups.Values)
-                    {
-                        cancellation.ThrowIfCancellationRequested();
-                        var imported = await Task.Run(() => store.ImportExams(examGroup.Rows.ToArray(), examGroup.Course,
-                            examObservedAt, cancellation, recordingRevision), cancellation);
-                        examsAdded += imported.Added; examsUpdated += imported.Updated; examsUnresolved += imported.Unresolved;
-                    }
-                    if (examsUnresolved > 0)
-                        Problem("SYNC006", "", $"{examsUnresolved} 条考试的名称、链接或课程归属无法确认，未自动保存这些条目。");
-                    if (examsAdded + examsUpdated + examsSkipped > 0)
+                    examsSkipped += courseExamsSkipped;
+                    examsUnresolved += courseExamsUnresolved;
+                    examTasks += examRows.Count;
+                    if (examList.PaginationUnresolved)
+                        Problem("SYNC007", course.Name, "考试列表存在尚未识别的分页，此课程考试可能不完整。");
+                    if (courseExamsUnresolved > 0)
+                        Problem("SYNC006", course.Name, $"{courseExamsUnresolved} 条考试的名称、入口或课程归属无法确认，未自动保存这些条目。");
+                    var examImported = await Task.Run(() => store.ImportExams(examRows, course, examObservedAt, cancellation, recordingRevision), cancellation);
+                    examsAdded += examImported.Added; examsUpdated += examImported.Updated; examsUnresolved += examImported.Unresolved;
+                    if (examImported.Added + examImported.Updated + courseExamsSkipped > 0)
                         Report($"考试列表：新增 {examsAdded} 条、更新 {examsUpdated} 条，跳过已完成、已结束或未选课程 {examsSkipped} 条。");
                 }
                 catch (SyncFailure failure) when (failure.Code != "SYNC001" && failure.Code != "SYNC008")
-                { Problem(failure.Code, "", "考试列表未读取：" + failure.Message + "已有考试任务保留。"); }
+                { Problem(failure.Code, course.Name, failure.Message); }
             }
 
             // Read metadata without asking the user to open each task; recently read headers are reused.
@@ -499,7 +513,7 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
         }
         cancellation.ThrowIfCancellationRequested();
         store.CheckCourseRecordingRevision("chaoxing", recordingRevision, cancellation);
-        return new(courses.Count, coursesRead, rowsByKey.Count, added, updated, detailCount, deferred,
+        return new(courses.Count, coursesRead, rowsByKey.Count + examTasks, added, updated, detailCount, deferred,
             loginRequired, catalogCovered, problems.Distinct().ToArray())
             { DetailsUnavailable = detailUnavailable, DetailsRequireAction = detailRequireAction, DetailsRequirePreview = detailRequirePreview, SelectedCourses = selectedCourses,
                 ExamsAdded = examsAdded, ExamsUpdated = examsUpdated, ExamsSkipped = examsSkipped, ExamsUnresolved = examsUnresolved };

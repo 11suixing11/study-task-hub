@@ -215,8 +215,9 @@ public sealed class ChaoxingSyncService : IDisposable
             var message = result.LoginRequired
                 ? "SYNC001：学习通需要登录。请在平台管理窗口点击“连接平台”完成登录，再保存课程选择并采集；已有任务保留。"
                 : $"学习通已同步 {result.CoursesRead}/{result.SelectedCourses ?? result.Courses} 门已选课程（发现 {result.Courses} 门）；新增 {result.Added} 条、更新 {result.Updated} 条。"
-                    + (result.ExamsAdded + result.ExamsUpdated + result.ExamsSkipped > 0
-                        ? $"考试列表新增 {result.ExamsAdded} 条、更新 {result.ExamsUpdated} 条，跳过已结束或未选课程 {result.ExamsSkipped} 条。" : "")
+                    + (result.ExamsAdded + result.ExamsUpdated + result.ExamsSkipped + result.ExamsUnresolved > 0
+                        ? $"考试列表新增 {result.ExamsAdded} 条、更新 {result.ExamsUpdated} 条，跳过已完成或已结束 {result.ExamsSkipped} 条"
+                            + (result.ExamsUnresolved > 0 ? $"，{result.ExamsUnresolved} 条名称或入口待核对。" : "。") : "")
                     + (result.Problems.Count > 0 ? $"有 {result.Problems.Count} 项未完成，点击“同步详情”查看。" : "")
                     + (result.DetailsUnavailable + result.DetailsRequireAction + result.DetailsRequirePreview > 0
                         ? $"其中 {result.DetailsUnavailable + result.DetailsRequireAction + result.DetailsRequirePreview} 条任务未取得详情作答时间，列表信息已保留。" : "")

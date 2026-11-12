@@ -458,7 +458,8 @@ internal static class Program
             else if (uri.AbsolutePath == "/visit/stucoursemiddle")
                 return new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri(
                     "https://mooc2-ans.chaoxing.com/mooc2-ans/mycourse/stu" + uri.Query + "&enc=SYNTHETIC%2BONLY&v=2") } };
-            else if (uri.AbsolutePath == "/mooc2-ans/mycourse/stu") html = "<input id='workEnc' value='SYNTHETIC+ENC'><input id='enc' value='SYNTHETIC+PAGE'><input id='openc' value='SYNTHETIC+OPEN'>";
+            else if (uri.AbsolutePath == "/mooc2-ans/mycourse/stu") html = "<input id='workEnc' value='SYNTHETIC+ENC'><input id='examEnc' value='SYNTHETIC+EXAM'>"
+                + "<input id='enc' value='SYNTHETIC+PAGE'><input id='openc' value='SYNTHETIC+OPEN'><input id='t' value='1700000000000'>";
             else if (uri.AbsolutePath == "/mooc2/work/list")
             {
                 var first = uri.Query.Contains("courseId=101", StringComparison.Ordinal);
@@ -466,8 +467,8 @@ internal static class Program
                     + (first ? "courseId=101&amp;classId=201&amp;cpi=301&amp;workId=401" : "courseId=102&amp;classId=202&amp;cpi=302&amp;workId=402") + "&amp;enc=SYNTHETIC%2BONLY";
                 html = $"<ul id='workList'><li onclick='goTask(this);' data='{target}'><div class='right-content'><p class='overHidden2'>合成作业 {(first ? "A" : "B")}</p><p class='status'>已完成</p></div><div class='time'>剩余 48 小时</div></li></ul>";
             }
-            else if (uri.AbsolutePath == "/exam-ans/exam/phone/examcode")
-                html = "<div id='chaoxing-assignment-wrapper'><div class='null-data'>暂无考试</div></div>";
+            else if (uri.AbsolutePath == "/exam-ans/mooc2/exam/exam-list")
+                html = "<div class='main task-list'><div class='has-content' style='display: none;'><div class='bottomList'><ul></ul></div></div></div>";
             else if (uri.AbsolutePath == "/mooc-ans/mooc2/work/task")
                 return new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri(
                     "https://mooc1.chaoxing.com/mooc-ans/mooc2/work/" + taskRoute + uri.Query) } };

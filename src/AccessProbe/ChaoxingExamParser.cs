@@ -1,16 +1,18 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 
 namespace AccessProbe;
 
-// An observed exam's identity, scoped by course, class and the platform's own exam id.
+// An observed exam's identity, scoped by course, class and the platform's own exam ids.
 // The reader never starts an exam; the address is only kept for the user's own navigation.
 public sealed record ExamTaskLocation(
     string CourseId,
     string ClassId,
     string ExamId,
+    string RelationId,
     [property: JsonIgnore] Uri PageUri)
 {
     public override string ToString() => nameof(ExamTaskLocation);
@@ -19,81 +21,110 @@ public sealed record ExamTaskLocation(
 public sealed record ExamListTask(string Title, string PlatformStatusText, string DisplayedTimeText, ExamTaskLocation? Location)
 {
     [JsonIgnore] public DateTimeOffset? TimeObservedAtUtc { get; init; }
-    // The platform marks an elapsed exam window with a "ks_02" picture and/or an "已结束" status.
+    // The platform marks a concluded exam with a finished answer state; the row itself keeps no dates.
     [JsonIgnore] public bool Expired { get; init; }
     [JsonIgnore] public string LinkOutcome => Location is null ? "unresolved" : "observed_from_list";
 }
 
-public sealed record ExamListParseResult(string Outcome, IReadOnlyList<ExamListTask> Tasks, int MissingTitles, int InvalidLinks)
+public sealed record ExamListParseResult(string Outcome, IReadOnlyList<ExamListTask> Tasks, int MissingTitles, int InvalidLinks, bool PaginationUnresolved)
 {
     public string Coverage => "provided_html_only_not_complete";
 }
 
-// Independently implemented from the public Web request contract documented in docs/自动同步.md.
-// The phone exam list is a cookie-authenticated HTML page; its rows carry course, class and exam ids.
+// Independently implemented from a captured, signed-in course exam tab (see docs/自动同步.md).
+// The exam list is a per-course, cookie-authenticated HTML page. A row carries only a click handler
+// with the platform's exam and relation ids; the handler is never evaluated, its literal ids are kept.
 public static class ChaoxingExamParser
 {
     public const int MaximumBytes = ChaoxingSyncParser.MaximumBytes;
-    public const string ListAddress = "https://mooc1-api.chaoxing.com/exam-ans/exam/phone/examcode";
-    public const string ListPath = "/exam-ans/exam/phone/examcode";
-    private static readonly System.Text.RegularExpressions.Regex ExamWindow = new(
+    public const string ListAddress = "https://mooc1.chaoxing.com/exam-ans/mooc2/exam/exam-list";
+    public const string ListPath = "/exam-ans/mooc2/exam/exam-list";
+    private static readonly Regex HandlerPair = new(
+        @"[""'](?<exam>[0-9]{1,64})[""']\s*,\s*[""'](?<relation>[0-9]{1,64})[""']",
+        RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+    private static readonly Regex ExamWindow = new(
         @"(?<start>(?:[0-9]{4}-)?[0-9]{1,2}-[0-9]{1,2}\s+[0-9]{1,2}:[0-9]{2})\s*(?:至|~|～|—|–|到)\s*(?<end>(?:(?:[0-9]{4}-)?[0-9]{1,2}-[0-9]{1,2}\s+)?[0-9]{1,2}:[0-9]{2})",
-        System.Text.RegularExpressions.RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+        RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
-    public static Uri ListUri => new(ListAddress);
+    // A readable exam list always carries the signed course, class and cpi scope.
+    public static bool IsReadAddress(Uri address) => Shaped(address) && ScopeOf(address) is not null;
 
-    public static bool IsReadAddress(Uri address) => address.Scheme == Uri.UriSchemeHttps
+    private static bool Shaped(Uri address) => address.Scheme == Uri.UriSchemeHttps
         && address.IsDefaultPort && address.UserInfo.Length == 0 && address.Fragment.Length == 0
         && address.AbsolutePath == ListPath
-        && (address.IdnHost.Equals("mooc1-api.chaoxing.com", StringComparison.OrdinalIgnoreCase)
-            || address.IdnHost.Equals("mooc1.chaoxing.com", StringComparison.OrdinalIgnoreCase));
+        && (address.IdnHost.Equals("mooc1.chaoxing.com", StringComparison.OrdinalIgnoreCase)
+            || address.IdnHost.Equals("mooc2-ans.chaoxing.com", StringComparison.OrdinalIgnoreCase));
+
+    // The course and class ids are part of the signed exam-list address, not of the row.
+    public static (string CourseId, string ClassId, string Cpi)? Scope(Uri address) => Shaped(address) ? ScopeOf(address) : null;
+
+    private static (string CourseId, string ClassId, string Cpi)? ScopeOf(Uri address)
+    {
+        var fields = ChaoxingSyncParser.Query(address);
+        if (fields is null) return null;
+        var courseId = Field(fields, "courseid");
+        var classId = Field(fields, "clazzid");
+        var cpi = Field(fields, "cpi");
+        if (!Numeric(courseId) || !Numeric(classId) || !Numeric(cpi)) return null;
+        return (courseId!, classId!, cpi!);
+    }
 
     public static ExamListParseResult Parse(string html, Uri pageAddress)
     {
         var document = Document(html);
-        if (document is null) return new("response_too_large", [], 0, 0);
-        var rows = document.QuerySelectorAll("#chaoxing-assignment-wrapper ul.ks_list > li, ul.ks_list > li");
+        if (document is null) return new("response_too_large", [], 0, 0, false);
+        if (Scope(pageAddress) is not { } scope) return new("schema_unrecognized", [], 0, 0, false);
+        var rows = document.QuerySelectorAll(".bottomList > ul > li, .bottomList ul > li");
+        var pages = document.QuerySelector("#page, .pageDiv");
+        // Pagination is filled by script; a non-empty indicator means further exams may exist unseen.
+        var paginationUnresolved = pages is not null
+            && (pages.ChildElementCount > 0 || Text(pages.TextContent).Length > 0);
         var tasks = new List<ExamListTask>();
         var missingTitles = 0; var invalidLinks = 0;
         foreach (var row in rows)
         {
-            var title = Text(row.QuerySelector("dl > dt, dt")?.TextContent ?? row.GetAttribute("title"));
-            var status = Text(row.QuerySelector("span.ks_state, .ks_state")?.TextContent);
-            var time = Text(row.QuerySelector("dl > dd, dd")?.TextContent);
-            var expired = row.QuerySelector("img[src*='ks_02']") is not null;
-            // Only literal addresses are read; scripts and click handlers are never evaluated.
-            var raw = row.GetAttribute("data") ?? row.QuerySelector("a[data]")?.GetAttribute("data")
-                ?? row.QuerySelector("a[href]")?.GetAttribute("href");
-            var location = ParseLocation(raw, pageAddress);
+            var title = Text(row.QuerySelector("p.overHidden2, .right-content p")?.TextContent);
+            var status = Text(row.QuerySelector("p.status, .status")?.TextContent);
+            var time = Text(row.QuerySelector("p.time, .time, .date")?.TextContent);
+            var location = HandlerLocation(row, scope, pageAddress);
             if (title.Length == 0) { missingTitles++; continue; }
             if (location is null) { invalidLinks++; continue; }
-            tasks.Add(new(title, status, time, location) { Expired = expired });
+            tasks.Add(new(title, status, time, location));
         }
         var outcome = rows.Length == 0
-            ? (IsExplicitEmptyExamList(document) ? "empty" : "schema_unrecognized")
+            ? (IsExplicitEmpty(document) ? "empty" : "schema_unrecognized")
             : tasks.Count == 0 ? "schema_unrecognized"
-            : missingTitles + invalidLinks > 0 ? "parsed_partial" : "parsed";
-        return new(outcome, tasks, missingTitles, invalidLinks);
+            : missingTitles + invalidLinks > 0 || paginationUnresolved ? "parsed_partial" : "parsed";
+        return new(outcome, tasks, missingTitles, invalidLinks, paginationUnresolved);
     }
 
-    public static ExamTaskLocation? ParseLocation(string? raw, Uri? pageAddress = null)
+    // Only a literal handler is read; a click handler is never evaluated or replayed.
+    public static ExamTaskLocation? HandlerLocation(IElement row, (string CourseId, string ClassId, string Cpi) scope, Uri pageAddress)
     {
-        if (string.IsNullOrWhiteSpace(raw) || raw.Length > 16384) return null;
-        if (raw.Any(character => char.IsControl(character) || char.IsWhiteSpace(character)
-            || character is '\\' or '"' or '\'' or '<' or '>')) return null;
-        if (raw.StartsWith("javascript:", StringComparison.OrdinalIgnoreCase)) return null;
-        if (!Uri.TryCreate(pageAddress ?? ListUri, raw, out var address)) return null;
-        if (!IsReadAddressNavigation(address)) return null;
-        var fields = ChaoxingSyncParser.Query(address);
-        if (fields is null) return null;
-        var courseId = Field(fields, "courseId");
-        var classId = Field(fields, "classId");
-        var examId = Field(fields, "taskrefId", "examId");
-        if (!Numeric(courseId) || !Numeric(classId) || !Numeric(examId)) return null;
-        return new(courseId!, classId!, examId!, address);
+        foreach (var element in row.QuerySelectorAll("[onclick]"))
+        {
+            var handler = element.GetAttribute("onclick");
+            if (string.IsNullOrWhiteSpace(handler) || handler.Length > 4096) continue;
+            var match = HandlerPair.Match(handler);
+            if (!match.Success) continue;
+            var examId = match.Groups["exam"].Value;
+            var relationId = match.Groups["relation"].Value;
+            if (!Numeric(examId) || !Numeric(relationId)) continue;
+            return new(scope.CourseId, scope.ClassId, examId, relationId, pageAddress);
+        }
+        return null;
     }
 
-    // A row is concluded when the platform reports a finished answer state or an elapsed exam window.
+    // Stored locations are re-verified before use: numeric ids and a signed list page for the same course.
+    public static bool VerifyLocation(ExamTaskLocation location)
+    {
+        if (!Numeric(location.CourseId) || !Numeric(location.ClassId)
+            || !Numeric(location.ExamId) || !Numeric(location.RelationId)) return false;
+        if (Scope(location.PageUri) is not { } scope) return false;
+        return scope.CourseId == location.CourseId && scope.ClassId == location.ClassId;
+    }
+
+    // A row is concluded when the platform reports a finished answer state or an elapsed window.
     public static bool IsConcluded(ExamListTask row)
     {
         if (row.Expired) return true;
@@ -102,8 +133,8 @@ public static class ChaoxingExamParser
             .Any(token => status.Contains(token, StringComparison.Ordinal));
     }
 
-    // Normalizes the exam window text into the detail-window shape the metadata reader understands.
-    // Returns an empty string when the row only shows a countdown or a duration.
+    // Normalizes an optional window text into the shape the metadata reader understands.
+    // Returns an empty string when the row shows only a status or a countdown.
     public static string WindowText(string displayedTimeText)
     {
         var match = ExamWindow.Match(displayedTimeText.Trim());
@@ -120,17 +151,14 @@ public static class ChaoxingExamParser
         return "作答时间:" + start + " 至 " + end;
     }
 
-    private static bool IsReadAddressNavigation(Uri address) => IsReadAddress(address)
-        // Do-task entries may live on another official Chaoxing host; they remain navigation targets only.
-        || (address.Scheme == Uri.UriSchemeHttps && address.IsDefaultPort && address.UserInfo.Length == 0
-            && address.Fragment.Length == 0 && address.AbsolutePath.StartsWith("/exam", StringComparison.Ordinal)
-            && ProbePolicy.IsOfficialHost(address.IdnHost));
-
-    private static bool IsExplicitEmptyExamList(IDocument document) =>
-        document.QuerySelectorAll("#chaoxing-assignment-wrapper, .ks_list, .exam-list, .main")
-            .Any(list => Text(list.TextContent) is "暂无考试" or "暂无考试安排" or "没有考试")
-        || document.QuerySelectorAll("img[src*='no_data'], .no-data, .null-data")
-            .Any(list => Text(list.TextContent).Contains("暂无考试", StringComparison.Ordinal));
+    // The signed list page itself is read; an empty known list container means no exams were published.
+    private static bool IsExplicitEmpty(IDocument document)
+    {
+        if (document.QuerySelector(".has-content, .bottomList, .main.task-list") is null) return false;
+        return document.QuerySelectorAll(".has-content, .null-data, .no-data, .bottomList")
+            .Any(element => Text(element.TextContent).Contains("暂无考试", StringComparison.Ordinal))
+            || document.QuerySelector(".has-content")?.GetAttribute("style")?.Contains("none", StringComparison.OrdinalIgnoreCase) == true;
+    }
 
     private static string? Field(IReadOnlyDictionary<string, string> fields, params string[] names)
     {

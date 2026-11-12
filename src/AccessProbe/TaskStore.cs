@@ -307,7 +307,7 @@ public sealed partial class TaskStore
             foreach (var row in rows)
             {
                 cancellation.ThrowIfCancellationRequested();
-                var verified = row.Location is null ? null : ChaoxingExamParser.ParseLocation(row.Location.PageUri.OriginalString, row.Location.PageUri);
+                var verified = row.Location is not null && ChaoxingExamParser.VerifyLocation(row.Location) ? row.Location : null;
                 var key = ObservedExamKey(verified);
                 if (key is not null && !seen.Add(key)) { duplicates++; continue; }
                 // An exam is only saved under the course that owns this import; a stray row is never reassigned.

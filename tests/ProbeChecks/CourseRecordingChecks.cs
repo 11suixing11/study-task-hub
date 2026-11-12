@@ -268,11 +268,12 @@ internal static class CourseRecordingChecks
                 html = "<div class='course-list'>" + string.Join("", Enumerable.Range(1, 2).Select(index =>
                     "<a href='https://mooc1.chaoxing.com/visit/stucoursemiddle?courseid=" + (100 + index) + "&amp;clazzid=" + (200 + index) + "&amp;cpi=" + (300 + index)
                     + "'><span class='course-name'>同名课</span></a>")) + "</div>";
-            else if (address.AbsolutePath.Contains("stucoursemiddle", StringComparison.Ordinal)) html = "<input id='workEnc' value='SYNTHETIC'>";
+            else if (address.AbsolutePath.Contains("stucoursemiddle", StringComparison.Ordinal))
+                html = "<input id='workEnc' value='SYNTHETIC'><input id='examEnc' value='SYNTHETIC'>";
             else if (address.AbsolutePath.EndsWith("/list", StringComparison.Ordinal))
                 html = "<ul id='workList'><li data='https://mooc1.chaoxing.com/mooc-ans/mooc2/work/task?courseId=101&amp;classId=201&amp;cpi=301&amp;workId=401&amp;enc=SYNTHETIC' onclick='goTask(this);'><div class='right-content'><p class='overHidden2'>任务</p><p class='status'>未交</p></div><div class='time'>剩余48小时</div></li></ul>";
             else if (address.AbsolutePath == ChaoxingExamParser.ListPath)
-                html = "<div id='chaoxing-assignment-wrapper'><div class='null-data'>暂无考试</div></div>";
+                html = "<div class='main task-list'><div class='has-content' style='display: none;'><div class='bottomList'><ul></ul></div></div></div>";
             else return Task.FromResult(new ChaoxingPage("detail_requires_user_action", 200, address, ""));
             return Task.FromResult(new ChaoxingPage("ok", 200, address, html));
         }

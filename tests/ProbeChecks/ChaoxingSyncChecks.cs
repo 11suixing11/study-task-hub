@@ -13,21 +13,25 @@ internal static class ChaoxingSyncChecks
     private const string Detail = "<div class='detailsHead'><h2 class='mark_title'>合成任务</h2><div class='infoHead'><p class='rightBord'>作答时间:<em>10-14 19:04</em>至<em>10-25 23:59</em></p></div></div>";
     private const string SubmittedPrompt = "<div class='workHead'></div><div class='workCen'><div class='subSucess'>提交成功</div>"
         + "<p class='dpy'>教师限制查看</p><p class='subTime'>提交时间：2026-10-20 12:00</p></div>";
-    private const string Signature = "<input id='workEnc' value='WORK+SIGNATURE'><input id='openc' value='OPEN&amp;VALUE'><input id='enc' value='GENERAL+ENC'>";
+    private const string Signature = "<input id='workEnc' value='WORK+SIGNATURE'><input id='examEnc' value='EXAM+SIGNATURE'>"
+        + "<input id='openc' value='OPEN&amp;VALUE'><input id='enc' value='GENERAL+ENC'><input id='t' value='1700000000000'>";
 
     private static string CatalogHtml => "<div class='course-list'>"
         + $"<div class='course'><a href='{WebUtility.HtmlEncode(EntryA)}'><span class='course-name' title='合成课程 A &amp; 分析'>A</span></a></div>"
         + $"<div class='course'><a href='{WebUtility.HtmlEncode(EntryB)}'><span class='course-name' title='合成课程 B'>B</span></a></div></div>";
     private static string ListHtml(string title, string target) => $"<ul id='workList'><li data='{WebUtility.HtmlEncode(target)}' onclick='goTask(this);'><div class='right-content'><p class='overHidden2'>{title}</p><p class='status'>已完成</p></div><div class='time'>剩余48小时</div></li></ul>";
-    private const string ExamA = "https://mooc1.chaoxing.com/exam-ans/exam/phone/examcode?courseId=101&classId=201&taskrefId=701";
-    private const string ExamB = "https://mooc1.chaoxing.com/exam-ans/exam/phone/examcode?courseId=101&classId=201&taskrefId=702";
-    private const string ExamDone = "https://mooc1.chaoxing.com/exam-ans/exam/phone/examcode?courseId=101&classId=201&taskrefId=703";
-    private static string ExamHtml => "<div id='chaoxing-assignment-wrapper'><ul class='ks_list'>"
-        + $"<li data='{WebUtility.HtmlEncode(ExamA)}'><dl><dt>期中考试</dt><dd>2026-11-20 14:00 至 2026-11-20 16:00</dd></dl><span class='ks_state'>未开始</span></li>"
-        + $"<li data='{WebUtility.HtmlEncode(ExamB)}'><dl><dt>单元测验</dt><dd>剩余48小时</dd></dl><span class='ks_state'>进行中</span></li>"
-        + $"<li data='{WebUtility.HtmlEncode(ExamDone)}'><dl><dt>已结束考试</dt><dd>2026-10-01 09:00 至 2026-10-01 10:00</dd></dl><span class='ks_state'>待批阅</span></li>"
-        + "</ul></div>";
-    private const string EmptyExamHtml = "<div id='chaoxing-assignment-wrapper'><div class='null-data'>暂无考试</div></div>";
+    private const string ExamPageA = "https://mooc1.chaoxing.com/exam-ans/mooc2/exam/exam-list"
+        + "?courseid=101&clazzid=201&cpi=301&ut=s&t=1700000000000&stuenc=GENERAL%2BENC&enc=EXAM%2BSIGNATURE&openc=OPEN%26VALUE";
+    private static string ExamHtml => "<div class='main task-list'><div class='has-content' style='display: block;'><div class='bottomList'><ul>"
+        + "<li><div onclick=\"viewExamAnswer('701','901')\"><div class='right-content'><p class='overHidden2 fl'>期中考试</p><p class='status fl'>未开始</p></div></div></li>"
+        + "<li><div onclick=\"viewExamAnswer('702','902')\"><div class='right-content'><p class='overHidden2 fl'>单元测验</p><p class='status fl'>进行中</p></div></div></li>"
+        + "<li><div onclick=\"viewExamAnswer('703','903')\"><div class='right-content'><p class='overHidden2 fl'>已结束考试</p><p class='status fl'>待批阅</p></div></div></li>"
+        + "</ul></div></div><div class='pagePosition'><div class='pageDiv' id='page'></div></div></div>";
+    private const string EmptyExamHtml = "<div class='main task-list'><div class='has-content' style='display: none;'>"
+        + "<div class='bottomList'><ul></ul></div></div></div>";
+    private const string PaginatedExamHtml = "<div class='main task-list'><div class='has-content' style='display: block;'><div class='bottomList'><ul>"
+        + "<li><div onclick=\"viewExamAnswer('701','901')\"><div class='right-content'><p class='overHidden2 fl'>期中考试</p><p class='status fl'>未开始</p></div></div></li>"
+        + "</ul></div></div><div class='pagePosition'><div class='pageDiv' id='page'><a href='javascript:;'>2</a></div></div></div>";
 
     public static async Task RunAsync()
     {
@@ -66,24 +70,43 @@ internal static class ChaoxingSyncChecks
         Check(ChaoxingSyncParser.IsExplicitEmptyWorkList("<div class='main task-list'><div class='has-content'><div class='null-data'> 暂无作业 </div></div></div>"));
         Check(!ChaoxingSyncParser.IsExplicitEmptyWorkList("<div class='null-data'>暂无作业</div>"));
         Check(!ChaoxingSyncParser.IsExplicitEmptyWorkList("<div class='task-list'><div class='has-content'><div class='null-data'>暂无作业</div></div>" + ListHtml("任务 A", TaskA) + "</div>"));
-        Check(ChaoxingExamParser.IsReadAddress(new(ChaoxingExamParser.ListAddress)));
-        Check(ChaoxingSyncParser.IsReadAddress(new(ChaoxingExamParser.ListAddress)));
-        Check(!ChaoxingExamParser.IsReadAddress(new("https://mooc1-api.chaoxing.com/exam-ans/exam/test/examcode/examlist")));
-        var examList = ChaoxingExamParser.Parse(ExamHtml, new(ChaoxingExamParser.ListAddress));
-        Check(examList.Outcome == "parsed" && examList.Tasks.Count == 3 && examList.MissingTitles == 0 && examList.InvalidLinks == 0);
-        Check(examList.Tasks[0].PlatformStatusText == "未开始" && examList.Tasks[0].Location is { ExamId: "701", CourseId: "101" });
-        Check(!ChaoxingExamParser.IsConcluded(examList.Tasks[0]) && ChaoxingExamParser.IsConcluded(examList.Tasks[2]));
+        var examAddress = ChaoxingSyncParser.ReadExamListAddress(Signature, catalog.Courses[0]);
+        Check(examAddress is not null && examAddress.AbsoluteUri.StartsWith("https://mooc1.chaoxing.com/exam-ans/mooc2/exam/exam-list"
+            + "?courseid=101&clazzid=201&cpi=301&ut=s&t=1700000000000", StringComparison.Ordinal));
+        Check(examAddress!.AbsoluteUri.Contains("enc=EXAM%2BSIGNATURE", StringComparison.Ordinal)
+            && examAddress.AbsoluteUri.Contains("stuenc=GENERAL%2BENC", StringComparison.Ordinal)
+            && examAddress.AbsoluteUri.Contains("openc=OPEN%26VALUE", StringComparison.Ordinal));
+        Check(ChaoxingSyncParser.ReadExamListAddress(Signature.Replace("examEnc", "otherEnc", StringComparison.Ordinal), catalog.Courses[0]) is null);
+        Check(ChaoxingSyncParser.ReadExamListAddress(Signature + "<input id='clazzid' value='999'>", catalog.Courses[0]) is null);
+        Check(ChaoxingExamParser.IsReadAddress(new(ExamPageA)));
+        Check(ChaoxingSyncParser.IsReadAddress(new(ExamPageA)));
+        Check(!ChaoxingExamParser.IsReadAddress(new("https://mooc1-api.chaoxing.com/exam-ans/exam/phone/examcode?courseid=101&clazzid=201&cpi=301")));
+        Check(!ChaoxingExamParser.IsReadAddress(new("https://mooc1.chaoxing.com/exam-ans/mooc2/exam/exam-list")));
+        var examList = ChaoxingExamParser.Parse(ExamHtml, new(ExamPageA));
+        Check(examList.Outcome == "parsed" && examList.Tasks.Count == 3 && examList.MissingTitles == 0 && examList.InvalidLinks == 0 && !examList.PaginationUnresolved);
+        Check(examList.Tasks[0].PlatformStatusText == "未开始"
+            && examList.Tasks[0].Location is { ExamId: "701", RelationId: "901", CourseId: "101", ClassId: "201" });
+        Check(examList.Tasks[0].DisplayedTimeText.Length == 0);
+        Check(!ChaoxingExamParser.IsConcluded(examList.Tasks[0]) && !ChaoxingExamParser.IsConcluded(examList.Tasks[1])
+            && ChaoxingExamParser.IsConcluded(examList.Tasks[2]));
+        Check(ChaoxingExamParser.VerifyLocation(examList.Tasks[0].Location!));
+        Check(!ChaoxingExamParser.VerifyLocation(examList.Tasks[0].Location! with { CourseId = "999" }));
+        Check(!ChaoxingExamParser.VerifyLocation(examList.Tasks[0].Location! with { PageUri = new(ChaoxingExamParser.ListAddress) }));
         Check(ChaoxingExamParser.WindowText("2026-11-20 14:00 至 2026-11-20 16:00") == "作答时间:2026-11-20 14:00 至 2026-11-20 16:00");
         Check(ChaoxingExamParser.WindowText("11-20 14:00 至 16:00") == "作答时间:11-20 14:00 至 11-20 16:00");
         Check(ChaoxingExamParser.WindowText("剩余48小时") == "" && ChaoxingExamParser.WindowText("90分钟") == "");
-        Check(ChaoxingExamParser.Parse(EmptyExamHtml, new(ChaoxingExamParser.ListAddress)).Outcome == "empty");
-        Check(ChaoxingExamParser.Parse("<html>unknown</html>", new(ChaoxingExamParser.ListAddress)).Outcome == "schema_unrecognized");
-        Check(ChaoxingExamParser.Parse(new string('a', ChaoxingSyncParser.MaximumBytes + 1), new(ChaoxingExamParser.ListAddress)).Outcome == "response_too_large");
-        Check(ChaoxingExamParser.Parse("<ul class='ks_list'><li data='https://evil.example/exam/phone/examcode?courseId=101&classId=201&taskrefId=701'><dt>注入</dt></li></ul>",
-            new(ChaoxingExamParser.ListAddress)).InvalidLinks == 1);
-        Check(ChaoxingExamParser.ParseLocation("javascript:alert(1)") is null && ChaoxingExamParser.ParseLocation(ExamA) is not null);
-        Check(ChaoxingExamParser.ParseLocation(ExamA + "&taskrefId=999") is null);
-        Check(!JsonSerializer.Serialize(examList.Tasks[0]).Contains("exam/phone/examcode", StringComparison.Ordinal));
+        Check(ChaoxingExamParser.Parse(EmptyExamHtml, new(ExamPageA)).Outcome == "empty");
+        Check(ChaoxingExamParser.Parse("<html>unknown</html>", new(ExamPageA)).Outcome == "schema_unrecognized");
+        Check(ChaoxingExamParser.Parse(ExamHtml, new(ChaoxingExamParser.ListAddress)).Outcome == "schema_unrecognized");
+        Check(ChaoxingExamParser.Parse(new string('a', ChaoxingSyncParser.MaximumBytes + 1), new(ExamPageA)).Outcome == "response_too_large");
+        var paginatedExams = ChaoxingExamParser.Parse(PaginatedExamHtml, new(ExamPageA));
+        Check(paginatedExams.PaginationUnresolved && paginatedExams.Outcome == "parsed_partial");
+        Check(ChaoxingExamParser.Parse("<div class='bottomList'><ul><li><div onclick=\"viewExamAnswer('abc','901')\">"
+            + "<p class='overHidden2'>注入</p></div></li></ul></div>", new(ExamPageA)).InvalidLinks == 1);
+        // A row without a title is reported, never silently saved without a name.
+        Check(ChaoxingExamParser.Parse("<div class='bottomList'><ul><li><div onclick=\"viewExamAnswer('701','901')\"></div></li></ul></div>",
+            new(ExamPageA)).MissingTitles == 1);
+        Check(!JsonSerializer.Serialize(examList.Tasks[0]).Contains("exam-list", StringComparison.Ordinal));
         var pageTwo = catalogAddress.AbsoluteUri + "&page=2";
         var pages = ChaoxingSyncParser.ParseCatalog(CatalogHtml + $"<div data-total-pages='2'><a href='{WebUtility.HtmlEncode(pageTwo)}'>2</a></div>", catalogAddress);
         Check(pages.ExpectedPages == 2 && pages.NextPages.Count == 1 && !pages.UnresolvedPaging);
@@ -102,7 +125,7 @@ internal static class ChaoxingSyncChecks
         Check(store.LoadTasks().All(task => task.DeadlineUtc is not null && task.DeadlineEvidence == DeadlineEvidence.InferredYear && task.State == TaskState.Completed));
         Check(store.LoadTasks().All(task => task.DetailCheckedAtUtc is not null));
         Check(progress.Values.Any(value => value.Courses == 2 && value.CoursesRead == 1));
-        Check(reader.Addresses.Count == 9 && reader.Addresses.All(ChaoxingSyncParser.IsReadAddress));
+        Check(reader.Addresses.Count == 10 && reader.Addresses.All(ChaoxingSyncParser.IsReadAddress));
         Check(!Encoding.UTF8.GetString(File.ReadAllBytes(Path.Combine(root, "tasks.db"))).Contains("SYNTHETIC%2BONLY", StringComparison.Ordinal));
         var saved = store.LoadTasks().Single(task => task.CourseName.Contains("A &", StringComparison.Ordinal));
         saved = store.Edit(saved.Id, saved.Revision, new("我的名称", "chaoxing", "我的课程", DeadlineKind.Known, null,
@@ -114,7 +137,7 @@ internal static class ChaoxingSyncChecks
         Check(repeated.Added == 0 && repeated.Updated == 2 && repeated.DetailsSaved == 0);
         Check(preserved.Title == "我的名称" && preserved.CourseName == "我的课程" && preserved.State == TaskState.Completed);
         Check(preserved.DeadlineUtc is not null && preserved.Notes == "用户备注" && preserved.DetailTimeText.Contains("作答时间", StringComparison.Ordinal));
-        Check(reader.Addresses.Count == 7); // Same-day details are cached; list signatures and the exam list still refresh.
+        Check(reader.Addresses.Count == 8); // Same-day details are cached; list signatures and the per-course exam lists still refresh.
 
         var examStore = FixtureTaskStore.Create(Path.Combine(root, "exam-list.db"));
         var examReader = new FixtureReader { ExamMode = "list" };
@@ -125,15 +148,16 @@ internal static class ChaoxingSyncChecks
         var exams = examStore.LoadTasks().Where(task => task.SourceKey!.StartsWith("chaoxing-exam:", StringComparison.Ordinal)).ToArray();
         Check(exams.Length == 2 && exams.All(task => task.Source == TaskSource.Chaoxing && task.CourseName.Contains("A &", StringComparison.Ordinal)));
         var midterm = exams.Single(task => task.Title == "期中考试");
-        Check(midterm.PlatformStatusText == "未开始" && midterm.Link!.Contains("taskrefId=701", StringComparison.Ordinal));
-        Check(midterm.DisplayedTimeText == "2026-11-20 14:00 至 2026-11-20 16:00");
-        Check(midterm.DeadlineUtc == new DateTimeOffset(2026, 11, 20, 16, 0, 0, TimeSpan.FromHours(8))
-            && midterm.DeadlineEvidence == DeadlineEvidence.PlatformDate && midterm.State != TaskState.Completed);
-        Check(exams.Single(task => task.Title == "单元测验").DeadlineUtc is not null);
+        Check(midterm.PlatformStatusText == "未开始"
+            && midterm.Link!.StartsWith("https://mooc1.chaoxing.com/exam-ans/mooc2/exam/exam-list?courseid=101", StringComparison.Ordinal));
+        // The observed exam list carries no dates; the reader must not invent a deadline.
+        Check(midterm.DisplayedTimeText.Length == 0 && midterm.DetailTimeText.Length == 0
+            && midterm.DeadlineUtc is null && midterm.DeadlineKind == DeadlineKind.Unknown);
+        Check(exams.All(task => task.Link!.Contains("courseid=101", StringComparison.Ordinal)));
         examReader.Addresses.Clear();
         var examRepeated = await new ChaoxingSynchronizer(examStore, examReader, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
         Check(examRepeated.ExamsAdded == 0 && examRepeated.ExamsUpdated == 2 && examRepeated.ExamsSkipped == 1 && examStore.LoadTasks().Count == 4);
-        Check(examRepeated.Exams == 2 && examReader.Addresses.Count == 7);
+        Check(examRepeated.Exams == 2 && examReader.Addresses.Count == 8);
 
         var deniedReader = new FixtureReader { DenySecondCourse = true };
         var partial = await new ChaoxingSynchronizer(store, deniedReader, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
@@ -186,7 +210,7 @@ internal static class ChaoxingSyncChecks
             {
                 detailReader.Addresses.Clear();
                 await new ChaoxingSynchronizer(detailStore, detailReader, TimeSpan.Zero).RunAsync(null, CancellationToken.None);
-                Check(detailReader.Addresses.Count == 7);
+                Check(detailReader.Addresses.Count == 8);
                 detailStore.RecordSyncResult(detailSummary, "completed", DateTimeOffset.UtcNow);
                 Check(detailStore.LoadSettings().LastSyncSummary is { } recorded
                     && recorded.DetailsUnavailable == detailSummary.DetailsUnavailable && recorded.DetailsRequireAction == detailSummary.DetailsRequireAction
@@ -389,8 +413,8 @@ internal static class ChaoxingSyncChecks
                 }
                 html = DetailMode == "unknown" ? "<html>unknown</html>" : Detail;
             }
-            else if (address.AbsolutePath == "/exam-ans/exam/phone/examcode")
-                html = ExamMode == "list" ? ExamHtml : EmptyExamHtml;
+            else if (address.AbsolutePath == "/exam-ans/mooc2/exam/exam-list")
+                html = ExamMode == "list" && address.Query.Contains("courseid=101", StringComparison.Ordinal) ? ExamHtml : EmptyExamHtml;
             else throw new InvalidOperationException("Unexpected synthetic route.");
             return Task.FromResult(new ChaoxingPage("ok", 200, address, html));
         }
