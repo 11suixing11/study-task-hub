@@ -22,9 +22,9 @@
 
 **Interfaces:** `DesktopNotifier.send(item): Future[NotificationOutcome]`；Outcome 包含 accepted、error_code、message、desktop_id。
 
-- [ ] 未完成发送 Future 时检查真实 reminders 仍为 processing，失败后 scheduled 且有错误；先观察旧调度器提前确认失败。
-- [ ] 实现 Gio.Notify 回执，调度器等待 Future 后 ack，停止时不接受迟到确认。
-- [ ] 私有 D-Bus 服务返回 id 及拒绝错误，核对客户端实际结果。
+- [x] 未完成发送 Future 时检查真实 reminders 仍为 processing，失败后 scheduled 且有错误；先观察旧调度器提前确认失败。
+- [x] 实现 Gio.Notify 回执，调度器等待 Future 后 ack，停止时不接受迟到确认。
+- [x] 私有 D-Bus 服务返回 id 及拒绝错误，核对客户端实际结果。
 
 ## Task 2 — 历史与测试入口
 
@@ -32,6 +32,6 @@
 
 **Interfaces:** `get-notification-status`；`retry-notifications`；`record-notification-test {accepted,errorCode}`；ack-notifications 增加可选 errorCode，旧调用兼容。
 
-- [ ] 失败错误持久化、手动重试解除退避、成功历史不重发；测试提醒独立结果。
-- [ ] GTK 显示历史和测试/重试入口；后台恢复后重读。
+- [x] 失败错误持久化、手动重试解除退避、成功历史不重发；测试提醒独立结果。
+- [x] GTK 显示历史和测试/重试入口；后台恢复后重读。
 - [ ] 运行 reminders、scheduler、D-Bus/GUI 和完整包回归；审查并提交。

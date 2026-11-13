@@ -22,10 +22,10 @@
 
 **Interfaces:** `CreateBackup(path,password): BackupPreview`；`InspectBackup(path,password): BackupPreview`；`RestoreBackup(path,password,fingerprint): RestoreResult`。
 
-- [ ] 测试先创建备份、修改原任务后恢复，断言原任务/加密链接/会话可读；错误密码返回 BACKUP003 且当前任务不变。
-- [ ] 使用 SQLite 快照和固定 ZIP 白名单，认证密码和版本，预览返回任务数/会话数/指纹。
-- [ ] 恢复双文件前写日志，成功重新验证后提交；启动时遇到日志执行原数据回退。
-- [ ] 运行 backups/core suites，检查损坏/变更拒绝和模拟日志恢复。
+- [x] 测试先创建备份、修改原任务后恢复，断言原任务/加密链接/会话可读；错误密码返回 BACKUP003 且当前任务不变。
+- [x] 使用 SQLite 快照和固定 ZIP 白名单，认证密码和版本，预览返回任务数/会话数/指纹。
+- [x] 恢复双文件前写日志，成功重新验证后提交；启动时遇到日志执行原数据回退。
+- [x] 运行 backups/core suites，检查损坏/变更拒绝和模拟日志恢复。
 
 ## Task 2 — IPC 与 GTK
 
@@ -33,6 +33,6 @@
 
 **Interfaces:** `create-backup/inspect-backup {path,password}`；`restore-backup {path,password,fingerprint}`；恢复结果返回回退备份/环境目录。
 
-- [ ] GTK 先检查再确认；确认前任务不变，确认后恢复备份并显示回退位置。
-- [ ] 后台串行每个请求，恢复先 StopAll；前端等待登录关闭、停止调度并禁用其他窗口，恢复完成再恢复交互。
+- [x] GTK 先检查再确认；确认前任务不变，确认后恢复备份并显示回退位置。
+- [x] 后台串行每个请求，恢复先 StopAll；前端等待登录关闭、停止调度并禁用其他窗口，恢复完成再恢复交互。
 - [ ] 核心、GUI 与包回归，审查后提交。

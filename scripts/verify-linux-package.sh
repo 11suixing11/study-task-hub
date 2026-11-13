@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname -- "${BASH_SOURCE[0]}")/linux-dev-env.sh"
-taskPackage="${1:-$taskRoot/artifacts/linux/study-task-hub_1.2.0~ubuntu4_amd64.deb}"
+taskPackage="${1:-$taskRoot/artifacts/linux/study-task-hub_1.2.0~ubuntu5_amd64.deb}"
 taskPackage="$(realpath "$taskPackage")"
 taskReport="$taskRoot/artifacts/linux/verification"
 mkdir -p "$taskReport"
@@ -52,12 +52,12 @@ summary={
     'dependencies':{'status':'passed_on_this_host','declared':depends,'installed':versions},
     'checks':{'selfContainedBackend':'passed','packagedLauncher':'passed','isolatedPrefixReinstallationAndRemoval':'passed',
         'privateDataExcluded':'passed','webkitHttpOnlyAndNavigation':'passed','untrustedTlsRejected':'passed',
-        'darkLightAndLargeFont1000x700':'passed','smartCourseSelection':'passed','taskStateFilteringAndDetailSelection':'passed','sourceUiMatchesPackage':'passed','desktopApplicationIdentity':'passed','normalHostInstallation':'not_run','differentVersionUpgrade':'passed_isolated_prefix_ubuntu3_to_ubuntu4',
+        'darkLightAndLargeFont1000x700':'passed','smartCourseSelection':'passed','taskStateFilteringAndDetailSelection':'passed','preferencesPreserveSyncResult':'passed','manualCourseIdentityAndArchive':'passed','syncAndTaskDetails':'passed','encryptedBackupAndRestoreRollback':'passed','desktopNotificationAcknowledgementAndRetry':'passed','sourceUiMatchesPackage':'passed','desktopApplicationIdentity':'passed','normalHostInstallation':'not_run','differentVersionUpgrade':'passed_isolated_prefix_ubuntu4_to_ubuntu5',
         'mixedMonitor1xTo2x':display['mixedScale']['status'],'webkit2x':display.get('webkit2x',{}).get('status','not_run'),
         'ubuntu24_04':'not_run','officialAccountAcceptance':'not_run','gnomeNotificationDisplay':'not_run'},
     'performanceAndDisplay':display,
     'platforms':{name:{'fixture':'passed','officialAccount':'not_run'} for name in ['chaoxing','yuketang','changjiang','mooc','xuetang','zhihuishu','ucampus','pta']},
-    'installationScope':'fakeroot dpkg with an isolated --root prefix; actual verified Ubuntu 3 package upgraded to Ubuntu 4 with tasks, encrypted links, sessions, preferences, course settings and profile marker preserved; dependency resolution checked separately on this host; system installation state was not modified',
+    'installationScope':'fakeroot dpkg with an isolated --root prefix; actual verified Ubuntu 4 package upgraded to Ubuntu 5 with tasks, encrypted links, sessions, preferences, course settings and profile marker preserved; dependency resolution checked separately on this host; system installation state was not modified',
     'screenshots':'verification/screenshots/'
 }
 (report.parent/'verification.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')

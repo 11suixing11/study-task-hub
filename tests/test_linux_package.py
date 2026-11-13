@@ -10,7 +10,7 @@ from study_task_hub.bridge import BackendBridge
 
 class PackageChecks(unittest.TestCase):
     def test_desktop_entry_has_the_application_id_used_by_gio(self):
-        package=Path(os.environ.get("STUDY_TASK_HUB_TEST_DEB",ROOT/"artifacts/linux/study-task-hub_1.2.0~ubuntu4_amd64.deb"))
+        package=Path(os.environ.get("STUDY_TASK_HUB_TEST_DEB",ROOT/"artifacts/linux/study-task-hub_1.2.0~ubuntu5_amd64.deb"))
         with tempfile.TemporaryDirectory(prefix="study-task-hub-desktop-") as tmp:
             tree=Path(tmp)/"tree"
             subprocess.run(["dpkg-deb","--extract",str(package),str(tree)],check=True)
@@ -20,12 +20,12 @@ class PackageChecks(unittest.TestCase):
             desktop=tree/"usr/share/applications"/(result.stdout.strip()+".desktop")
             self.assertTrue(desktop.is_file(),"GNOME cannot resolve the desktop entry for the application's notification identity")
     def test_verified_previous_package_upgrade_preserves_encrypted_data_and_profiles(self):
-        current=Path(os.environ.get("STUDY_TASK_HUB_TEST_DEB",ROOT/"artifacts/linux/study-task-hub_1.2.0~ubuntu4_amd64.deb"))
-        previous=ROOT/"artifacts/linux/history/1.2.0~ubuntu3/study-task-hub_1.2.0~ubuntu3_amd64.deb"
-        old_report=json.loads((ROOT/"docs/releases/ubuntu-1.2.0~ubuntu3/verification.json").read_text())
+        current=Path(os.environ.get("STUDY_TASK_HUB_TEST_DEB",ROOT/"artifacts/linux/study-task-hub_1.2.0~ubuntu5_amd64.deb"))
+        previous=ROOT/"artifacts/linux/history/1.2.0~ubuntu4/study-task-hub_1.2.0~ubuntu4_amd64.deb"
+        old_report=json.loads((ROOT/"docs/releases/ubuntu-1.2.0~ubuntu4/verification.json").read_text())
         self.assertTrue(previous.is_file(),"Verified previous package is required for the upgrade test")
         self.assertEqual(hashlib.sha256(previous.read_bytes()).hexdigest(),old_report["sha256"])
-        self.assertTrue(current.is_file(),"Ubuntu 4 package has not been built")
+        self.assertTrue(current.is_file(),"Ubuntu 5 package has not been built")
         old_version=subprocess.check_output(["dpkg-deb","--field",str(previous),"Version"],text=True).strip()
         new_version=subprocess.check_output(["dpkg-deb","--field",str(current),"Version"],text=True).strip()
         self.assertEqual(subprocess.run(["dpkg","--compare-versions",new_version,"gt",old_version]).returncode,0)
@@ -91,7 +91,7 @@ class PackageChecks(unittest.TestCase):
             finally:bridge.close()
         return opened()
     def test_deb_runs_backend_without_sdk_outside_repository(self):
-        package=Path(os.environ.get("STUDY_TASK_HUB_TEST_DEB",ROOT/"artifacts/linux/study-task-hub_1.2.0~ubuntu4_amd64.deb"))
+        package=Path(os.environ.get("STUDY_TASK_HUB_TEST_DEB",ROOT/"artifacts/linux/study-task-hub_1.2.0~ubuntu5_amd64.deb"))
         self.assertTrue(package.is_file(),"Self-contained Debian package is not built")
         with tempfile.TemporaryDirectory(prefix="study-task-hub-package-") as tmp:
             tree=Path(tmp)/"tree"
@@ -133,7 +133,7 @@ class PackageChecks(unittest.TestCase):
             self.assertEqual(process.returncode,0,errors)
 
     def test_install_upgrade_remove_in_isolated_prefix_preserves_user_data(self):
-        package=Path(os.environ.get("STUDY_TASK_HUB_TEST_DEB",ROOT/"artifacts/linux/study-task-hub_1.2.0~ubuntu4_amd64.deb"))
+        package=Path(os.environ.get("STUDY_TASK_HUB_TEST_DEB",ROOT/"artifacts/linux/study-task-hub_1.2.0~ubuntu5_amd64.deb"))
         self.assertTrue(package.is_file(),"Package is not built")
         with tempfile.TemporaryDirectory(prefix="study-task-hub-install-") as tmp:
             target=Path(tmp)/"system"

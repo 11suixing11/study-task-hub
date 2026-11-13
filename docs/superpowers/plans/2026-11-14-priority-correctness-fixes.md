@@ -24,11 +24,11 @@
 
 **Interface:** `TaskStore.SaveLinuxPreferences(AppSettings requested): void`。只更新 NotificationsEnabled、AutomaticSyncEnabled、ChaoxingAutomaticSyncEnabled；DisclaimerSeen 保留已确认状态。LastSyncAtUtc、LastSyncOutcome、LastSyncSummary 从同一事务内最新记录保留。
 
-- [ ] 在测试中取得旧设置，直接以独立 TaskStore 保存 `LastSyncOutcome=completed`，再调用 `service.SaveSettings(cached with { NotificationsEnabled=false })`；断言结果仍为 completed 且通知关闭。
-- [ ] 运行 `bash scripts/test-linux-core.sh --suite tasks`，观察旧结果覆盖失败。
-- [ ] 在 `lock(gate)` 与 SQLite 事务内 `ReadSettings`，构造 `latest with { ...偏好字段... }`，写 `settings/app` 并提交；LinuxAppService 调此新方法。
-- [ ] 重跑 tasks/reminders/ipc，确认同步记录与开关持久化。
-- [ ] 提交该独立修复。
+- [x] 在测试中取得旧设置，直接以独立 TaskStore 保存 `LastSyncOutcome=completed`，再调用 `service.SaveSettings(cached with { NotificationsEnabled=false })`；断言结果仍为 completed 且通知关闭。
+- [x] 运行 `bash scripts/test-linux-core.sh --suite tasks`，观察旧结果覆盖失败。
+- [x] 在 `lock(gate)` 与 SQLite 事务内 `ReadSettings`，构造 `latest with { ...偏好字段... }`，写 `settings/app` 并提交；LinuxAppService 调此新方法。
+- [x] 重跑 tasks/reminders/ipc，确认同步记录与开关持久化。
+- [x] 提交该独立修复。
 
 ## Task 2 — F02 统一采集资格
 
@@ -36,12 +36,12 @@
 
 **Interfaces:** `has_recorded_official_courses(recording): bool`；`can_sync_tasks(platform_view): bool`。确认选择且至少一门 Available 官方课程被选中才具备任务采集资格；登录状态可复用和 LoginUri 必须存在。
 
-- [ ] 用真实后台保存手动课程并保存合成登录，拦截 start-sync 网络边界；调用 scheduler.platforms_loaded，断言没有 start-sync 请求。
-- [ ] 使用一门已选可用官方课程、未选官方课程、历史不可用课程、RecordAll 四组数据分别检查资格。
-- [ ] 运行 scheduler 测试，观察仅手动课程被错误调度失败。
-- [ ] 三个 UI/调度入口复用新规则，课程目录刷新继续保留独立 catalogOnly 流程。
-- [ ] 重跑 scheduler、platform 和 SmartCourse GUI 检查。
-- [ ] 提交该独立修复。
+- [x] 用真实后台保存手动课程并保存合成登录，拦截 start-sync 网络边界；调用 scheduler.platforms_loaded，断言没有 start-sync 请求。
+- [x] 使用一门已选可用官方课程、未选官方课程、历史不可用课程、RecordAll 四组数据分别检查资格。
+- [x] 运行 scheduler 测试，观察仅手动课程被错误调度失败。
+- [x] 三个 UI/调度入口复用新规则，课程目录刷新继续保留独立 catalogOnly 流程。
+- [x] 重跑 scheduler、platform 和 SmartCourse GUI 检查。
+- [x] 提交该独立修复。
 
 ## Task 3 — F03 多学期选择档案
 
@@ -49,12 +49,12 @@
 
 **Interface:** 学期快照包含 Semester、ReviewedKeys、SelectedKeys、RecordAll；key 为 `linux-course-period:<platform>:<yearStart>:<term>`。现有 `linux-course-selection:<platform>` 继续保存当前学期兼容记录。
 
-- [ ] 保存秋季排除、春季不同选择，再查询秋季；断言秋季排除仍在，春季选择也在。重建服务后重复断言。
-- [ ] 在仅有旧版单学期记录的数据库中保存新学期，断言旧学期档案保留。验证旧版格式仍有 Semester/ReviewedKeys。
-- [ ] 运行 courses suite，观察跨学期排除丢失。
-- [ ] 查询指定学期的快照；若为当前兼容记录所属学期，用最新全局选择补充，历史学期用独立快照。首次新格式保存时先快照原当前学期，再保存新学期、全局课程选择和兼容记录。
-- [ ] 仍以 Revision 保护事务；未知或损坏档案返回 DB002，不静默丢失选择。
-- [ ] 重跑 courses、SmartCourse、全部 Linux 核心与 GUI 回归。
+- [x] 保存秋季排除、春季不同选择，再查询秋季；断言秋季排除仍在，春季选择也在。重建服务后重复断言。
+- [x] 在仅有旧版单学期记录的数据库中保存新学期，断言旧学期档案保留。验证旧版格式仍有 Semester/ReviewedKeys。
+- [x] 运行 courses suite，观察跨学期排除丢失。
+- [x] 查询指定学期的快照；若为当前兼容记录所属学期，用最新全局选择补充，历史学期用独立快照。首次新格式保存时先快照原当前学期，再保存新学期、全局课程选择和兼容记录。
+- [x] 仍以 Revision 保护事务；未知或损坏档案返回 DB002，不静默丢失选择。
+- [x] 重跑 courses、SmartCourse、全部 Linux 核心与 GUI 回归。
 - [ ] 提交并更新审计、开发进度与新包验证清单。
 
 ## 后续子项目顺序

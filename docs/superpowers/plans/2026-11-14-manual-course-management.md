@@ -22,9 +22,9 @@
 
 **Interfaces:** `GetManualCourses(string): ManualCoursePage`；`UpdateManualCourse(ManualCourseEdit): ManualCoursePage`；`RemoveManualCourse(string,string,long): ManualCoursePage`；TaskInput 增加可选 RecordingCourseKey。
 
-- [ ] 写并观察测试失败：登记“数学”，创建同名旧手动任务，改名后断言相同 key、新名称、Revision 增加；归档任务不在默认清单，包含未选课程时仍可见；有任务移除返回 COURSE003。
-- [ ] 登记读旧说明作为迁移，新增写登记；管理与任务保存核对 key，在一个事务中绑定并更新相关数据。
-- [ ] 运行 `bash scripts/test-linux-core.sh --suite courses` 和 `--suite all`。
+- [x] 写并观察测试失败：登记“数学”，创建同名旧手动任务，改名后断言相同 key、新名称、Revision 增加；归档任务不在默认清单，包含未选课程时仍可见；有任务移除返回 COURSE003。
+- [x] 登记读旧说明作为迁移，新增写登记；管理与任务保存核对 key，在一个事务中绑定并更新相关数据。
+- [x] 运行 `bash scripts/test-linux-core.sh --suite courses` 和 `--suite all`。
 
 ## Task 2 — IPC 与 GTK
 
@@ -32,6 +32,6 @@
 
 **Interfaces:** `get-manual-courses {platform}`；`edit-manual-course {platform,key,revision,name,semester,archived}`；`remove-manual-course {platform,key,revision}`。页面返回 Revision 与课程及任务计数。TaskInput `recordingCourseKey` 为 null 保留自由输入行为。
 
-- [ ] 添加真实 GTK 回归：新增自定义课程，任务编辑器选择课程并保存；管理页改名、归档并重新读取任务验证关联。
-- [ ] 接入 IPC，管理课程窗口提供编辑、归档/恢复与确认移除；任务下拉选择登记课程，后台恢复后重新读取。
-- [ ] 运行 GTK UI 全套，检查改名/归档后刷新和旧连接回调保护；审查 diff 并提交。
+- [x] 添加真实 GTK 回归：新增自定义课程，任务编辑器选择课程并保存；管理页改名、归档并重新读取任务验证关联。
+- [x] 接入 IPC，管理课程窗口提供编辑、归档/恢复与确认移除；任务下拉选择登记课程，后台恢复后重新读取。
+- [x] 运行 GTK UI 全套，检查改名/归档后刷新和旧连接回调保护；审查 diff 并提交。

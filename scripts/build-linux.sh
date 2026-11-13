@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname -- "${BASH_SOURCE[0]}")/linux-dev-env.sh"
-taskVersion=1.2.0~ubuntu4
+taskVersion=1.2.0~ubuntu5
 if [[ $# -gt 0 ]]; then
   [[ $# == 2 && $1 == --version ]] || { echo 'Usage: build-linux.sh [--version VERSION]' >&2; exit 2; }
   taskVersion="$2"
