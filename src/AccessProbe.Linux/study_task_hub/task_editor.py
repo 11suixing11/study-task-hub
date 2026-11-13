@@ -2,7 +2,7 @@ import datetime
 import zoneinfo
 from decimal import Decimal, InvalidOperation
 from gi.repository import Gtk, Adw
-from .ui import PLATFORMS, label, margins, on_result
+from .ui import PLATFORMS, label, margins, on_result, recovery_button
 
 def local_zone():
     with open("/etc/localtime", "rb") as stream:
@@ -35,6 +35,8 @@ class TaskEditor(Adw.Window):
         toolbar.add_top_bar(Adw.HeaderBar())
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         form = margins(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10), 20)
+        self.form = form
+        form.set_sensitive(self.loaded)
         form.append(label("任务信息", "title-3"))
         for key, title in (("title", "任务名称"), ("courseName", "课程名称")):
             self.add_entry(form, key, title)
@@ -63,6 +65,7 @@ class TaskEditor(Adw.Window):
         self.error_label = margins(label("", "error"))
         self.error_label.set_visible(False)
         body.append(self.error_label)
+        body.append(margins(recovery_button(self, self.error_label)))
         actions = margins(Gtk.Box(spacing=12), 16)
         cancel = Gtk.Button(label="取消", hexpand=True)
         cancel.connect("clicked", lambda *_: self.close())
@@ -75,7 +78,24 @@ class TaskEditor(Adw.Window):
         toolbar.set_content(body)
         self.set_content(toolbar)
         if task_id:
-            on_result(bridge.request_async("get-task", {"id": task_id}), self.load, self.show_error)
+            self.load_task()
+
+    def load_task(self):
+        requested_bridge = self.bridge
+        on_result(requested_bridge.request_async("get-task", {"id":self.task_id}),
+            lambda detail: self.load(detail) if self.bridge is requested_bridge else None,
+            lambda message: self.show_error(message) if self.bridge is requested_bridge else None)
+
+    def rebind_bridge(self, bridge):
+        if self.closed:
+            return
+        self.bridge = bridge
+        self.busy = False
+        self.error_label.set_visible(False)
+        self.error_label.set_text("")
+        self.save_button.set_sensitive(self.loaded)
+        if not self.loaded and self.task_id:
+            self.load_task()
 
     def add_field(self, form, title, widget):
         form.append(label(title))
@@ -112,6 +132,7 @@ class TaskEditor(Adw.Window):
                 self.original_dates[field] = task[key]
                 self.original_text[field] = self.fields[field].get_text()
         self.loaded = True
+        self.form.set_sensitive(True)
         self.save_button.set_sensitive(True)
 
     def input(self):
@@ -156,12 +177,16 @@ class TaskEditor(Adw.Window):
         self.save_button.set_sensitive(False)
         self.error_label.set_visible(False)
         command, args = ("create-task", value) if self.task_id is None else ("edit-task", {"id": self.task_id, "revision": self.revision, "input": value})
+        requested_bridge = self.bridge
         def success(detail):
+            if self.closed or self.bridge is not requested_bridge:
+                return
             self.busy = False
             self.saved_detail = detail
             self.parent.dashboard.refresh()
             self.close()
-        on_result(self.bridge.request_async(command, args), success, self.show_error)
+        on_result(requested_bridge.request_async(command, args), success,
+            lambda message: self.show_error(message) if self.bridge is requested_bridge else None)
 
     def show_error(self, message):
         if self.closed:

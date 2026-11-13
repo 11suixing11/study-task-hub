@@ -33,3 +33,15 @@ def on_result(future, success, failure):
             success(value)
         return GLib.SOURCE_REMOVE
     future.add_done_callback(lambda _: GLib.idle_add(apply))
+
+def recovery_button(window, error_label):
+    button = Gtk.Button(label="恢复连接", visible=False)
+    def recover(*_):
+        owner = window
+        while owner and not hasattr(owner, "restart_backend"):
+            owner = owner.get_transient_for()
+        if owner:
+            owner.restart_backend()
+    button.connect("clicked", recover)
+    error_label.connect("notify::label", lambda *_: button.set_visible(error_label.get_text().startswith(("IPC004", "IPC006"))))
+    return button

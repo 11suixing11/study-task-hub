@@ -25,6 +25,85 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass
 
 class WebKitChecks(unittest.TestCase):
+    def test_default_navigation_policy_uses_recovered_backend(self):
+        from study_task_hub.login_window import LoginWindow
+        from study_task_hub.bridge import BackendBridge
+        with TestAppFixture() as fx:
+            class DelayedInitialRestore:
+                def request_async(self,command,args=None):
+                    if command=="get-session":return concurrent.futures.Future()
+                    return fx.bridge.request_async(command,args)
+            login=LoginWindow(fx.window,DelayedInitialRestore(),{"id":"chaoxing","name":"Policy fixture","loginUri":"https://i.chaoxing.com/"})
+            login.present()
+            fx.bridge.close()
+            recovered=BackendBridge(fx.application.backend_path,fx.temp.name)
+            try:
+                login.bridge=recovered
+                policy=login.policy_request("https://i.chaoxing.com/")
+                self.assertIsNone(policy.exception(timeout=5),"Navigation policy kept the disconnected backend")
+                self.assertTrue(policy.result()["allowed"])
+            finally:
+                login.finish_close();recovered.close()
+    def test_closed_login_discards_delayed_cookie_fingerprint(self):
+        from study_task_hub.login_window import LoginWindow
+        from gi.repository import GLib
+        import time
+        server=http.server.ThreadingHTTPServer(("127.0.0.1",0),Handler)
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        address=f"http://127.0.0.1:{server.server_port}/"
+        def policy(uri,frame=False):
+            future=concurrent.futures.Future();future.set_result({"allowed":uri.startswith(address),"upgrade":None,"metadata":False});return future
+        try:
+            with TestAppFixture() as fx:
+                requests=[];pending=[]
+                class DelayedBinding:
+                    def request_async(self,command,args=None):
+                        requests.append(command)
+                        actual=fx.bridge.request_async(command,args)
+                        if command=="cookie-fingerprint":
+                            held=concurrent.futures.Future();pending.append((held,actual));return held
+                        return actual
+                login=LoginWindow(fx.window,DelayedBinding(),{"id":"chaoxing","name":"Delayed fixture","loginUri":address},policy_request=policy)
+                login.present();run_until(lambda:login.web.get_title()=="Local login fixture",20)
+                result=login.capture_session()
+                run_until(lambda:len(pending)==1)
+                login.finish_close("fixture timeout")
+                pending[0][0].set_result(pending[0][1].result(timeout=5))
+                until=time.monotonic()+0.15;run_until(lambda:time.monotonic()>until)
+                self.assertEqual(requests.count("capture-session"),0,"Closed login submitted a stale credential snapshot")
+                self.assertTrue(result.done(),"Closed capture was left pending")
+        finally:
+            server.shutdown();server.server_close();thread.join()
+
+    def test_close_reuses_inflight_capture_instead_of_capturing_twice(self):
+        from study_task_hub.login_window import LoginWindow
+        import time
+        server=http.server.ThreadingHTTPServer(("127.0.0.1",0),Handler)
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        address=f"http://127.0.0.1:{server.server_port}/"
+        def policy(uri,frame=False):
+            future=concurrent.futures.Future();future.set_result({"allowed":uri.startswith(address),"upgrade":None,"metadata":False});return future
+        try:
+            with TestAppFixture() as fx:
+                pending=[]
+                class DelayedBinding:
+                    def request_async(self,command,args=None):
+                        actual=fx.bridge.request_async(command,args)
+                        if command=="cookie-fingerprint":
+                            held=concurrent.futures.Future();pending.append((held,actual));return held
+                        return actual
+                login=LoginWindow(fx.window,DelayedBinding(),{"id":"chaoxing","name":"Single capture fixture","loginUri":address},policy_request=policy)
+                login.present();run_until(lambda:login.web.get_title()=="Local login fixture",20)
+                login.save_clicked();run_until(lambda:len(pending)==1)
+                login.close_with_save()
+                until=time.monotonic()+0.15;run_until(lambda:time.monotonic()>until)
+                try:
+                    self.assertEqual(len(pending),1,"Closing started a second credential capture")
+                finally:
+                    login.finish_close()
+        finally:
+            server.shutdown();server.server_close();thread.join()
+
     def test_real_cookie_scope_navigation_and_private_profile(self):
         self.assertIsNotNone(importlib.util.find_spec("study_task_hub.login_window"), "WebKit login is not implemented")
         from study_task_hub.login_window import LoginWindow

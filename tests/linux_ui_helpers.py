@@ -18,6 +18,15 @@ def run_until(predicate, timeout=5):
             GLib.MainContext.default().iteration(False)
         time.sleep(0.005)
 
+def find_button(widget, text):
+    if isinstance(widget,Gtk.Button) and widget.get_label()==text:
+        return widget
+    child=widget.get_first_child()
+    while child:
+        found=find_button(child,text)
+        if found:return found
+        child=child.get_next_sibling()
+
 class TestAppFixture:
     def __init__(self, width=1200, height=800):
         from study_task_hub.application import StudyTaskHubApplication
@@ -37,9 +46,16 @@ class TestAppFixture:
     def wait(self, predicate):
         run_until(predicate)
     def close(self):
+        if self.application.scheduler:
+            self.application.scheduler.stop()
+        if self.application.close_source:
+            GLib.source_remove(self.application.close_source)
+            self.application.close_source=None
         self.window.dashboard.stop()
         self.window.destroy()
-        self.bridge.close()
+        self.window.bridge.close()
+        if self.window.bridge is not self.bridge:
+            self.bridge.close()
         self.application.quit()
         self.temp.cleanup()
         while GLib.MainContext.default().pending():

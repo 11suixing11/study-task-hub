@@ -7,6 +7,23 @@ from linux_test_paths import backend_path
 from study_task_hub.bridge import BackendBridge, BackendError
 
 class BridgeChecks(unittest.TestCase):
+    def test_close_deadline_does_not_add_a_second_termination_wait(self):
+        with tempfile.TemporaryDirectory(prefix="study-task-hub-exit-") as root:
+            script=Path(root)/"stubborn-backend"
+            script.write_text("#!/usr/bin/python3\nimport signal,time,sys\nfrom pathlib import Path\nsignal.signal(signal.SIGTERM,lambda *_:None)\nPath(sys.argv[-1], 'ready').write_text('ready')\ntime.sleep(30)\n")
+            script.chmod(0o700)
+            bridge=BackendBridge(script,root)
+            try:
+                deadline=time.monotonic()+3
+                while not (Path(root)/"ready").exists() and time.monotonic()<deadline:time.sleep(0.005)
+                self.assertTrue((Path(root)/"ready").exists())
+                started=time.monotonic()
+                bridge.close(timeout=0.1)
+                self.assertLess(time.monotonic()-started,0.7,"Shutdown exceeded its caller's deadline")
+                self.assertIsNotNone(bridge.process.poll())
+            finally:
+                if bridge.process.poll() is None:bridge.process.kill()
+                bridge.close(timeout=0)
     def test_large_request_does_not_block_when_backend_is_not_reading(self):
         with tempfile.TemporaryDirectory(prefix="study-task-hub-pipe-") as root:
             script=Path(root)/"blocked-backend"

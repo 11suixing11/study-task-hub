@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname -- "${BASH_SOURCE[0]}")/linux-dev-env.sh"
-taskVersion=1.2.0~ubuntu1
+taskVersion=1.2.0~ubuntu2
 if [[ $# -gt 0 ]]; then
   [[ $# == 2 && $1 == --version ]] || { echo 'Usage: build-linux.sh [--version VERSION]' >&2; exit 2; }
   taskVersion="$2"
@@ -19,7 +19,7 @@ cp -r "$taskRoot/src/AccessProbe.Linux/study_task_hub" "$taskStage/opt/study-tas
 find "$taskStage/opt/study-task-hub/ui" -type d -name __pycache__ -exec rm -rf -- {} +
 sed "s/@VERSION@/$taskVersion/g" "$taskRoot/packaging/linux/control.in" > "$taskStage/DEBIAN/control"
 install -m 755 "$taskRoot/packaging/linux/study-task-hub" "$taskStage/usr/bin/study-task-hub"
-install -m 644 "$taskRoot/packaging/linux/study-task-hub.desktop" "$taskStage/usr/share/applications/"
+install -m 644 "$taskRoot/packaging/linux/study-task-hub.desktop" "$taskStage/usr/share/applications/io.github.studyTaskHub.desktop"
 python3 - "$taskRoot/design/icons/app-1024.png" "$taskStage/usr/share/icons/hicolor/512x512/apps/study-task-hub.png" <<'PY'
 from PIL import Image
 import sys

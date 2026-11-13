@@ -1,7 +1,7 @@
 from pathlib import Path
 import shutil
 from gi.repository import Gtk, Adw, GLib
-from .ui import label, margins, on_result
+from .ui import label, margins, on_result, recovery_button
 
 class PlatformWindow(Adw.Window):
     def __init__(self, parent, bridge):
@@ -18,16 +18,32 @@ class PlatformWindow(Adw.Window):
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.status = margins(label("登录后先确认课程，再采集任务。各平台实际覆盖范围以官网和读取结果为准。", "dim-label"))
         body.append(self.status)
+        body.append(margins(recovery_button(self, self.status)))
         self.rows = margins(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16), 20)
         body.append(Gtk.ScrolledWindow(child=self.rows, vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER))
         toolbar.set_content(body)
         self.set_content(toolbar)
         self.connect("close-request", self.on_close)
-        self.unsubscribe = bridge.subscribe_events(self.receive_event)
+        self.unsubscribe = bridge.subscribe_events(lambda event: self.receive_event(event, bridge))
         self.refresh()
 
     def refresh(self):
-        on_result(self.bridge.request_async("platforms"), self.render, self.status.set_text)
+        requested_bridge = self.bridge
+        on_result(requested_bridge.request_async("platforms"),
+            lambda views: self.render(views) if self.bridge is requested_bridge else None,
+            lambda message: self.status.set_text(message) if self.bridge is requested_bridge and not self.disposed else None)
+
+    def rebind_bridge(self, bridge):
+        if self.disposed:
+            return
+        self.unsubscribe()
+        self.bridge = bridge
+        self.active_jobs.clear()
+        self.early_events.clear()
+        self.last_result = None
+        self.unsubscribe = bridge.subscribe_events(lambda event: self.receive_event(event, bridge))
+        self.status.set_text("连接已恢复，请重新发起读取。")
+        self.refresh()
 
     def render(self, views):
         if self.disposed:
@@ -75,13 +91,16 @@ class PlatformWindow(Adw.Window):
             return
         self.active_jobs[platform] = None
         self.status.set_text("正在开始课程读取…" if catalog_only else "正在开始任务采集…")
+        requested_bridge = self.bridge
         def started(result):
-            if self.disposed:
+            if self.disposed or self.bridge is not requested_bridge:
                 return
             self.active_jobs[platform] = result["jobId"]
             if event := self.early_events.pop(result["jobId"], None):
                 self.apply_event(event)
         def failed(message):
+            if self.disposed or self.bridge is not requested_bridge:
+                return
             self.active_jobs.pop(platform, None)
             self.status.set_text(message)
         on_result(self.bridge.request_async("start-sync", {"platform":platform,"catalogOnly":catalog_only}), started, failed)
@@ -91,11 +110,11 @@ class PlatformWindow(Adw.Window):
         if job_id:
             on_result(self.bridge.request_async("cancel-sync", {"jobId":job_id}), lambda _: self.status.set_text("正在停止读取…"), self.status.set_text)
 
-    def receive_event(self, event):
-        GLib.idle_add(self.apply_event, event)
+    def receive_event(self, event, source=None):
+        GLib.idle_add(self.apply_event, event, source)
 
-    def apply_event(self, event):
-        if self.disposed:
+    def apply_event(self, event, source=None):
+        if self.disposed or source is not None and source is not self.bridge:
             return GLib.SOURCE_REMOVE
         payload = event["payload"]
         if self.active_jobs.get(payload["platform"]) != payload["jobId"]:

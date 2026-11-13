@@ -76,6 +76,8 @@ class MainWindow(Adw.ApplicationWindow):
         on_result(self.bridge.request_async("platforms"), loaded, self.dashboard.show_error)
 
     def restart_backend(self):
+        if not self.restart_button.get_sensitive() or self.get_application().closing:
+            return
         from .bridge import BackendBridge
         from .ui import on_result
         import concurrent.futures
@@ -87,11 +89,22 @@ class MainWindow(Adw.ApplicationWindow):
         future = concurrent.futures.Future()
         def restart():
             self.bridge.close()
+            if app.closing:
+                future.set_exception(RuntimeError())
+                return
             try:
-                future.set_result(BackendBridge(app.backend_path, app.data_root))
+                bridge = BackendBridge(app.backend_path, app.data_root)
+                if app.closing:
+                    bridge.close(timeout=0)
+                    future.set_exception(RuntimeError())
+                else:
+                    future.set_result(bridge)
             except OSError:
                 future.set_exception(RuntimeError())
         def success(bridge):
+            if app.closing:
+                bridge.close(timeout=0)
+                return
             self.bridge = bridge
             self.dashboard.bridge = bridge
             self.dashboard.refresh()
@@ -102,10 +115,14 @@ class MainWindow(Adw.ApplicationWindow):
                 from gi.repository import GLib
                 bridge.subscribe_events(lambda event: GLib.idle_add(app.backend_event, event))
                 for dialog in app.owned_dialogs():
-                    if hasattr(dialog, "bridge"):
+                    if hasattr(dialog, "rebind_bridge"):
+                        dialog.rebind_bridge(bridge)
+                    elif hasattr(dialog, "bridge"):
                         dialog.bridge = bridge
             self.restart_button.set_sensitive(True)
         def failure(message):
+            if app.closing:
+                return
             self.restart_button.set_sensitive(True)
             self.dashboard.show_error(message)
         threading.Thread(target=restart, daemon=True).start()

@@ -194,6 +194,103 @@ class EditorChecks(unittest.TestCase):
             fx.wait(lambda: fx.request("snapshot")["total"] == 0)
 
 class PlatformChecks(unittest.TestCase):
+    def test_open_platform_window_receives_jobs_after_backend_recovery(self):
+        from study_task_hub.platform_window import PlatformWindow
+        with TestAppFixture() as fx:
+            fx.application.window=fx.window
+            fx.application.bridge=fx.bridge
+            platforms=PlatformWindow(fx.window,fx.bridge)
+            platforms.present()
+            fx.wait(lambda:len(platforms.views)==9)
+            try:
+                fx.bridge.close()
+                fx.window.restart_backend()
+                fx.wait(lambda:platforms.bridge is not fx.bridge)
+                platforms.start_sync("pta",True)
+                fx.wait(lambda:platforms.last_result is not None and not platforms.active_jobs)
+                self.assertTrue(platforms.last_result["result"]["loginRequired"])
+            finally:
+                platforms.on_close();platforms.destroy()
+                if fx.application.scheduler:fx.application.scheduler.stop()
+                fx.window.bridge.close()
+                fx.application.window=None
+
+class RecoveryChecks(unittest.TestCase):
+    def test_application_exit_deadline_closes_an_unresponsive_login(self):
+        from gi.repository import Adw
+        from linux_ui_helpers import run_until
+        with TestAppFixture() as fx:
+            class UnresponsiveLogin(Adw.Window):
+                closed=False
+                def close_with_save(self,*_):return True
+                def finish_close(self,*_):self.closed=True;self.destroy()
+            login=UnresponsiveLogin(transient_for=fx.window)
+            login.set_default_size(300,200)
+            login.present()
+            fx.application.window=fx.window
+            fx.application.bridge=fx.bridge
+            try:
+                fx.application.request_close()
+                run_until(lambda:fx.application.window is None,6)
+                self.assertTrue(login.closed)
+                self.assertIsNotNone(fx.bridge.process.poll())
+            finally:
+                login.finish_close()
+
+    def test_editor_can_recover_without_closing_or_discarding_inputs(self):
+        from study_task_hub.task_editor import TaskEditor
+        from linux_ui_helpers import find_button
+        with TestAppFixture() as fx:
+            fx.application.window=fx.window
+            fx.application.bridge=fx.bridge
+            task=fx.request("create-task",{"title":"原任务","platformId":"pta","courseName":"","deadlineKind":"unknown","scoreText":"","notes":"原备注"})["view"]["task"]
+            editor=TaskEditor(fx.window,fx.bridge,task["id"])
+            editor.present();fx.wait(lambda:editor.loaded)
+            editor.fields["title"].set_text("保留的新名称")
+            editor.fields["notes"].get_buffer().set_text("保留的新备注")
+            try:
+                fx.bridge.close()
+                editor.save_button.emit("clicked")
+                fx.wait(lambda:editor.error_label.get_visible())
+                button=find_button(editor,"恢复连接")
+                self.assertIsNotNone(button,"Modal editor has no accessible recovery action")
+                button.emit("clicked")
+                fx.wait(lambda:editor.bridge is not fx.bridge)
+                self.assertEqual(editor.fields["title"].get_text(),"保留的新名称")
+                editor.save_button.emit("clicked")
+                fx.wait(lambda:editor.saved_detail is not None)
+                self.assertEqual(editor.saved_detail["view"]["task"]["notes"],"保留的新备注")
+            finally:
+                editor.destroy()
+                if fx.application.scheduler:fx.application.scheduler.stop()
+                fx.window.bridge.close()
+                fx.application.window=None
+    def test_open_settings_can_save_existing_inputs_after_rebinding(self):
+        from study_task_hub.settings_window import SettingsWindow
+        from study_task_hub.bridge import BackendBridge
+        with TestAppFixture() as fx:
+            dialog=SettingsWindow(fx.window,fx.bridge)
+            dialog.present();fx.wait(lambda:dialog.settings is not None)
+            dialog.notifications.set_active(False)
+            dialog.automatic.set_active(False)
+            fx.bridge.close()
+            restarted=BackendBridge(fx.application.backend_path,fx.temp.name)
+            dialog.bridge=restarted
+            def find_button(widget):
+                from gi.repository import Gtk
+                if isinstance(widget,Gtk.Button) and widget.get_label()=="保存设置":return widget
+                child=widget.get_first_child()
+                while child:
+                    result=find_button(child)
+                    if result:return result
+                    child=child.get_next_sibling()
+            try:
+                find_button(dialog).emit("clicked")
+                fx.wait(lambda:not restarted.request_async("get-settings").result(timeout=5)["notificationsEnabled"])
+                self.assertFalse(restarted.request_async("get-settings").result(timeout=5)["automaticSyncEnabled"])
+            finally:
+                dialog.destroy();restarted.close()
+class PlatformCatalogChecks(unittest.TestCase):
     def test_platforms_show_eight_automatic_sources_and_manual_fif(self):
         self.assertIsNotNone(importlib.util.find_spec("study_task_hub.platform_window"), "Platform management is not implemented")
         from study_task_hub.platform_window import PlatformWindow

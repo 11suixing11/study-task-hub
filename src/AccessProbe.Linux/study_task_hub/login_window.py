@@ -4,7 +4,7 @@ from pathlib import Path
 import gi
 gi.require_version("WebKit", "6.0")
 from gi.repository import WebKit, Gtk, Adw, Gio, GLib
-from .ui import label, margins, on_result
+from .ui import label, margins, on_result, recovery_button
 from .bridge import BackendError
 from .cookie_adapter import read_cookies, restore_cookies
 
@@ -21,15 +21,17 @@ class LoginWindow(Adw.Window):
     def __init__(self, parent, bridge, platform_view, policy_request=None):
         super().__init__(transient_for=parent, modal=True, title="连接" + platform_view["name"])
         self.parent, self.bridge, self.platform = parent, bridge, platform_view["id"]
+        self.login_uri = platform_view["loginUri"]
         self.set_default_size(1000, 760)
         self.closing = False
         self.closed = False
         self.busy = False
+        self.active_capture = None
         self.close_timer = None
         self.cancellable = Gio.Cancellable()
         self.popups = []
         self.upgrades = set()
-        self.policy_request = policy_request or (lambda address, frame=False: bridge.request_async("platform-policy", {"platform":self.platform, "address":address, "frame":frame}))
+        self.policy_request = policy_request or (lambda address, frame=False: self.bridge.request_async("platform-policy", {"platform":self.platform, "address":address, "frame":frame}))
         root = Path(parent.get_application().data_root) / "profiles"
         private_directory(root)
         self.profile_path = root / self.platform
@@ -49,6 +51,7 @@ class LoginWindow(Adw.Window):
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.status = margins(label("请在官网完成登录；确认后保存会话并读取课程。", "dim-label"))
         body.append(self.status)
+        body.append(margins(recovery_button(self, self.status)))
         self.web.set_vexpand(True)
         body.append(self.web)
         controls = margins(Gtk.Box(spacing=8))
@@ -63,14 +66,35 @@ class LoginWindow(Adw.Window):
         toolbar.set_content(body)
         self.set_content(toolbar)
         self.connect("close-request", self.close_with_save)
+        self.restore_login()
+
+    def restore_login(self):
+        requested_bridge = self.bridge
         def restored(session):
-            if self.closed:
+            if self.closed or self.bridge is not requested_bridge:
                 return
             if session:
-                on_result(restore_cookies(self.manager, session["cookies"], self.cancellable), lambda _: self.web.load_uri(platform_view["loginUri"]), self.restore_failed)
+                def ready(_):
+                    if not self.closed and self.bridge is requested_bridge:
+                        self.web.load_uri(self.login_uri)
+                on_result(restore_cookies(self.manager, session["cookies"], self.cancellable), ready, self.restore_failed)
             else:
-                self.web.load_uri(platform_view["loginUri"])
-        on_result(bridge.request_async("get-session", {"platform":self.platform}), restored, self.restore_failed)
+                self.web.load_uri(self.login_uri)
+        on_result(requested_bridge.request_async("get-session", {"platform":self.platform}), restored,
+            lambda message: self.restore_failed(message) if self.bridge is requested_bridge else None)
+
+    def rebind_bridge(self, bridge):
+        if self.closed:
+            return
+        if self.active_capture is not None and not self.active_capture.done():
+            self.active_capture.set_exception(BackendError("IPC004", "连接已恢复，请重新确认保存登录。"))
+        self.active_capture = None
+        self.bridge = bridge
+        self.busy = False
+        self.capture_button.set_sensitive(True)
+        self.status.set_text("连接已恢复，请重新确认保存登录。")
+        if self.web.get_uri() in (None, "about:blank"):
+            self.restore_login()
 
     def restore_failed(self, message):
         if not self.closed:
@@ -140,11 +164,26 @@ class LoginWindow(Adw.Window):
         return future
 
     def capture_session(self):
+        if self.active_capture is not None and not self.active_capture.done():
+            return self.active_capture
         result = concurrent.futures.Future()
+        self.active_capture = result
+        if self.closed:
+            result.set_exception(BackendError("SESSION001", "登录窗口已关闭，旧保存结果已丢弃。"))
+            return result
         address = self.web.get_uri() or ""
+        def guarded(callback):
+            def apply(value):
+                if not self.closed and not result.done() and self.active_capture is result:
+                    callback(value)
+            return apply
         def failed(message):
             if not result.done():
-                result.set_exception(BackendError("SESSION001", message))
+                if message.startswith(("IPC004", "IPC006")):
+                    code,_,detail = message.partition(" · ")
+                    result.set_exception(BackendError(code, detail))
+                else:
+                    result.set_exception(BackendError("SESSION001", message))
         def cookies_before(cookies):
             if not cookies:
                 failed("未取得有效登录，原会话保留。")
@@ -169,12 +208,12 @@ class LoginWindow(Adw.Window):
                             def saved(info):
                                 if not result.done():
                                     result.set_result(info)
-                            on_result(self.bridge.request_async("capture-session", payload), saved, failed)
-                        on_result(self.bridge.request_async("cookie-fingerprint", {"platform":self.platform,"cookies":after}), fingerprint, failed)
-                    on_result(read_cookies(self.manager,self.cancellable), cookies_after, failed)
-                on_result(metadata, metadata_ready, failed)
-            on_result(self.policy_request(address), allowed, failed)
-        on_result(read_cookies(self.manager,self.cancellable), cookies_before, failed)
+                            on_result(self.bridge.request_async("capture-session", payload), guarded(saved), failed)
+                        on_result(self.bridge.request_async("cookie-fingerprint", {"platform":self.platform,"cookies":after}), guarded(fingerprint), failed)
+                    on_result(read_cookies(self.manager,self.cancellable), guarded(cookies_after), failed)
+                on_result(metadata, guarded(metadata_ready), failed)
+            on_result(self.policy_request(address), guarded(allowed), failed)
+        on_result(read_cookies(self.manager,self.cancellable), guarded(cookies_before), failed)
         return result
 
     def save_clicked(self):
@@ -183,16 +222,21 @@ class LoginWindow(Adw.Window):
         self.busy = True
         self.capture_button.set_sensitive(False)
         self.status.set_text("正在保存并校验官网登录…")
+        capture = self.capture_session()
         def saved(_):
+            if self.closed or self.closing or self.active_capture is not capture:
+                return
             self.busy = False
             self.capture_button.set_sensitive(True)
             self.status.set_text("登录已保存，正在读取课程目录…")
             on_result(self.bridge.request_async("start-sync", {"platform":self.platform,"catalogOnly":True}), lambda _: self.status.set_text("课程读取已开始，可关闭此窗口后在平台管理查看。"), failed)
         def failed(message):
+            if self.closed or self.closing or self.active_capture is not capture:
+                return
             self.busy = False
             self.capture_button.set_sensitive(True)
             self.status.set_text(message)
-        on_result(self.capture_session(), saved, failed)
+        on_result(capture, saved, failed)
 
     def close_with_save(self, *_):
         if self.closed:
@@ -202,7 +246,7 @@ class LoginWindow(Adw.Window):
         self.closing = True
         self.web.stop_loading()
         self.status.set_text("正在保存登录，最多等待 5 秒…")
-        self.close_timer = GLib.timeout_add_seconds(5, lambda: self.finish_close("保存超时；原会话保留，请重开连接窗口再保存。"))
+        self.close_timer = GLib.timeout_add(5000, lambda: self.finish_close("保存超时；原会话保留，请重开连接窗口再保存。"))
         on_result(self.capture_session(), lambda _: self.finish_close(), self.finish_close)
         return True
 
@@ -210,6 +254,8 @@ class LoginWindow(Adw.Window):
         if self.closed:
             return GLib.SOURCE_REMOVE
         self.closed = True
+        if self.active_capture is not None and not self.active_capture.done():
+            self.active_capture.set_exception(BackendError("SESSION001", "登录窗口已关闭，旧保存结果已丢弃。"))
         self.cancellable.cancel()
         if self.close_timer:
             GLib.source_remove(self.close_timer)

@@ -15,7 +15,6 @@ class BackendBridge:
         self._pending = {}
         self._events = []
         self._lock = threading.RLock()
-        self._write_lock = threading.Lock()
         self._next_id = 0
         self._closed = False
         self._outgoing = queue.Queue(maxsize=32)
@@ -121,19 +120,22 @@ class BackendBridge:
                 self.process.stdin.close()
                 self.process.wait(timeout=max(0, deadline-time.monotonic()))
             except (subprocess.TimeoutExpired, OSError, ValueError):
-                self.process.terminate()
-                try:
-                    self.process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
+                remaining = deadline-time.monotonic()
+                if remaining > 0:
+                    self.process.terminate()
+                    try:
+                        self.process.wait(timeout=remaining)
+                    except subprocess.TimeoutExpired:
+                        self.process.kill()
+                else:
                     self.process.kill()
-                    self.process.wait()
+                self.process.wait(timeout=0.5)
         self._fail_all()
         try:
             self._outgoing.put_nowait(None)
         except queue.Full:
             pass
-        self._writer.join(timeout=1)
-        self._reader.join(timeout=1)
-        self._stderr.join(timeout=1)
+        for thread in (self._writer,self._reader,self._stderr):
+            thread.join(timeout=max(0,min(0.1,deadline-time.monotonic())))
         for stream in (self.process.stdin, self.process.stdout, self.process.stderr):
             stream.close()

@@ -16,6 +16,7 @@ class StudyTaskHubApplication(Adw.Application):
         self.window = None
         self.scheduler = None
         self.closing = False
+        self.close_source = None
 
     def do_activate(self):
         if self.window:
@@ -82,13 +83,20 @@ class StudyTaskHubApplication(Adw.Application):
             GLib.idle_add(self.finish_close)
         # GTK callbacks remain on the main thread while jobs and IPC drain.
         def await_logins():
-            if any(hasattr(w, "close_with_save") and not w.closed for w in self.owned_dialogs()):
+            logins = [w for w in self.owned_dialogs() if hasattr(w, "close_with_save") and not w.closed]
+            if logins and time.monotonic() < close_deadline:
                 return GLib.SOURCE_CONTINUE
+            for login in logins:
+                login.finish_close("退出保存等待已超时；原会话保留，请重新确认登录。")
             threading.Thread(target=finish, daemon=True).start()
+            self.close_source = None
             return GLib.SOURCE_REMOVE
-        GLib.timeout_add(50, await_logins)
+        self.close_source = GLib.timeout_add(50, await_logins)
 
     def finish_close(self):
+        if self.close_source:
+            GLib.source_remove(self.close_source)
+            self.close_source = None
         if self.window:
             self.window.destroy()
             self.window = None
