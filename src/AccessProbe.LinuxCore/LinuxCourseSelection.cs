@@ -16,13 +16,13 @@ public sealed record CourseSelectionPlan(AcademicSemester Semester,long Revision
 public sealed record CustomCourseInput(string Name,bool Selected=true);
 public sealed record ReviewedCourseSelection(string Platform,long Revision,AcademicSemester Semester,string[] Keys,CustomCourseInput[] CustomCourses)
 { public string[]? ReviewedKeys {get;init;} }
-internal sealed record LinuxCoursePreference(AcademicSemester Semester,string[] ReviewedKeys);
+internal sealed record LinuxCoursePreference(AcademicSemester Semester,string[] ReviewedKeys,string[]? SelectedKeys=null,bool RecordAll=false);
 public sealed partial class LinuxAppService
 {
     public CourseSelectionPlan GetCourseSelectionPlan(string platform,AcademicSemester? semester=null)
     {
         EnsureOpen();semester??=AcademicSemester.Current(utcNow());semester.Validate();
-        var (recording,preference,tasks)=store.LoadLinuxCourseSelection(platform);
+        var (recording,preference,tasks)=store.LoadLinuxCourseSelection(platform,semester);
         var same=preference is not null?preference.Semester==semester:semester==AcademicSemester.Current(utcNow());
         var reviewed=(preference?.ReviewedKeys??recording.Courses.Select(c=>c.Key).ToArray()).ToHashSet(StringComparer.Ordinal);
         var counts=tasks.Where(TaskRules.IsActive).GroupBy(CourseRecordingRules.TaskCourseKey).ToDictionary(g=>g.Key,g=>g.Count());
@@ -30,9 +30,11 @@ public sealed partial class LinuxAppService
         {
             var pending=counts.GetValueOrDefault(course.Key);
             var (group,selected,reason)=CourseSelectionRules.Suggest(course,semester,pending);
-            if(same&&recording.SelectionConfirmed)
+            if(same&&(preference?.SelectedKeys is not null||recording.SelectionConfirmed))
             {
-                if(recording.RecordAllCourses||recording.SelectedCourseKeys.Contains(course.Key,StringComparer.Ordinal))
+                var selectedKeys=preference?.SelectedKeys??recording.SelectedCourseKeys;
+                var recordAll=preference?.RecordAll??recording.RecordAllCourses;
+                if(recordAll||selectedKeys.Contains(course.Key,StringComparer.Ordinal))
                 {selected=true;group="selected";reason="保留已保存选择 · "+reason;}
                 else if(reviewed.Contains(course.Key)){selected=false;reason="本学期已手动排除 · "+reason;}
             }

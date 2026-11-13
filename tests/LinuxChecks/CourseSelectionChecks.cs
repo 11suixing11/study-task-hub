@@ -56,6 +56,38 @@ static class CourseSelectionChecks
         service.SaveReviewedCourseSelection(new("pta",visible.Revision,visible.Semester,[courses[2].Key],[]){ReviewedKeys=visible.Courses.Select(c=>c.Course.Key).ToArray()});
         Check.True(service.GetCourseSelectionPlan("pta").Courses.Single(c=>c.Course.Key==unseen.Key).Preselected,"Unseen discovery was incorrectly remembered as an explicit exclusion");
         Check.True(!service.GetCourses("pta").SelectedCourseKeys.Contains(unseen.Key),"Recommendation was persisted without confirmation");
+        var autumn=service.GetCourseSelectionPlan("pta",new(2026,"autumn"));
+        service.SaveReviewedCourseSelection(new("pta",autumn.Revision,autumn.Semester,[courses[2].Key],[]));
+        var springPlan=service.GetCourseSelectionPlan("pta",new(2026,"spring"));
+        service.SaveReviewedCourseSelection(new("pta",springPlan.Revision,springPlan.Semester,[courses[1].Key],[]));
+        autumn=service.GetCourseSelectionPlan("pta",new(2026,"autumn"));
+        Check.True(!autumn.Courses.Single(c=>c.Course.Key==courses[0].Key).Preselected,"Autumn exclusion was lost after saving spring");
+        Check.True(autumn.Courses.Single(c=>c.Course.Key==courses[2].Key).Preselected);
+        using var restored=new LinuxAppService(root.Path,()=>now);
+        Check.True(!restored.GetCourseSelectionPlan("pta",new(2026,"autumn")).Courses.Single(c=>c.Course.Key==courses[0].Key).Preselected);
+        Check.True(restored.GetCourseSelectionPlan("pta",new(2026,"spring")).Courses.Single(c=>c.Course.Key==courses[1].Key).Preselected);
+        using(var connection=new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(root.Path,"tasks.db")}"))
+        {
+            connection.Open();
+            using var command=connection.CreateCommand();
+            command.CommandText="DELETE FROM settings WHERE key LIKE 'linux-course-period:%'; UPDATE settings SET value=$legacy WHERE key='linux-course-selection:pta';";
+            command.Parameters.AddWithValue("$legacy",System.Text.Json.JsonSerializer.Serialize(new{Semester=new AcademicSemester(2026,"spring"),ReviewedKeys=courses.Select(c=>c.Key).ToArray()}));
+            command.ExecuteNonQuery();
+        }
+        var legacy=service.GetCourseSelectionPlan("pta",new(2026,"spring"));
+        Check.True(legacy.Courses.Single(c=>c.Course.Key==courses[1].Key).Preselected);
+        service.SaveReviewedCourseSelection(new("pta",legacy.Revision,new(2026,"autumn"),[courses[2].Key],[]));
+        var migrated=restored.GetCourseSelectionPlan("pta",new(2026,"spring"));
+        Check.True(migrated.Courses.Single(c=>c.Course.Key==courses[1].Key).Preselected,"Legacy active semester was not migrated before switching");
+        Check.True(!migrated.Courses.Single(c=>c.Course.Key==courses[2].Key).Preselected);
+        using(var connection=new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(root.Path,"tasks.db")}"))
+        {
+            connection.Open();using var command=connection.CreateCommand();
+            command.CommandText="UPDATE settings SET value=$invalid WHERE key='linux-course-period:pta:2026:spring';";
+            command.Parameters.AddWithValue("$invalid",System.Text.Json.JsonSerializer.Serialize(new{Semester=new AcademicSemester(2025,"spring"),ReviewedKeys=Array.Empty<string>(),SelectedKeys=Array.Empty<string>()}));
+            command.ExecuteNonQuery();
+        }
+        Check.Equal("DB002",Check.Throws<TaskValidationException>(()=>service.GetCourseSelectionPlan("pta",new(2026,"spring"))).Code);
         return Task.CompletedTask;
     }
     private static RecordingCourse Course(string id,string name,string detail)=>new(CourseRecordingRules.MetadataKey("pta","synthetic-account",id,"class"),name,detail);
