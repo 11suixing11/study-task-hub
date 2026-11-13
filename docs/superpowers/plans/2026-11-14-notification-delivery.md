@@ -34,4 +34,4 @@
 
 - [x] 失败错误持久化、手动重试解除退避、成功历史不重发；测试提醒独立结果。
 - [x] GTK 显示历史和测试/重试入口；后台恢复后重读。
-- [ ] 运行 reminders、scheduler、D-Bus/GUI 和完整包回归；审查并提交。
+- [x] 运行 reminders、scheduler、D-Bus/GUI 和完整包回归；审查并提交。

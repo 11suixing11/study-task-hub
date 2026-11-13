@@ -1,0 +1,56 @@
+{
+  "packagedColdStartupSeconds": 0.9981,
+  "displayType": "GdkWaylandDisplay",
+  "availableScales": [
+    1,
+    2
+  ],
+  "webkit2x": {
+    "status": "passed",
+    "windowScale": 2,
+    "imageWidth": 3840,
+    "imageHeight": 2400,
+    "blueCoverageSamples": 1398,
+    "screenshot": "webkit-2x.png"
+  },
+  "mixedScale": {
+    "status": "passed",
+    "mechanism": "GTK fullscreen_on_monitor on owned windows, actual Wayland output changes",
+    "transitions": [
+      {
+        "scale": 1,
+        "logicalWidth": 2560,
+        "logicalHeight": 1440,
+        "screenshot": "dashboard-1x.png"
+      },
+      {
+        "scale": 2,
+        "logicalWidth": 1920,
+        "logicalHeight": 1200,
+        "screenshot": "dashboard-2x.png"
+      },
+      {
+        "scale": 1,
+        "returnedToFirstOutput": true
+      }
+    ]
+  },
+  "package": "study-task-hub_1.2.0~ubuntu5_amd64.deb",
+  "sha256": "de3160bdcfce17c39aa41510e6835926a3abfe87b035f31a0d11f182d2cdd965",
+  "dataset": {
+    "tasks": 5000,
+    "notesCharactersPerTask": 4000,
+    "links": 0
+  },
+  "snapshotSeconds": [
+    0.7867,
+    0.6789,
+    0.6922
+  ],
+  "startupTargetSeconds": 3,
+  "queryTargetSeconds": 2,
+  "startupTargetMet": true,
+  "queryTargetMet": true,
+  "officialNetworkAccessed": false,
+  "productionDataAccessed": false
+}

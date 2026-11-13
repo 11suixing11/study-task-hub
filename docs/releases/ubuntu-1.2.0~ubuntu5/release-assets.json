@@ -1,0 +1,40 @@
+{
+  "version": "1.2.0~ubuntu5",
+  "assets": [
+    {
+      "file": "study-task-hub_1.2.0~ubuntu5_amd64.deb",
+      "bytes": 29076288,
+      "sha256": "de3160bdcfce17c39aa41510e6835926a3abfe87b035f31a0d11f182d2cdd965"
+    },
+    {
+      "file": "SHA256SUMS.txt",
+      "bytes": 105,
+      "sha256": "f48703b57508c629518d22c7f61c14730f7715aab8f184671d96b6ca7a7a5dfc"
+    },
+    {
+      "file": "verification.json",
+      "bytes": 5064,
+      "sha256": "c052a6d9017f6cbf35c4d3abcab1fb9275321bc214042ce074fc6c959f87dc49"
+    },
+    {
+      "file": "verification/display/validation.json",
+      "bytes": 1294,
+      "sha256": "405842b8b8f2838230d7176077d0739c95aee38d724eee1fdaa12af679f56503"
+    },
+    {
+      "file": "verification/display/dashboard-1x.png",
+      "bytes": 222623,
+      "sha256": "8375c4709c9f74199d092be08cb1b068efac3104f3eff6ede22ae8d067512ddc"
+    },
+    {
+      "file": "verification/display/dashboard-2x.png",
+      "bytes": 414799,
+      "sha256": "cff7ec10a27b35f06b91345070c6269ef1c6a7c567af2454107bb0cf1a16607e"
+    },
+    {
+      "file": "verification/display/webkit-2x.png",
+      "bytes": 132294,
+      "sha256": "46f362bc51c999e6e9fc4df9d187b723160516137a00c193cfaa4409fd1fe99e"
+    }
+  ]
+}

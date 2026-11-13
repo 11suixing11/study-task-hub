@@ -1,6 +1,6 @@
 # 学习任务聚合平台
 
-2026-11-13 Ubuntu 原生桌面开发预览更新为 `1.2.0~ubuntu4`：修复窄窗口状态筛选后空详情覆盖清单，以及详情状态菜单不跟随当前任务的问题。智能选课、统一清单、编辑、官方登录、八平台采集和提醒继续使用。源码可用 `bash scripts/start-linux.sh` 启动，包与验证清单位于 `artifacts/linux/`。本人账号、GNOME 通知目视、Ubuntu 24.04 和常规系统安装仍待验收；见 [Ubuntu 使用说明](docs/Ubuntu安装与使用.md)。
+2026-11-14 Ubuntu 原生桌面开发预览更新为 `1.2.0~ubuntu5`：修复设置覆盖同步结果、手动课程误触发采集及跨学期选课丢失；补齐自定义课程管理、同步和任务详情、加密备份恢复、通知回执与失败重试。完整包验证通过 295 项 Linux 检查、47 项共享移动端检查、47 项 Python/GTK/WebKit/包测试。源码可用 `bash scripts/start-linux.sh` 启动；包与验证清单位于 `artifacts/linux/`。本人账号、GNOME 通知目视、Ubuntu 24.04 和常规系统安装仍待验收；见 [Ubuntu 使用说明](docs/Ubuntu安装与使用.md)。
 
 提供 Windows 安装版与独立 Android 手机版。Windows 使用 C# / .NET 10 / WPF / WebView2 / SQLite，Android 使用原生界面、系统 WebView 和本机 SQLite。已接入学习通、雨课堂、长江雨课堂、中国大学 MOOC、学堂在线、智慧树、旧版 U 校园和 PTA 的官方登录后任务采集；各平台覆盖范围见下方说明。首页统一显示已选课程的全平台、全状态任务，支持统计和同步。FiF 按要求停止适配，保留手动任务与历史数据。
 
