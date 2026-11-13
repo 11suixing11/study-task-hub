@@ -1,6 +1,8 @@
 from gi.repository import Gtk, Gio, GObject, Adw
 from .ui import PLATFORMS, STATES, label, margins, on_result
 
+TASK_STATES = STATES[1:]
+
 class TaskRow(GObject.Object):
     def __init__(self, view):
         super().__init__()
@@ -89,7 +91,9 @@ class Dashboard(Gtk.Box):
         self.open_button = Gtk.Button(label="打开官方任务 ↗", sensitive=False)
         self.open_button.connect("clicked", lambda *_: self.open_selected())
         self.details.append(self.open_button)
-        self.state_action = Gtk.DropDown.new_from_strings([text for _, text in STATES])
+        self.details.append(label("任务状态", "heading"))
+        self.state_action = Gtk.DropDown.new_from_strings([text for _, text in TASK_STATES])
+        self.state_action.set_sensitive(False)
         self.details.append(self.state_action)
         self.state_button = Gtk.Button(label="更新任务状态", sensitive=False)
         self.state_button.connect("clicked", lambda *_: self.change_state())
@@ -187,9 +191,12 @@ class Dashboard(Gtk.Box):
         self.selected_detail = None
         for button in (self.edit_button, self.open_button, self.state_button, self.delete_button):
             button.set_sensitive(False)
+        self.state_action.set_sensitive(False)
         if not selected:
             self.detail_title.set_text("选择一个任务")
             self.detail_body.set_text("查看时间、备注和任务状态。")
+            if self.content.get_collapsed():
+                self.content.set_show_sidebar(False)
             return
         def success(detail):
             if generation != self.details_generation or self.disposed:
@@ -199,6 +206,8 @@ class Dashboard(Gtk.Box):
             for button in (self.edit_button, self.open_button, self.state_button, self.delete_button):
                 button.set_sensitive(True)
             view, task = detail["view"], detail["view"]["task"]
+            self.state_action.set_selected([state for state, _ in TASK_STATES].index(task["state"]))
+            self.state_action.set_sensitive(True)
             self.detail_title.set_text(task["title"])
             self.detail_body.set_text(f"{task['courseName']}\n{view['stateLabel']} · {view['deadlineLabel']}\n\n{task['notes'] or '暂无备注'}" + (f"\n\n{view['linkIssue']}" if view.get("linkIssue") else ""))
         on_result(self.bridge.request_async("get-task", {"id": selected.view["task"]["id"]}), success, self.show_error)
@@ -224,7 +233,7 @@ class Dashboard(Gtk.Box):
         on_result(self.bridge.request_async("resolve-task", {"id":self.selected_detail["view"]["task"]["id"]}), opened, failure)
 
     def change_state(self):
-        if not self.selected_detail or self.state_action.get_selected() == 0:
+        if not self.selected_detail:
             return
         task = self.selected_detail["view"]["task"]
         self.state_button.set_sensitive(False)
@@ -232,7 +241,7 @@ class Dashboard(Gtk.Box):
             self.state_button.set_sensitive(True)
             self.show_error(message)
         on_result(self.bridge.request_async("set-state", {"id": task["id"], "revision": task["revision"],
-            "state": STATES[self.state_action.get_selected()][0]}), lambda _: self.refresh(), failure)
+            "state": TASK_STATES[self.state_action.get_selected()][0]}), lambda _: self.refresh(), failure)
 
     def confirm_delete(self):
         if not self.selected_detail:

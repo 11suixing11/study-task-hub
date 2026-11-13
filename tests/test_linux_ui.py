@@ -3,6 +3,59 @@ import importlib.util
 from linux_ui_helpers import TestAppFixture
 
 class DashboardChecks(unittest.TestCase):
+    def test_detail_state_follows_selection_and_can_restore_pending(self):
+        with TestAppFixture() as fx:
+            tasks=[]
+            for title in ("待办任务","完成任务"):
+                task=fx.request("create-task",{"title":title,"platformId":"pta","courseName":"","deadlineKind":"unknown","scoreText":"","notes":""})["view"]["task"]
+                if title=="完成任务":task=fx.request("set-state",{"id":task["id"],"revision":1,"state":"completed"})["view"]["task"]
+                tasks.append(task)
+            dashboard=fx.window.dashboard;dashboard.refresh()
+            fx.wait(lambda:dashboard.task_model.get_n_items()==2)
+            completed=next(i for i in range(2) if dashboard.task_model.get_item(i).view["task"]["id"]==tasks[1]["id"])
+            dashboard.selection.set_selected(completed)
+            fx.wait(lambda:dashboard.selected_detail is not None)
+            self.assertEqual(dashboard.state_action.get_selected_item().get_string(),"已完成")
+            labels=[dashboard.state_action.get_model().get_item(i).get_string() for i in range(dashboard.state_action.get_model().get_n_items())]
+            self.assertNotIn("全部状态",labels)
+            dashboard.state_action.set_selected(labels.index("待办"))
+            dashboard.state_button.emit("clicked")
+            fx.wait(lambda:fx.request("get-task",{"id":tasks[1]["id"]})["view"]["task"]["state"]=="pending")
+            fx.wait(lambda:dashboard.selected_detail is not None and dashboard.selected_detail["view"]["task"]["state"]=="pending")
+            self.assertEqual(dashboard.state_action.get_selected_item().get_string(),"待办")
+    def test_every_display_state_filter_shows_matching_tasks(self):
+        with TestAppFixture() as fx:
+            states=["pending","completed","ignored","returned","needsReview"]
+            for state in states:
+                task=fx.request("create-task",{"title":"合成 "+state,"platformId":"pta","courseName":"","deadlineKind":"unknown","scoreText":"","notes":""})["view"]["task"]
+                if state=="returned":
+                    task=fx.request("set-state",{"id":task["id"],"revision":1,"state":"completed"})["view"]["task"]
+                if state!="pending":fx.request("set-state",{"id":task["id"],"revision":task["revision"],"state":state})
+            dashboard=fx.window.dashboard;dashboard.refresh()
+            fx.wait(lambda:dashboard.task_model.get_n_items()==5)
+            for index,state in enumerate(states,1):
+                dashboard.state_filter.set_selected(index)
+                fx.wait(lambda:not dashboard.loading and dashboard.task_model.get_n_items()==1 and dashboard.task_model.get_item(0).view["task"]["state"]==state)
+                self.assertFalse(dashboard.error_label.get_visible())
+            dashboard.state_filter.set_selected(0)
+            fx.wait(lambda:not dashboard.loading and dashboard.task_model.get_n_items()==5)
+
+    def test_filter_change_closes_details_when_selection_is_filtered_out(self):
+        with TestAppFixture(width=1000,height=700) as fx:
+            for title in ("待办任务","已完成任务"):
+                task=fx.request("create-task",{"title":title,"platformId":"pta","courseName":"","deadlineKind":"unknown","scoreText":"","notes":""})["view"]["task"]
+                if title=="已完成任务":fx.request("set-state",{"id":task["id"],"revision":1,"state":"completed"})
+            dashboard=fx.window.dashboard;dashboard.refresh()
+            fx.wait(lambda:dashboard.task_model.get_n_items()==2)
+            dashboard.state_filter.set_selected(1)
+            fx.wait(lambda:not dashboard.loading and dashboard.task_model.get_n_items()==1)
+            dashboard.selection.set_selected(0)
+            fx.wait(lambda:dashboard.selected_detail is not None and dashboard.content.get_show_sidebar())
+            self.assertTrue(dashboard.content.get_collapsed())
+            dashboard.state_filter.set_selected(2)
+            fx.wait(lambda:not dashboard.loading and dashboard.task_model.get_item(0).view["task"]["state"]=="completed")
+            self.assertIsNone(dashboard.selected_detail)
+            self.assertFalse(dashboard.content.get_show_sidebar(),"Empty detail overlay blocks the filtered task list")
     def test_older_search_response_cannot_replace_current_filter(self):
         import concurrent.futures
         import time
@@ -181,7 +234,8 @@ class EditorChecks(unittest.TestCase):
             fx.wait(lambda: dashboard.task_model.get_n_items() == 1)
             dashboard.selection.set_selected(0)
             fx.wait(lambda: dashboard.selected_detail is not None)
-            dashboard.state_action.set_selected(2)
+            labels=[dashboard.state_action.get_model().get_item(i).get_string() for i in range(dashboard.state_action.get_model().get_n_items())]
+            dashboard.state_action.set_selected(labels.index("已完成"))
             dashboard.state_button.emit("clicked")
             fx.wait(lambda: fx.request("get-task", {"id": task["id"]})["view"]["task"]["state"] == "completed")
             dashboard.refresh()

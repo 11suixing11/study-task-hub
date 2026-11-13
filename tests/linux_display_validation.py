@@ -119,7 +119,7 @@ def gui_worker(ui,backend,data,output):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument("--package",type=Path,default=ROOT/"artifacts/linux/study-task-hub_1.2.0~ubuntu3_amd64.deb")
+    parser.add_argument("--package",type=Path,default=ROOT/"artifacts/linux/study-task-hub_1.2.0~ubuntu4_amd64.deb")
     parser.add_argument("--output",type=Path,default=ROOT/"artifacts/linux/verification/display")
     parser.add_argument("--worker",nargs=4,metavar=("UI","BACKEND","DATA","OUTPUT"))
     args=parser.parse_args()
