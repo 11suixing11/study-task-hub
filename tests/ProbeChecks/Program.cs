@@ -34,6 +34,7 @@ foreach (var item in diagnosticCases)
         throw new Exception("Navigation diagnostic classification failed.");
 Console.WriteLine($"PASS: {diagnosticCases.Length} secret-free navigation classification checks.");
 
+await ChaoxingIndependentSyncChecks.RunAsync();
 TaskStoreChecks.Run();
 TaskMetadataChecks.Run();
 await TaskNavigationChecks.RunAsync();

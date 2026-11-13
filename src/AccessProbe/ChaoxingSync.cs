@@ -381,9 +381,18 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
                 cancellation.ThrowIfCancellationRequested();
                 store.CheckCourseRecordingRevision("chaoxing", recordingRevision, cancellation);
                 Report($"正在读取课程：{course.Name}（{coursesRead + 1}/{selectedCourses} 门已选课程）");
+                ChaoxingPage entry;
                 try
                 {
-                    var entry = await Fetch(course.PageUri, cancellation); RequirePage(entry);
+                    entry = await Fetch(course.PageUri, cancellation); RequirePage(entry);
+                    if (course.Name.Length > 200) throw new SyncFailure("SYNC003", "课程名称超过保存长度，未保存此课程任务。");
+                }
+                catch (SyncFailure failure) when (failure.Code != "SYNC001" && failure.Code != "SYNC008")
+                { Problem(failure.Code, course.Name, failure.Message); continue; }
+
+                // Both lists share the course page, but a work-list failure must not skip the exam list.
+                try
+                {
                     var workAddress = await Task.Run(() => ChaoxingSyncParser.ReadWorkListAddress(entry.Html, course), cancellation);
                     if (workAddress is null) throw new SyncFailure("SYNC005", "课程页未返回可用的作业入口，不能确认此课程没有作业。");
                     var workQueue = new Queue<Uri>(); workQueue.Enqueue(workAddress);
@@ -416,12 +425,16 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
                     if (!covered) Problem("SYNC007", course.Name, "存在尚未识别的作业分页或达到读取上限，此课程任务可能不完整。");
                     if (skipped > 0) Problem("SYNC006", course.Name, $"{skipped} 条作业的名称、链接或课程归属无法确认，未自动保存这些条目。");
                     if (course.Name == "课程名称待识别") Problem("SYNC003", course.Name, "已读取任务，但课程名称尚未识别。");
-                    if (course.Name.Length > 200) throw new SyncFailure("SYNC003", "课程名称超过保存长度，未保存此课程任务。");
                     var imported = await Task.Run(() => store.ImportWorks(courseRows.Values.ToArray(), course.Name, DateTimeOffset.UtcNow, cancellation, recordingRevision), cancellation);
                     added += imported.Added; updated += imported.Updated; coursesRead++;
                     foreach (var row in courseRows) rowsByKey.TryAdd(row.Key, row.Value);
                     Report($"已读取 {coursesRead}/{selectedCourses} 门已选课程，新增 {added} 条、更新 {updated} 条。");
+                }
+                catch (SyncFailure failure) when (failure.Code != "SYNC001" && failure.Code != "SYNC008")
+                { Problem(failure.Code, course.Name, failure.Message); }
 
+                try
+                {
                     // The exam list belongs to this course and is signed separately from the work list.
                     var examAddress = await Task.Run(() => ChaoxingSyncParser.ReadExamListAddress(entry.Html, course), cancellation);
                     if (examAddress is null)
@@ -441,13 +454,15 @@ public sealed class ChaoxingSynchronizer(TaskStore store, IChaoxingPageReader re
                         examRows.Add(row with { TimeObservedAtUtc = examObservedAt });
                     }
                     examsUnresolved += courseExamsUnresolved;
-                    examTasks += examRows.Count;
                     if (examList.PaginationUnresolved)
                         Problem("SYNC007", course.Name, "考试列表存在尚未识别的分页，此课程考试可能不完整。");
                     if (courseExamsUnresolved > 0)
                         Problem("SYNC006", course.Name, $"{courseExamsUnresolved} 条考试的名称、入口或课程归属无法确认，未自动保存这些条目。");
                     var examImported = await Task.Run(() => store.ImportExams(examRows, course, examObservedAt, cancellation, recordingRevision), cancellation);
                     examsAdded += examImported.Added; examsUpdated += examImported.Updated; examsUnresolved += examImported.Unresolved;
+                    examTasks += examImported.Added + examImported.Updated;
+                    if (examImported.Unresolved > 0)
+                        Problem("SYNC006", course.Name, $"{examImported.Unresolved} 条考试的课程归属无法确认，未保存；本次同步未完成，请核对。");
                     if (examImported.Added + examImported.Updated > 0)
                         Report($"考试列表：新增 {examsAdded} 条、更新 {examsUpdated} 条。");
                 }
