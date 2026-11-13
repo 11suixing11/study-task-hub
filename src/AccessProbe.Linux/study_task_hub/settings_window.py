@@ -5,6 +5,7 @@ class SettingsWindow(Adw.Window):
     def __init__(self, parent, bridge):
         super().__init__(transient_for=parent, modal=True, title="设置")
         self.bridge, self.settings = bridge, None
+        self.parent=parent
         self.closed = False
         self.connect("close-request", self.on_close)
         self.set_default_size(560, 420)
@@ -15,6 +16,8 @@ class SettingsWindow(Adw.Window):
         self.automatic = Gtk.CheckButton(label="应用运行时每 30 分钟采集已选课程")
         body.append(self.notifications)
         body.append(self.automatic)
+        backup=Gtk.Button(label="备份与恢复")
+        backup.connect("clicked",self.open_backup);body.append(backup)
         body.append(label("数据保存在：", "heading"))
         location = label(str(parent.get_application().data_root), "dim-label")
         location.set_selectable(True)
@@ -42,6 +45,10 @@ class SettingsWindow(Adw.Window):
             self.save_button.set_sensitive(True)
         on_result(requested_bridge.request_async("get-settings"), loaded,
             lambda message: self.error.set_text(message) if not self.closed and self.bridge is requested_bridge else None)
+
+    def open_backup(self,*_):
+        from .backup_window import BackupWindow
+        BackupWindow(self.parent,self.bridge).present()
 
     def save(self, *_):
         if self.closed or self.settings is None:

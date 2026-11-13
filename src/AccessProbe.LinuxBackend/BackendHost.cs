@@ -9,6 +9,7 @@ public static class BackendHost
 sealed partial class BackendServer(Stream output,LinuxAppService service)
 {
     private readonly SemaphoreSlim writeGate=new(1,1);
+    private readonly SemaphoreSlim operationGate=new(1,1);
     private bool stopping;
     private SyncJobManager? jobManager;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string,SemaphoreSlim> platformMutations=new();
@@ -43,6 +44,7 @@ sealed partial class BackendServer(Stream output,LinuxAppService service)
     }
     private async Task HandleAsync(int id,string command,JsonElement args,CancellationToken cancellation)
     {
+        await operationGate.WaitAsync(cancellation);
         try
         {
             object? result=command switch
@@ -65,6 +67,7 @@ sealed partial class BackendServer(Stream output,LinuxAppService service)
         {await ErrorAsync(id,"IPC003","请求参数无效。");}
         catch(OperationCanceledException){await ErrorAsync(id,"SYNC003","操作已停止，请刷新后重试。");}
         catch{await ErrorAsync(id,"IPC006","后台操作失败，请重试或重新启动后台。");}
+        finally{operationGate.Release();}
     }
     private async Task<object?> DispatchExtensionAsync(string command,JsonElement args,CancellationToken cancellation)
     {
@@ -78,6 +81,10 @@ sealed partial class BackendServer(Stream output,LinuxAppService service)
             case "get-courses":return service.GetCourses(Text(args,"platform"));
             case "get-manual-courses":return service.GetManualCourses(Text(args,"platform"));
             case "get-sync-reports":return service.GetSyncReports(Text(args,"platform"));
+            case "create-backup":return service.CreateBackup(Text(args,"path"),Text(args,"password"));
+            case "inspect-backup":return service.InspectBackup(Text(args,"path"),Text(args,"password"));
+            case "restore-backup":
+                await Jobs.StopAllAsync();return service.RestoreBackup(Text(args,"path"),Text(args,"password"),Text(args,"fingerprint"));
             case "edit-manual-course":
                 var courseEdit=Read<ManualCourseEdit>(args);
                 return await MutatePlatformAsync(courseEdit.Platform,()=>service.UpdateManualCourse(courseEdit),cancellation);
