@@ -25,6 +25,8 @@ class TaskEditor(Adw.Window):
         self.loaded = task_id is None
         self.saved_detail = None
         self.revision = None
+        self.original_dates = {}
+        self.original_text = {}
         self.closed = False
         self.busy = False
         self.fields = {}
@@ -107,6 +109,8 @@ class TaskEditor(Adw.Window):
             if task.get(key):
                 date = datetime.datetime.fromisoformat(task[key].replace("Z", "+00:00"))
                 self.fields[field].set_text(date.astimezone(self.zone).strftime("%Y-%m-%d %H:%M"))
+                self.original_dates[field] = task[key]
+                self.original_text[field] = self.fields[field].get_text()
         self.loaded = True
         self.save_button.set_sensitive(True)
 
@@ -124,10 +128,17 @@ class TaskEditor(Adw.Window):
             except InvalidOperation:
                 raise ValueError("进度必须是 0–100 的百分比。")
         buffer = fields["notes"].get_buffer()
+        def date_input(field):
+            text = fields[field].get_text().strip()
+            if not text:
+                return None
+            if text == self.original_text.get(field):
+                return self.original_dates[field]
+            return parse_local_datetime(text, self.zone)
         return {"title": fields["title"].get_text(), "platformId": PLATFORMS[fields["platformId"].get_selected()+1][0],
             "courseName": fields["courseName"].get_text(), "deadlineKind": kind,
-            "beginIso": parse_local_datetime(fields["begin"].get_text().strip(), self.zone) if fields["begin"].get_text().strip() else None,
-            "deadlineIso": parse_local_datetime(fields["deadline"].get_text().strip(), self.zone) if kind == "known" else None,
+            "beginIso": date_input("begin"),
+            "deadlineIso": date_input("deadline") if kind == "known" else None,
             "link": fields["link"].get_text().strip() or None, "progressPercent": progress,
             "scoreText": fields["scoreText"].get_text(), "notes": buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), True),
             "priorityOverride": fields["priorityOverride"].get_selected() or None,

@@ -19,7 +19,7 @@ def run_until(predicate, timeout=5):
         time.sleep(0.005)
 
 class TestAppFixture:
-    def __init__(self):
+    def __init__(self, width=1200, height=800):
         from study_task_hub.application import StudyTaskHubApplication
         from study_task_hub.window import MainWindow
         Adw.init()
@@ -30,6 +30,7 @@ class TestAppFixture:
         self.application.set_application_id("io.github.studyTaskHub.Test" + uuid.uuid4().hex)
         self.application.register(None)
         self.window = MainWindow(self.application, self.bridge)
+        self.window.set_default_size(width, height)
         self.window.present()
     def request(self, command, args=None):
         return self.bridge.request_async(command, args).result(timeout=5)

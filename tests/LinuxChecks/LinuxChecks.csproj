@@ -4,4 +4,12 @@
     <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../src/AccessProbe.LinuxCore/AccessProbe.LinuxCore.csproj" /><ProjectReference Include="../../src/AccessProbe.LinuxBackend/AccessProbe.LinuxBackend.csproj" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="../PtaFixtures.cs" Link="Fixtures/PtaFixtures.cs" />
+    <Compile Include="../XuetangFixtures.cs" Link="Fixtures/XuetangFixtures.cs" />
+    <Compile Include="../UcampusFixtures.cs" Link="Fixtures/UcampusFixtures.cs" />
+    <Compile Include="../MetadataFixtures.cs" Link="Fixtures/MetadataFixtures.cs" />
+    <Compile Include="../../src/AccessProbe.Android/MobileSyntheticChecks.cs" Link="Fixtures/MobileSyntheticChecks.cs" />
+    <Compile Include="../../src/AccessProbe.Android/MobilePasswordlessLogin.cs" Link="Fixtures/MobilePasswordlessLogin.cs" />
+  </ItemGroup>
 </Project>

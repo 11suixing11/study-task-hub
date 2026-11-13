@@ -46,8 +46,10 @@ class Dashboard(Gtk.Box):
         self.body.set_start_child(sidebar)
         self.body.set_resize_start_child(False)
         self.body.set_shrink_start_child(False)
-        self.content = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
-        self.content.set_position(540)
+        self.content = Adw.OverlaySplitView(sidebar_position=Gtk.PackType.END)
+        self.content.set_min_sidebar_width(280)
+        self.content.set_max_sidebar_width(360)
+        self.content.set_sidebar_width_fraction(0.35)
         center = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.total_label = margins(label("", "dim-label"))
         center.append(self.total_label)
@@ -70,9 +72,13 @@ class Dashboard(Gtk.Box):
         self.load_more_button = Gtk.Button(label="加载更多任务")
         self.load_more_button.connect("clicked", lambda *_: self.load_more())
         center.append(margins(self.load_more_button))
-        self.content.set_start_child(center)
+        self.content.set_content(center)
         self.details = margins(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12), 16)
         self.details.set_size_request(235, -1)
+        self.back_button = Gtk.Button(label="返回任务清单", visible=False)
+        self.back_button.connect("clicked", lambda *_: self.content.set_show_sidebar(False))
+        self.details.append(self.back_button)
+        self.content.connect("notify::collapsed", lambda *_: self.back_button.set_visible(self.content.get_collapsed()))
         self.detail_title = label("选择一个任务", "title-2")
         self.detail_body = label("查看时间、备注和任务状态。", "dim-label")
         self.details.append(self.detail_title)
@@ -80,6 +86,9 @@ class Dashboard(Gtk.Box):
         self.edit_button = Gtk.Button(label="编辑任务", sensitive=False)
         self.edit_button.connect("clicked", lambda *_: self.edit_selected())
         self.details.append(self.edit_button)
+        self.open_button = Gtk.Button(label="打开官方任务 ↗", sensitive=False)
+        self.open_button.connect("clicked", lambda *_: self.open_selected())
+        self.details.append(self.open_button)
         self.state_action = Gtk.DropDown.new_from_strings([text for _, text in STATES])
         self.details.append(self.state_action)
         self.state_button = Gtk.Button(label="更新任务状态", sensitive=False)
@@ -89,8 +98,7 @@ class Dashboard(Gtk.Box):
         self.delete_button.add_css_class("destructive-action")
         self.delete_button.connect("clicked", lambda *_: self.confirm_delete())
         self.details.append(self.delete_button)
-        self.content.set_end_child(Gtk.ScrolledWindow(child=self.details))
-        self.content.set_shrink_end_child(False)
+        self.content.set_sidebar(Gtk.ScrolledWindow(child=self.details, hscrollbar_policy=Gtk.PolicyType.NEVER))
         self.body.set_end_child(self.content)
         self.append(self.body)
         self.refresh()
@@ -177,7 +185,7 @@ class Dashboard(Gtk.Box):
         generation = self.details_generation
         selected = self.selection.get_selected_item()
         self.selected_detail = None
-        for button in (self.edit_button, self.state_button, self.delete_button):
+        for button in (self.edit_button, self.open_button, self.state_button, self.delete_button):
             button.set_sensitive(False)
         if not selected:
             self.detail_title.set_text("选择一个任务")
@@ -187,7 +195,8 @@ class Dashboard(Gtk.Box):
             if generation != self.details_generation or self.disposed:
                 return
             self.selected_detail = detail
-            for button in (self.edit_button, self.state_button, self.delete_button):
+            self.content.set_show_sidebar(True)
+            for button in (self.edit_button, self.open_button, self.state_button, self.delete_button):
                 button.set_sensitive(True)
             view, task = detail["view"], detail["view"]["task"]
             self.detail_title.set_text(task["title"])
@@ -198,6 +207,21 @@ class Dashboard(Gtk.Box):
         if self.selected_detail:
             from .task_editor import TaskEditor
             TaskEditor(self.parent, self.bridge, self.selected_detail["view"]["task"]["id"]).present()
+
+    def open_selected(self):
+        if not self.selected_detail:
+            return
+        self.open_button.set_sensitive(False)
+        def opened(value):
+            self.open_button.set_sensitive(True)
+            try:
+                Gio.AppInfo.launch_default_for_uri(value["address"], None)
+            except Exception:
+                self.show_error("系统浏览器未能打开任务，请检查默认浏览器后重试。")
+        def failure(message):
+            self.open_button.set_sensitive(True)
+            self.show_error(message)
+        on_result(self.bridge.request_async("resolve-task", {"id":self.selected_detail["view"]["task"]["id"]}), opened, failure)
 
     def change_state(self):
         if not self.selected_detail or self.state_action.get_selected() == 0:

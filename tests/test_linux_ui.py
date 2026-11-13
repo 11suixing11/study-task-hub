@@ -3,6 +3,58 @@ import importlib.util
 from linux_ui_helpers import TestAppFixture
 
 class DashboardChecks(unittest.TestCase):
+    def test_older_search_response_cannot_replace_current_filter(self):
+        import concurrent.futures
+        import time
+        from linux_ui_helpers import run_until
+        with TestAppFixture() as fx:
+            fx.request("create-task",{"title":"数学作业","platformId":"pta","courseName":"","deadlineKind":"unknown","scoreText":"","notes":""})
+            dashboard=fx.window.dashboard
+            dashboard.refresh()
+            fx.wait(lambda:dashboard.task_model.get_n_items()==1)
+            pending=[]
+            class DelayedResponses:
+                def request_async(self,command,args=None):
+                    value=fx.bridge.request_async(command,args).result(timeout=5)
+                    future=concurrent.futures.Future()
+                    pending.append((future,value))
+                    return future
+            dashboard.bridge=DelayedResponses()
+            dashboard.search_entry.set_text("数学")
+            dashboard.refresh()
+            dashboard.search_entry.set_text("程序")
+            dashboard.refresh()
+            latest=pending[-1]
+            older=next(item for item in pending if item[1]["filteredTotal"]==1)
+            latest[0].set_result(latest[1])
+            fx.wait(lambda:dashboard.task_model.get_n_items()==0)
+            older[0].set_result(older[1])
+            until=time.monotonic()+0.1
+            run_until(lambda:time.monotonic()>until)
+            self.assertEqual(dashboard.task_model.get_n_items(),0)
+            self.assertEqual(dashboard.page["filteredTotal"],0)
+    def test_large_font_detail_actions_fit_inside_window(self):
+        from gi.repository import Gtk
+        settings=Gtk.Settings.get_default()
+        original=settings.get_property("gtk-font-name")
+        settings.set_property("gtk-font-name","Sans 16")
+        try:
+            with TestAppFixture(width=1000,height=700) as fx:
+                fx.request("create-task",{"title":"大字体详情","platformId":"pta","courseName":"","deadlineKind":"unknown","scoreText":"","notes":""})
+                dashboard=fx.window.dashboard
+                dashboard.refresh()
+                fx.wait(lambda:dashboard.task_model.get_n_items()==1)
+                dashboard.selection.set_selected(0)
+                fx.wait(lambda:dashboard.selected_detail is not None)
+                from linux_ui_helpers import run_until
+                import time
+                until=time.monotonic()+0.2
+                run_until(lambda:time.monotonic()>until)
+                ok,bounds=dashboard.open_button.compute_bounds(fx.window)
+                self.assertTrue(ok)
+                self.assertLessEqual(bounds.get_x()+bounds.get_width(),fx.window.get_width()+1,"Detail action is horizontally clipped")
+        finally:
+            settings.set_property("gtk-font-name",original)
     def test_dashboard_queries_real_backend_and_search_filters(self):
         with TestAppFixture() as fx:
             self.assertTrue(hasattr(fx.window, "dashboard"), "Native dashboard is not implemented")
@@ -48,6 +100,11 @@ class DashboardChecks(unittest.TestCase):
             dashboard.refresh()
             fx.wait(lambda: dashboard.error_label.get_visible())
             self.assertEqual(dashboard.task_model.get_n_items(), 1)
+            self.assertTrue(hasattr(fx.window,"restart_backend"), "Backend recovery is not implemented")
+            fx.window.restart_backend()
+            fx.wait(lambda: fx.window.bridge is not fx.bridge and not dashboard.error_label.get_visible())
+            self.assertEqual(dashboard.task_model.get_n_items(), 1)
+            fx.window.bridge.close()
 
 class EditorChecks(unittest.TestCase):
     def editor_type(self):
@@ -103,6 +160,18 @@ class EditorChecks(unittest.TestCase):
             with self.assertRaises(ValueError):
                 parse_local_datetime(text, ZoneInfo("Europe/Berlin"))
 
+    def test_editing_notes_preserves_existing_deadline_seconds(self):
+        Editor = self.editor_type()
+        with TestAppFixture() as fx:
+            task=fx.request("create-task",{"title":"保留原日期","platformId":"pta","courseName":"","deadlineKind":"known","deadlineIso":"2026-11-14T20:00:59+08:00","notes":"","scoreText":""})["view"]["task"]
+            editor=Editor(fx.window,fx.bridge,task["id"])
+            editor.present()
+            fx.wait(lambda:editor.loaded)
+            editor.fields["notes"].get_buffer().set_text("仅修改备注")
+            editor.save_button.emit("clicked")
+            fx.wait(lambda:editor.saved_detail is not None)
+            self.assertEqual(fx.request("get-task",{"id":task["id"]})["view"]["task"]["deadlineUtc"],"2026-11-14T12:00:59+00:00")
+
     def test_state_and_delete_confirmation_use_backend(self):
         self.editor_type()
         with TestAppFixture() as fx:
@@ -123,5 +192,20 @@ class EditorChecks(unittest.TestCase):
             dialog = dashboard.confirm_delete()
             dialog.emit("response", "delete")
             fx.wait(lambda: fx.request("snapshot")["total"] == 0)
+
+class PlatformChecks(unittest.TestCase):
+    def test_platforms_show_eight_automatic_sources_and_manual_fif(self):
+        self.assertIsNotNone(importlib.util.find_spec("study_task_hub.platform_window"), "Platform management is not implemented")
+        from study_task_hub.platform_window import PlatformWindow
+        with TestAppFixture() as fx:
+            platforms = PlatformWindow(fx.window, fx.bridge)
+            platforms.present()
+            fx.wait(lambda: len(platforms.views) == 9)
+            self.assertEqual(len([p for p in platforms.views if p["loginUri"]]), 8)
+            platforms.start_sync("pta", True)
+            fx.wait(lambda: not platforms.active_jobs and platforms.last_result is not None)
+            self.assertTrue(platforms.last_result["result"]["loginRequired"])
+            self.assertEqual(fx.request("snapshot")["total"], 0)
+            platforms.destroy()
 
 if __name__=="__main__":unittest.main()

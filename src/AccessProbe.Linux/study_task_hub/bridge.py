@@ -2,6 +2,8 @@ import concurrent.futures
 import json
 import subprocess
 import threading
+import queue
+import time
 
 class BackendError(Exception):
     def __init__(self, code, message):
@@ -16,12 +18,15 @@ class BackendBridge:
         self._write_lock = threading.Lock()
         self._next_id = 0
         self._closed = False
+        self._outgoing = queue.Queue(maxsize=32)
         self.process = subprocess.Popen([str(backend_path), "--data-root", str(data_root)], stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
         self._reader = threading.Thread(target=self._read, daemon=True)
         self._stderr = threading.Thread(target=self._drain, daemon=True)
+        self._writer = threading.Thread(target=self._write, daemon=True)
         self._reader.start()
         self._stderr.start()
+        self._writer.start()
     def request_async(self, command, args=None):
         future = concurrent.futures.Future()
         with self._lock:
@@ -38,18 +43,33 @@ class BackendBridge:
             future.set_exception(BackendError("IPC003", "请求超过大小限制。"))
             return future
         try:
-            with self._write_lock:
+            self._outgoing.put_nowait(payload)
+        except queue.Full:
+            with self._lock:
+                self._pending.pop(request_id, None)
+            future.set_exception(BackendError("IPC003", "后台请求过多，请等待当前操作后重试。"))
+        return future
+    def _write(self):
+        while True:
+            payload = self._outgoing.get()
+            if payload is None or self._closed:
+                return
+            try:
                 view = memoryview(payload)
                 while view:
                     count = self.process.stdin.write(view)
                     if not count:
                         raise BrokenPipeError
                     view = view[count:]
-        except (OSError, ValueError):
-            self._fail_all()
-        return future
+            except (OSError, ValueError):
+                self._fail_all()
+                return
     def subscribe_events(self, callback):
         self._events.append(callback)
+        def unsubscribe():
+            if callback in self._events:
+                self._events.remove(callback)
+        return unsubscribe
     def _read(self):
         try:
             while line := self.process.stdout.readline(16 * 1024 * 1024 + 2):
@@ -90,15 +110,16 @@ class BackendBridge:
         for future in pending.values():
             if not future.done():
                 future.set_exception(BackendError("IPC004", "后台已断开，请重新启动后台；未保存的输入仍保留。"))
-    def close(self):
+    def close(self, timeout=5):
+        deadline = time.monotonic() + timeout
         if self.process.poll() is None:
             try:
-                self.request_async("shutdown").result(timeout=5)
+                self.request_async("shutdown").result(timeout=max(0, deadline-time.monotonic()))
             except Exception:
                 pass
             try:
                 self.process.stdin.close()
-                self.process.wait(timeout=5)
+                self.process.wait(timeout=max(0, deadline-time.monotonic()))
             except (subprocess.TimeoutExpired, OSError, ValueError):
                 self.process.terminate()
                 try:
@@ -107,6 +128,11 @@ class BackendBridge:
                     self.process.kill()
                     self.process.wait()
         self._fail_all()
+        try:
+            self._outgoing.put_nowait(None)
+        except queue.Full:
+            pass
+        self._writer.join(timeout=1)
         self._reader.join(timeout=1)
         self._stderr.join(timeout=1)
         for stream in (self.process.stdin, self.process.stdout, self.process.stderr):

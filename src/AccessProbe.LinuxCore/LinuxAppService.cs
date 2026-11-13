@@ -24,5 +24,10 @@ public sealed partial class LinuxAppService : IDisposable
     private void EnsureOpen() => ObjectDisposedException.ThrowIf(disposed,this);
     public AppSettings LoadSettings() { EnsureOpen(); return store.LoadSettings(); }
     public void SaveSettings(AppSettings settings) { EnsureOpen(); store.SaveSettings(settings); }
-    public void Dispose() { if(disposed)return; disposed=true; store.Changed-=Changed; protector.Dispose(); }
+    public void Dispose()
+    {
+        if(disposed)return;
+        try{ReleaseAllNotificationClaims();}
+        finally{disposed=true;store.Changed-=Changed;protector.Dispose();}
+    }
 }

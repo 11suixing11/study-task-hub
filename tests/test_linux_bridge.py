@@ -1,10 +1,27 @@
 import unittest
 import tempfile
 import os
+import time
+from pathlib import Path
 from linux_test_paths import backend_path
 from study_task_hub.bridge import BackendBridge, BackendError
 
 class BridgeChecks(unittest.TestCase):
+    def test_large_request_does_not_block_when_backend_is_not_reading(self):
+        with tempfile.TemporaryDirectory(prefix="study-task-hub-pipe-") as root:
+            script=Path(root)/"blocked-backend"
+            script.write_text("#!/usr/bin/python3\nimport time\ntime.sleep(2)\n",encoding="utf-8")
+            script.chmod(0o700)
+            bridge=BackendBridge(script, root)
+            try:
+                started=time.monotonic()
+                future=bridge.request_async("capture-session", {"value":"x"*1024*1024})
+                self.assertLess(time.monotonic()-started,0.5,"UI request blocked on the subprocess pipe")
+                bridge.process.terminate()
+                with self.assertRaises(BackendError):
+                    future.result(timeout=3)
+            finally:
+                bridge.close()
     def test_real_backend_roundtrip_persistence_and_error(self):
         with tempfile.TemporaryDirectory(prefix="study-task-hub-check-") as root:
             os.chmod(root, 0o700)

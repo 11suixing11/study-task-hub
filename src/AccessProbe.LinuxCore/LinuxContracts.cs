@@ -11,3 +11,7 @@ public sealed record DashboardCounts(int Pending, int Completed, int Ignored, in
 public sealed record TaskPage(long SnapshotVersion, int Offset, int Total, int FilteredTotal, int HiddenTotal, DashboardCounts Summary,
     IReadOnlyList<LinuxTaskView> Items, IReadOnlyDictionary<string,int> PlatformCounts);
 public sealed record TaskDetail(LinuxTaskView View, string? Link);
+public sealed record BrowserSessionInput(string PlatformId,string PageUri,MetadataSessionCookie[] Cookies,string? AccountId,string? Token,string? TokenBinding);
+public sealed record PlatformView(string Id,string Name,string? LoginUri,PlatformSessionInfo Session,CourseRecordingSettings Recording,string TaskSyncOutcome,string? TaskSyncAtIso);
+public sealed record NavigationView(string Address,string Destination,string Message);
+public sealed record NotificationView(string Id,string TaskId,string Title,string Body);
