@@ -77,6 +77,7 @@ sealed partial class BackendServer(Stream output,LinuxAppService service)
             case "clear-session":return await MutatePlatformAsync(Text(args,"platform"),()=>ClearSession(args),cancellation);
             case "get-courses":return service.GetCourses(Text(args,"platform"));
             case "get-manual-courses":return service.GetManualCourses(Text(args,"platform"));
+            case "get-sync-reports":return service.GetSyncReports(Text(args,"platform"));
             case "edit-manual-course":
                 var courseEdit=Read<ManualCourseEdit>(args);
                 return await MutatePlatformAsync(courseEdit.Platform,()=>service.UpdateManualCourse(courseEdit),cancellation);

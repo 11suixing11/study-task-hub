@@ -1,5 +1,6 @@
 from gi.repository import Gtk, Gio, GObject, Adw
 from .ui import PLATFORMS, STATES, label, margins, on_result
+from .task_details import format_task_detail
 
 TASK_STATES = STATES[1:]
 
@@ -209,7 +210,7 @@ class Dashboard(Gtk.Box):
             self.state_action.set_selected([state for state, _ in TASK_STATES].index(task["state"]))
             self.state_action.set_sensitive(True)
             self.detail_title.set_text(task["title"])
-            self.detail_body.set_text(f"{task['courseName']}\n{view['stateLabel']} · {view['deadlineLabel']}\n\n{task['notes'] or '暂无备注'}" + (f"\n\n{view['linkIssue']}" if view.get("linkIssue") else ""))
+            self.detail_body.set_text(format_task_detail(detail))
         on_result(self.bridge.request_async("get-task", {"id": selected.view["task"]["id"]}), success, self.show_error)
 
     def edit_selected(self):

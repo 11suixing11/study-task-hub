@@ -71,6 +71,7 @@ class PlatformWindow(Adw.Window):
                 ("刷新课程", lambda _, p=view["id"]: self.start_sync(p, True)),
                 ("选择课程", lambda _, p=view["id"]: self.pick_courses(p)),
                 ("采集任务", lambda _, p=view["id"]: self.start_sync(p, False)),
+                ("同步详情", lambda _, p=view["id"]: self.sync_details(p)),
                 ("停止读取", lambda _, p=view["id"]: self.stop_platform(p)),
                 ("清除登录", lambda _, p=view["id"]: self.clear_login(p))):
                 button = Gtk.Button(label=title)
@@ -87,6 +88,10 @@ class PlatformWindow(Adw.Window):
     def manage_courses(self,platform):
         from .manual_courses import ManualCoursesWindow
         ManualCoursesWindow(self.parent,self.bridge,platform).present()
+
+    def sync_details(self,platform):
+        from .sync_details import SyncDetailsWindow
+        SyncDetailsWindow(self,self.bridge,platform,retry=self.start_sync).present()
 
     def pick_courses(self, platform):
         from .course_picker import CoursePicker

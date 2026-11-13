@@ -12,6 +12,8 @@ static class SyncChecks
         var catalog=await service.RunSyncAsync("pta",true,null,CancellationToken.None);
         Check.True(catalog.CatalogCovered,"PTA catalog fixture must be covered");
         Check.Equal(0,service.QueryTasks(new()).Total);
+        Check.True(service.GetSyncReports("pta").Catalog is not null);
+        Check.True(service.GetSyncReports("pta").Tasks is null,"Catalog refresh overwrote task sync history");
         var courses=service.GetCourses("pta");
         Check.Equal(2,courses.Courses.Count);
         var selection=service.SelectCourses("pta",courses.Revision,[courses.Courses.Single(c=>c.Name==PtaFixtures.Course.Name).Key],true);
@@ -22,6 +24,12 @@ static class SyncChecks
         Check.Equal(5,result.Tasks);
         Check.Equal(5,service.QueryTasks(new()).Total);
         Check.Equal(1,service.QueryTasks(new()).Summary.Completed);
+        var report=service.GetSyncReports("pta").Tasks!;
+        Check.Equal(result.Tasks,report.TasksObserved);
+        Check.True(report.Metrics.ContainsKey("CoursesRead"));
+        Check.True(report.Courses.Any(c=>c.Selected&&c.ObservedTasks==5));
+        Check.Equal(result.Codes.Count,report.Problems.Select(p=>p.Code).Distinct().Count());
+        using(var restarted=new LinuxAppService(root.Path))Check.Equal(report.FinishedAtUtc,restarted.GetSyncReports("pta").Tasks!.FinishedAtUtc);
         var next=service.GetCourses("pta");
         service.SelectCourses("pta",next.Revision,[],true);
         Check.Equal(0,service.QueryTasks(new()).Total);
@@ -45,6 +53,8 @@ static class SyncChecks
             Check.Equal(count,adapter.QueryTasks(new()).Total);
             Check.True(adapter.QueryTasks(new()).Items.All(t=>t.Task.Source!=TaskSource.Manual));
             Check.True(adapter.QueryTasks(new()).Items.Any(t=>t.Task.DeadlineUtc is not null));
+            Check.Equal(count,adapter.GetSyncReports(platform).Tasks!.TasksObserved);
+            Check.True(adapter.GetSyncReports(platform).Catalog is not null);
             if(platform is "chaoxing" or "ucampus")
             {
                 var navigable=adapter.QueryTasks(new()).Items.First(t=>t.Task.CollectedNavigationKey.Length>0||t.Task.Source==TaskSource.Chaoxing);
@@ -52,6 +62,17 @@ static class SyncChecks
                 Check.True(TaskRules.IsSafeLink(opened.Address));
                 if(platform=="ucampus")Check.True(opened.Address.Contains("sign=synthetic-desktop-sign",StringComparison.Ordinal));
                 else Check.Equal(0,lastReader!.Contents.Last().Reads);
+            }
+            if(platform=="yuketang")
+            {
+                var successful=adapter.GetSyncReports(platform);
+                Check.True(successful.Tasks!.Complete);Check.True(successful.Tasks.LastSuccessfulAtUtc is not null);
+                adapter.ClearBrowserSession(platform);
+                await adapter.RunSyncAsync(platform,false,null,CancellationToken.None);
+                var failed=adapter.GetSyncReports(platform);
+                Check.Equal("login_required",failed.Tasks!.Outcome);Check.True(!failed.Tasks.Complete);
+                Check.Equal(successful.Tasks.LastSuccessfulAtUtc,failed.Tasks.LastSuccessfulAtUtc);
+                Check.Equal(successful.Catalog!.FinishedAtUtc,failed.Catalog!.FinishedAtUtc);
             }
         }
         using var regressionRoot=new TestRoot();using var protector=new LinuxDataProtector(regressionRoot.Path);
@@ -73,6 +94,7 @@ static class SyncChecks
         var cancelled=await finished.Task.WaitAsync(TimeSpan.FromSeconds(3));
         Check.Equal("SYNC003",cancelled.GetProperty("error").GetProperty("code").GetString());
         Check.Equal(0,cancellable.QueryTasks(new()).Total);
+        Check.Equal("cancelled",cancellable.GetSyncReports("pta").Catalog!.Outcome);
         await jobs.StopAllAsync();
     }
 }
