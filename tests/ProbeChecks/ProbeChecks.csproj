@@ -23,6 +23,7 @@
     <Compile Include="../../src/AccessProbe/WorkDetailParser.cs" Link="WorkDetailParser.cs" />
     <Compile Include="../../src/AccessProbe/WorkPageSnapshot.cs" Link="WorkPageSnapshot.cs" />
     <Compile Include="../../src/AccessProbe/ChaoxingSync.cs" Link="ChaoxingSync.cs" />
+    <Compile Include="../../src/AccessProbe/ChaoxingExamParser.cs" Link="ChaoxingExamParser.cs" />
     <Compile Include="../../src/AccessProbe/ChaoxingHttpReader.cs" Link="ChaoxingHttpReader.cs" />
     <Compile Include="../../src/AccessProbe/ChaoxingSessionStore.cs" Link="ChaoxingSessionStore.cs" />
   </ItemGroup>

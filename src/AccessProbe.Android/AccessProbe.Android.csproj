@@ -32,6 +32,7 @@
     <Compile Include="../AccessProbe/WorkListParser.cs" Link="Shared/WorkListParser.cs" />
     <Compile Include="../AccessProbe/WorkDetailParser.cs" Link="Shared/WorkDetailParser.cs" />
     <Compile Include="../AccessProbe/ChaoxingSync.cs" Link="Shared/ChaoxingSync.cs" />
+    <Compile Include="../AccessProbe/ChaoxingExamParser.cs" Link="Shared/ChaoxingExamParser.cs" />
     <Compile Include="../AccessProbe/ChaoxingHttpReader.cs" Link="Shared/ChaoxingHttpReader.cs" />
     <Compile Include="../AccessProbe/ChaoxingSessionStore.cs" Link="Shared/ChaoxingSessionStore.cs" />
     <Compile Include="../AccessProbe/TaskDomain.cs" Link="Shared/TaskDomain.cs" />

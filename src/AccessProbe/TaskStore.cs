@@ -281,6 +281,74 @@ public sealed partial class TaskStore
         return new(added, updated, unresolved, duplicates);
     }
 
+    // An observed exam key, scoped by course, class and the platform's own exam id.
+    public static string? ObservedExamKey(ExamTaskLocation? location)
+    {
+        if (location is null || location.ExamId.Length == 0) return null;
+        var scope = string.Join("|", location.CourseId, location.ClassId, location.ExamId);
+        return "chaoxing-exam:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(scope)));
+    }
+
+    public ImportSummary ImportExams(IReadOnlyList<ExamListTask> rows, ChaoxingCourse course, DateTimeOffset now, CancellationToken cancellation = default,
+        long? recordingRevision = null)
+    {
+        if (course.Name.Length > 200) throw new TaskValidationException("TASK001", "课程名最多 200 字。");
+        var added = 0; var updated = 0; var unresolved = 0; var duplicates = 0;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        lock (gate)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            using var connection = Open(); using var transaction = connection.BeginTransaction();
+            var notifications = ReadSettings(connection, transaction).NotificationsEnabled;
+            var recording = ReadCourseRecording(connection, transaction, "chaoxing");
+            if (recordingRevision is { } revision && recording.Revision != revision) throw new CourseRecordingChangedException();
+            var recordingKey = CourseRecordingRules.ChaoxingKey(course.CourseId, course.ClassId, course.Cpi);
+            if (!CourseRecordingRules.IsSelected(recording, recordingKey)) return new(0, 0, 0, 0);
+            foreach (var row in rows)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                var verified = row.Location is not null && ChaoxingExamParser.VerifyLocation(row.Location) ? row.Location : null;
+                var key = ObservedExamKey(verified);
+                if (key is not null && !seen.Add(key)) { duplicates++; continue; }
+                // An exam is only saved under the course that owns this import; a stray row is never reassigned.
+                if (key is null || verified!.CourseId != course.CourseId || verified.ClassId != course.ClassId) { unresolved++; continue; }
+                if (string.IsNullOrWhiteSpace(row.Title) || row.Title.Length > 300)
+                    throw new TaskValidationException("TASK001", "考试名称无效或超过 300 字，未保存本批数据。");
+                var current = Find(connection, transaction, "source_key", key);
+                var task = current ?? new TaskItem
+                {
+                    Source = TaskSource.Chaoxing, SourceKey = key, CreatedAtUtc = now.ToUniversalTime(),
+                    Title = row.Title, CourseName = string.IsNullOrWhiteSpace(course.Name) ? "课程待补充" : course.Name.Trim()
+                };
+                var window = ChaoxingExamParser.WindowText(row.DisplayedTimeText);
+                task = task with
+                {
+                    Title = task.Overrides.HasFlag(TaskOverrides.Title) ? task.Title : row.Title,
+                    CourseName = task.Overrides.HasFlag(TaskOverrides.Course) || string.IsNullOrWhiteSpace(course.Name) ? task.CourseName : course.Name.Trim(),
+                    PlatformTitle = row.Title, PlatformStatusText = row.PlatformStatusText,
+                    RecordingCourseKey = recordingKey,
+                    // The exam list text is the only window evidence this platform provides for exams.
+                    DisplayedTimeText = row.DisplayedTimeText, DetailTimeText = window, CollectedAtUtc = now.ToUniversalTime(),
+                    UpdatedAtUtc = now.ToUniversalTime(), Revision = current is null ? 1 : current.Revision + 1,
+                    Link = task.Overrides.HasFlag(TaskOverrides.Link) ? task.Link : verified.PageUri.OriginalString,
+                    LinkIssue = task.Overrides.HasFlag(TaskOverrides.Link) ? task.LinkIssue : null
+                };
+                task = ChaoxingTaskMetadata.Apply(task, row.DisplayedTimeText, row.TimeObservedAtUtc ?? now, refreshWindow: true);
+                Write(connection, transaction, task); Reconcile(connection, transaction, task, now);
+                if (current is null)
+                {
+                    added++;
+                    if (notifications && TaskRules.IsActive(task)) InsertPlan(connection, transaction, ReminderPlanner.NewTask(task, now));
+                }
+                else updated++;
+            }
+            cancellation.ThrowIfCancellationRequested();
+            transaction.Commit();
+        }
+        Changed?.Invoke();
+        return new(added, updated, unresolved, duplicates);
+    }
+
     public TaskItem SaveDetail(WorkTaskLocation location, WorkDetailParseResult detail, DateTimeOffset now, CancellationToken cancellation = default,
         long? recordingRevision = null)
     {

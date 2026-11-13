@@ -11,6 +11,7 @@
     <Compile Include="../../src/AccessProbe/WorkListParser.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../../src/AccessProbe/WorkDetailParser.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../../src/AccessProbe/ChaoxingSync.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/ChaoxingExamParser.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../../src/AccessProbe/ChaoxingHttpReader.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../../src/AccessProbe/ChaoxingSessionStore.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../../src/AccessProbe/TaskDomain.cs" Link="Shared/%(Filename)%(Extension)" />

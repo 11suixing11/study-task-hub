@@ -220,9 +220,11 @@ internal static class SessionRestartChecks
             else if (address.AbsolutePath == "/visit/stucoursemiddle")
                 result = new(HttpStatusCode.Found) { Headers = { Location = new Uri("https://mooc2-ans.chaoxing.com/mooc2-ans/mycourse/stu" + address.Query + "&enc=SYNTHETIC_ONLY&v=2") } };
             else if (address.AbsolutePath == "/mooc2-ans/mycourse/stu")
-                result = new(HttpStatusCode.OK) { Content = new StringContent("<input id='workEnc' value='SYNTHETIC_ONLY'><input id='enc' value='SYNTHETIC_ONLY'><input id='openc' value='SYNTHETIC_ONLY'>") };
+                result = new(HttpStatusCode.OK) { Content = new StringContent("<input id='workEnc' value='SYNTHETIC_ONLY'><input id='examEnc' value='SYNTHETIC_ONLY'><input id='enc' value='SYNTHETIC_ONLY'><input id='openc' value='SYNTHETIC_ONLY'>") };
             else if (address.AbsolutePath == "/mooc2/work/list")
                 result = new(HttpStatusCode.OK) { Content = new StringContent("<ul id='workList'><li onclick='goTask(this);' data='https://mooc1.chaoxing.com/mooc-ans/mooc2/work/task?courseId=101&amp;classId=201&amp;cpi=301&amp;workId=401&amp;enc=SYNTHETIC_ONLY'><div class='right-content'><p class='overHidden2'>合成作业</p><p class='status'>已完成</p></div><div class='time'>剩余 48 小时</div></li></ul>") };
+            else if (address.AbsolutePath == "/exam-ans/mooc2/exam/exam-list")
+                result = new(HttpStatusCode.OK) { Content = new StringContent("<div class='main task-list'><div class='has-content' style='display: none;'><div class='bottomList'><ul></ul></div></div></div>") };
             else if (address.AbsolutePath == "/mooc-ans/mooc2/work/task")
                 result = new(HttpStatusCode.Found) { Headers = { Location = new Uri("https://mooc1.chaoxing.com/mooc-ans/mooc2/work/view" + address.Query) } };
             else if (address.AbsolutePath == "/mooc-ans/mooc2/work/view")
