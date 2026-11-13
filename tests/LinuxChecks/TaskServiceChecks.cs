@@ -37,6 +37,17 @@ static class TaskServiceChecks
         Check.Equal(0,restarted.QueryTasks(new()).Total);
         service.SaveSettings(new(false) {AutomaticSyncEnabled=false});
         Check.True(!restarted.LoadSettings().NotificationsEnabled && !restarted.LoadSettings().AutomaticSyncEnabled);
+        var cached=service.LoadSettings();
+        using(var preferenceProtector=new LinuxDataProtector(root.Path))
+        {
+            var backgroundStore=new TaskStore(Path.Combine(root.Path,"tasks.db"),preferenceProtector);
+            backgroundStore.SaveSettings(cached with{LastSyncOutcome="completed",LastSyncAtUtc=now.AddMinutes(1),DisclaimerSeen=true});
+        }
+        service.SaveSettings(cached with{NotificationsEnabled=true});
+        Check.Equal("completed",restarted.LoadSettings().LastSyncOutcome);
+        Check.Equal(now.AddMinutes(1),restarted.LoadSettings().LastSyncAtUtc);
+        Check.True(restarted.LoadSettings().DisclaimerSeen);
+        Check.True(restarted.LoadSettings().NotificationsEnabled);
         var large=service.CreateTask(input with {Title=new string('字',300), DeadlineKind="unknown",DeadlineIso=null});
         Check.Equal(300,large.View.Task.Title.Length);
         var before=service.QueryTasks(new()).SnapshotVersion;

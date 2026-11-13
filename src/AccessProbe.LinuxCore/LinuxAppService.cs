@@ -23,7 +23,7 @@ public sealed partial class LinuxAppService : IDisposable
     private void Changed() => Interlocked.Increment(ref snapshotVersion);
     private void EnsureOpen() => ObjectDisposedException.ThrowIf(disposed,this);
     public AppSettings LoadSettings() { EnsureOpen(); return store.LoadSettings(); }
-    public void SaveSettings(AppSettings settings) { EnsureOpen(); store.SaveSettings(settings); }
+    public void SaveSettings(AppSettings settings) { EnsureOpen(); store.SaveLinuxPreferences(settings); }
     public void Dispose()
     {
         if(disposed)return;
