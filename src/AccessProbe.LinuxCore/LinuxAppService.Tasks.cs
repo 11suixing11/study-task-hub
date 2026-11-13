@@ -38,8 +38,8 @@ public sealed partial class LinuxAppService
     }
 
     public TaskDetail GetTask(string id) { EnsureOpen(); return ToDetail(store.Get(id)??throw new TaskValidationException("TASK004","任务已不存在，请刷新清单。")); }
-    public TaskDetail CreateTask(TaskInput input) { EnsureOpen(); return ToDetail(store.Create(ToDraft(input),utcNow())); }
-    public TaskDetail EditTask(string id,int revision,TaskInput input) { EnsureOpen(); return ToDetail(store.Edit(id,revision,ToDraft(input),utcNow())); }
+    public TaskDetail CreateTask(TaskInput input) { EnsureOpen(); return ToDetail(store.SaveLinuxTask(null,0,ToDraft(input),input.RecordingCourseKey,utcNow())); }
+    public TaskDetail EditTask(string id,int revision,TaskInput input) { EnsureOpen(); return ToDetail(store.SaveLinuxTask(id,revision,ToDraft(input),input.RecordingCourseKey,utcNow())); }
     public TaskDetail SetTaskState(string id,int revision,string state) { EnsureOpen(); return ToDetail(store.SetState(id,revision,ParseState(state),utcNow())); }
     public void DeleteTask(string id,int revision) { EnsureOpen(); store.Delete(id,revision); }
     private static TaskState ParseState(string value) => value switch

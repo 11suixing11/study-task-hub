@@ -26,7 +26,8 @@ public sealed partial class LinuxAppService
         var same=preference is not null?preference.Semester==semester:semester==AcademicSemester.Current(utcNow());
         var reviewed=(preference?.ReviewedKeys??recording.Courses.Select(c=>c.Key).ToArray()).ToHashSet(StringComparer.Ordinal);
         var counts=tasks.Where(TaskRules.IsActive).GroupBy(CourseRecordingRules.TaskCourseKey).ToDictionary(g=>g.Key,g=>g.Count());
-        var suggestions=recording.Courses.Select(course=>
+        var archived=store.LoadLinuxManualCourses(platform,utcNow()).Courses.Where(c=>c.Archived).Select(c=>c.Key).ToHashSet(StringComparer.Ordinal);
+        var suggestions=recording.Courses.Where(c=>!archived.Contains(c.Key)).Select(course=>
         {
             var pending=counts.GetValueOrDefault(course.Key);
             var (group,selected,reason)=CourseSelectionRules.Suggest(course,semester,pending);
@@ -69,7 +70,7 @@ internal static class CourseSelectionRules
         if(course.Detail.Contains("即将开课",StringComparison.Ordinal))return("review",false,"官网显示即将开课，请审查学期");
         return("review",true,"平台未标明学期，预勾供审查");
     }
-    private static AcademicSemester? ParseSemester(string text)
+    internal static AcademicSemester? ParseSemester(string text)
     {
         const System.Text.RegularExpressions.RegexOptions options=System.Text.RegularExpressions.RegexOptions.CultureInvariant;
         var timeout=TimeSpan.FromSeconds(1);

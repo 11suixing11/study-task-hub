@@ -10,7 +10,7 @@ try
     if (suite is "all" or "sync") await SyncChecks.RunAsync();
     if (suite is "all" or "navigation") await NavigationChecks.RunAsync();
     if (suite is "all" or "reminders") await ReminderChecks.RunAsync();
-    if (suite is "all" or "courses") await CourseSelectionChecks.RunAsync();
+    if (suite is "all" or "courses") { await CourseSelectionChecks.RunAsync(); await ManualCourseChecks.RunAsync(); }
     if (suite is not ("all" or "protection" or "tasks" or "ipc" or "sessions" or "sync" or "navigation" or "reminders" or "courses")) throw new ArgumentException("Unknown suite");
     Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new { outcome = "passed", suite, checks = Check.Count, officialNetworkAccessed = false, productionDataAccessed = false }));
 }

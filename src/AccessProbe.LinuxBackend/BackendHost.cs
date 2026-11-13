@@ -76,6 +76,12 @@ sealed partial class BackendServer(Stream output,LinuxAppService service)
                 var input=Read<BrowserSessionInput>(args);return await MutatePlatformAsync(input.PlatformId,()=>service.CaptureBrowserSession(input),cancellation);
             case "clear-session":return await MutatePlatformAsync(Text(args,"platform"),()=>ClearSession(args),cancellation);
             case "get-courses":return service.GetCourses(Text(args,"platform"));
+            case "get-manual-courses":return service.GetManualCourses(Text(args,"platform"));
+            case "edit-manual-course":
+                var courseEdit=Read<ManualCourseEdit>(args);
+                return await MutatePlatformAsync(courseEdit.Platform,()=>service.UpdateManualCourse(courseEdit),cancellation);
+            case "remove-manual-course":
+                return await MutatePlatformAsync(Text(args,"platform"),()=>service.RemoveManualCourse(Text(args,"platform"),Text(args,"key"),args.GetProperty("revision").GetInt64()),cancellation);
             case "get-course-plan":return service.GetCourseSelectionPlan(Text(args,"platform"),args.TryGetProperty("semester",out var semester)?Read<AcademicSemester>(semester):null);
             case "save-course-selection":
                 var selection=Read<ReviewedCourseSelection>(args);
@@ -97,7 +103,7 @@ sealed partial class BackendServer(Stream output,LinuxAppService service)
     }
     private SemaphoreSlim PlatformGate(string platform)
     {
-        if(!AccessProbe.CourseRecordingRules.SupportsAutomatic(platform))throw new AccessProbe.TaskValidationException("SESSION001","平台未接入。");
+        if(!AccessProbe.PlatformCatalog.Sites.Any(p=>p.Id==platform))throw new AccessProbe.TaskValidationException("SESSION001","平台未接入。");
         return platformMutations.GetOrAdd(platform,_=>new(1,1));
     }
     private async Task<object?> MutatePlatformAsync(string platform,Func<object?> action,CancellationToken cancellation)

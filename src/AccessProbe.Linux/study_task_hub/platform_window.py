@@ -54,6 +54,9 @@ class PlatformWindow(Adw.Window):
         for view in views:
             card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             card.append(label(view["name"], "title-3"))
+            manage=Gtk.Button(label="管理自定义课程")
+            manage.connect("clicked",lambda _,p=view["id"]:self.manage_courses(p))
+            card.append(manage)
             if not view["loginUri"]:
                 card.append(label("手动模式 · 可在首页新增或查看历史任务。", "dim-label"))
                 self.rows.append(card)
@@ -80,6 +83,10 @@ class PlatformWindow(Adw.Window):
     def connect_platform(self, view):
         from .login_window import LoginWindow
         LoginWindow(self.parent, self.bridge, view).present()
+
+    def manage_courses(self,platform):
+        from .manual_courses import ManualCoursesWindow
+        ManualCoursesWindow(self.parent,self.bridge,platform).present()
 
     def pick_courses(self, platform):
         from .course_picker import CoursePicker

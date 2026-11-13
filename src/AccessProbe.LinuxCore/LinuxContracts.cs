@@ -3,7 +3,8 @@ namespace AccessProbe.Linux;
 public sealed record TaskInput(string Title, string PlatformId, string CourseName,
     string DeadlineKind, string? BeginIso, string? DeadlineIso, string? Link,
     decimal? ProgressPercent, string ScoreText, string Notes, int? PriorityOverride,
-    bool ConfirmDeadline = false);
+    bool ConfirmDeadline = false)
+{ public string? RecordingCourseKey {get;init;} }
 public sealed record TaskQuery(string? Platform = null, string State = "all", string Search = "", string Sort = "priority",
     int Offset = 0, int Limit = 100, bool IncludeUnselected = false);
 public sealed record LinuxTaskView(TaskItem Task, string StateLabel, string DeadlineLabel, bool CanComplete, int Priority, string? LinkIssue);

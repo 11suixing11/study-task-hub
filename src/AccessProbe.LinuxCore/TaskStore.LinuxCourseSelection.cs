@@ -34,8 +34,9 @@ public sealed partial class TaskStore
             if(current.Revision!=input.Revision)throw new TaskValidationException("COURSE002","课程选择已更新，输入已保留，请重新加载课程。");
             var tasks=ReadRecordingTasks(connection,transaction,input.Platform);
             var courses=RecordingCourses(current,tasks).ToDictionary(c=>c.Key,StringComparer.Ordinal);
+            var manual=ReadManualCourses(connection,transaction,input.Platform,current,tasks,now);
             var keys=input.Keys.Distinct(StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
-            if(keys.Any(k=>!courses.ContainsKey(k)))throw new TaskValidationException("COURSE001","选中的课程不属于当前目录。");
+            if(keys.Any(k=>!courses.ContainsKey(k)||manual.TryGetValue(k,out var c)&&c.Archived))throw new TaskValidationException("COURSE001","选中的课程不属于当前目录或已归档。");
             var reviewed=(input.ReviewedKeys??courses.Keys.ToArray()).ToHashSet(StringComparer.Ordinal);
             if(reviewed.Any(k=>!courses.ContainsKey(k))||keys.Any(k=>!reviewed.Contains(k)))throw new TaskValidationException("COURSE001","选课审查范围无效。");
             var names=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -43,14 +44,16 @@ public sealed partial class TaskStore
             {
                 if(custom is null||string.IsNullOrWhiteSpace(custom.Name)||custom.Name.Trim().Length>200||!names.Add(custom.Name.Trim()))
                     throw new TaskValidationException("COURSE001","自定义课程名称不能为空、超过 200 字或重复。");
-                var name=custom.Name.Trim();var key=CourseRecordingRules.TaskCourseKey(new TaskItem{PlatformId=input.Platform,Source=TaskSource.Manual,CourseName=name});
-                if(courses.ContainsKey(key))throw new TaskValidationException("COURSE001","该手动课程已存在，请直接勾选。");
+                var name=custom.Name.Trim();var key=CourseRecordingRules.TaskCourseKey(new TaskItem{PlatformId=input.Platform,Source=TaskSource.Manual,CourseName=Guid.NewGuid().ToString("N")});
+                if(manual.Values.Any(c=>string.Equals(c.Name,name,StringComparison.OrdinalIgnoreCase)))throw new TaskValidationException("COURSE001","该手动课程已存在，请直接勾选或恢复归档。");
                 courses.Add(key,new(key,name,"自定义 · "+input.Semester.Label,false));reviewed.Add(key);
+                manual.Add(key,new(key,name,input.Semester));
                 if(custom.Selected)keys.Add(key);
             }
             result=current with{Revision=checked(current.Revision+1),SelectionConfirmed=true,RecordAllCourses=false,
                 HideUnselectedTasks=true,SelectedCourseKeys=keys.ToArray(),Courses=courses.Values.ToArray()};
             WriteCourseRecording(connection,transaction,input.Platform,result);
+            WriteManualCourses(connection,transaction,input.Platform,manual.Values);
             var previous=ReadLinuxCoursePreference(connection,transaction,"linux-course-selection:"+input.Platform,input.Platform);
             if(previous is not null&&current.SelectionConfirmed)
                 WriteLinuxCoursePreference(connection,transaction,PeriodKey(input.Platform,previous.Semester),previous with{SelectedKeys=current.SelectedCourseKeys.ToArray(),RecordAll=current.RecordAllCourses});

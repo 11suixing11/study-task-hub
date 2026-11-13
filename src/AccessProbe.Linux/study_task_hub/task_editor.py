@@ -30,6 +30,7 @@ class TaskEditor(Adw.Window):
         self.closed = False
         self.busy = False
         self.fields = {}
+        self.registered_courses=[];self.course_key=None;self.course_generation=0;self.manual_task=True;self.configuring_course=False
         self.connect("close-request", self.on_close)
         toolbar = Adw.ToolbarView()
         toolbar.add_top_bar(Adw.HeaderBar())
@@ -42,6 +43,10 @@ class TaskEditor(Adw.Window):
             self.add_entry(form, key, title)
         self.fields["platformId"] = Gtk.DropDown.new_from_strings([name for _, name in PLATFORMS[1:]])
         self.add_field(form, "来源平台", self.fields["platformId"])
+        self.course_choice=Gtk.DropDown.new_from_strings(["自由填写课程名称"])
+        self.add_field(form,"选择已登记的自定义课程",self.course_choice)
+        self.course_choice.connect("notify::selected",self.choose_course)
+        self.fields["platformId"].connect("notify::selected",self.reload_courses)
         form.append(label("时间安排", "title-3"))
         self.fields["deadlineKind"] = Gtk.DropDown.new_from_strings(["截止时间未知", "明确截止时间", "无截止时间"])
         self.add_field(form, "截止类型", self.fields["deadlineKind"])
@@ -79,6 +84,7 @@ class TaskEditor(Adw.Window):
         self.set_content(toolbar)
         if task_id:
             self.load_task()
+        else:self.reload_courses()
 
     def load_task(self):
         requested_bridge = self.bridge
@@ -96,6 +102,36 @@ class TaskEditor(Adw.Window):
         self.save_button.set_sensitive(self.loaded)
         if not self.loaded and self.task_id:
             self.load_task()
+        else:self.reload_courses()
+
+    def reload_courses(self,*_):
+        self.course_generation+=1;generation=self.course_generation;bridge=self.bridge
+        platform=PLATFORMS[self.fields["platformId"].get_selected()+1][0]
+        if _:
+            self.course_key=None
+        self.configuring_course=True;self.registered_courses=[]
+        self.course_choice.set_model(Gtk.StringList.new(["自由填写课程名称"]))
+        self.course_choice.set_selected(0);self.course_choice.set_sensitive(False)
+        self.fields["courseName"].set_sensitive(True);self.configuring_course=False
+        if not self.manual_task:return
+        def loaded(page):
+            if self.closed or bridge is not self.bridge or generation!=self.course_generation:return
+            self.registered_courses=[c for c in page["courses"] if not c["archived"]]
+            self.configuring_course=True
+            self.course_choice.set_model(Gtk.StringList.new(["自由填写课程名称"]+[c["name"]+" · "+str(c["semester"]["yearStart"])+(" 上学期" if c["semester"]["term"]=="autumn" else " 下学期") for c in self.registered_courses]))
+            selected=next((i+1 for i,c in enumerate(self.registered_courses) if c["key"]==self.course_key),0)
+            self.course_choice.set_selected(selected);self.course_choice.set_sensitive(True);self.configuring_course=False
+            if selected:self.choose_course()
+        on_result(bridge.request_async("get-manual-courses",{"platform":platform}),loaded,
+            lambda message:self.show_error(message) if not self.closed and generation==self.course_generation and bridge is self.bridge else None)
+
+    def choose_course(self,*_):
+        if self.configuring_course:return
+        index=self.course_choice.get_selected()
+        chosen=self.registered_courses[index-1] if 0<index<=len(self.registered_courses) else None
+        self.course_key=chosen["key"] if chosen else None
+        self.fields["courseName"].set_sensitive(chosen is None)
+        if chosen:self.fields["courseName"].set_text(chosen["name"])
 
     def add_field(self, form, title, widget):
         form.append(label(title))
@@ -114,6 +150,7 @@ class TaskEditor(Adw.Window):
         if self.closed:
             return
         task = detail["view"]["task"]
+        self.manual_task=task["source"]=="manual"
         self.revision = task["revision"]
         for key in ("title", "courseName", "scoreText"):
             self.fields[key].set_text(task[key])
@@ -134,6 +171,8 @@ class TaskEditor(Adw.Window):
         self.loaded = True
         self.form.set_sensitive(True)
         self.save_button.set_sensitive(True)
+        self.course_key=task.get("recordingCourseKey") or None
+        self.reload_courses()
 
     def input(self):
         fields = self.fields
@@ -158,6 +197,7 @@ class TaskEditor(Adw.Window):
             return parse_local_datetime(text, self.zone)
         return {"title": fields["title"].get_text(), "platformId": PLATFORMS[fields["platformId"].get_selected()+1][0],
             "courseName": fields["courseName"].get_text(), "deadlineKind": kind,
+            "recordingCourseKey":self.course_key if self.manual_task and self.course_choice.get_selected()>0 else None,
             "beginIso": date_input("begin"),
             "deadlineIso": date_input("deadline") if kind == "known" else None,
             "link": fields["link"].get_text().strip() or None, "progressPercent": progress,
