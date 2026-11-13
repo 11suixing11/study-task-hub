@@ -305,4 +305,99 @@ class PlatformCatalogChecks(unittest.TestCase):
             self.assertEqual(fx.request("snapshot")["total"], 0)
             platforms.destroy()
 
+class SmartCourseChecks(unittest.TestCase):
+    def test_switching_semester_recommends_matching_courses_and_keeps_review_draft(self):
+        import sqlite3,json
+        from study_task_hub.course_picker import CoursePicker
+        with TestAppFixture() as fx:
+            courses=self.seed(fx)
+            courses[0]["Name"]="2026-2027第一学期 高等数学";courses[0]["Detail"]="官方课程"
+            courses[1]["Name"]="2026-2027第二学期 大学物理";courses[1]["Detail"]="官方课程"
+            with sqlite3.connect(fx.temp.name+"/tasks.db") as connection:
+                value=json.loads(connection.execute("SELECT value FROM settings WHERE key='course-recording:pta'").fetchone()[0])
+                value["Courses"]=courses
+                connection.execute("UPDATE settings SET value=? WHERE key='course-recording:pta'",(json.dumps(value,ensure_ascii=False),))
+            picker=CoursePicker(fx.window,fx.bridge,"pta")
+            picker.present();fx.wait(lambda:len(picker.choices)==3)
+            try:
+                picker.year_filter.set_selected(picker.years.index(2026));picker.term_filter.set_selected(0)
+                fx.wait(lambda:not picker.loading and picker.semester["term"]=="autumn")
+                self.assertTrue(picker.choices[courses[0]["Key"]].get_active());self.assertFalse(picker.choices[courses[1]["Key"]].get_active())
+                picker.choices[courses[0]["Key"]].set_active(False)
+                picker.custom_name_entry.set_text("上学期补充课程");picker.add_custom_button.emit("clicked")
+                picker.term_filter.set_selected(1)
+                fx.wait(lambda:not picker.loading and picker.semester["term"]=="spring")
+                self.assertFalse(picker.choices[courses[0]["Key"]].get_active());self.assertTrue(picker.choices[courses[1]["Key"]].get_active())
+                picker.term_filter.set_selected(0)
+                fx.wait(lambda:not picker.loading and picker.semester["term"]=="autumn")
+                self.assertFalse(picker.choices[courses[0]["Key"]].get_active())
+                self.assertEqual(len(picker.choices),4)
+            finally:picker.close()
+    @staticmethod
+    def seed(fx):
+        import sqlite3,json
+        courses=[{"Key":"pta:"+str(i)*64,"Name":name,"Detail":detail,"Available":True} for i,name,detail in
+            ((1,"正在学习的数学","正在上课"),(2,"未注明学期的课程","班级 1"),(3,"已完成历史课程","已结课"))]
+        settings={"Revision":0,"SelectionConfirmed":False,"RecordAllCourses":False,"HideUnselectedTasks":True,"SelectedCourseKeys":[],"Courses":courses,"CatalogComplete":True}
+        fx.request("get-courses",{"platform":"pta"})
+        with sqlite3.connect(fx.temp.name+"/tasks.db") as connection:
+            connection.execute("INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)",("course-recording:pta",json.dumps(settings,ensure_ascii=False)))
+        return courses
+
+    def test_current_courses_are_prechecked_but_not_saved_until_review(self):
+        from study_task_hub.course_picker import CoursePicker
+        with TestAppFixture() as fx:
+            courses=self.seed(fx)
+            picker=CoursePicker(fx.window,fx.bridge,"pta")
+            picker.present();fx.wait(lambda:len(picker.choices)==3)
+            try:
+                self.assertTrue(picker.choices[courses[0]["Key"]].get_active(),"Current course was not recommended")
+                self.assertTrue(picker.choices[courses[1]["Key"]].get_active())
+                self.assertFalse(picker.choices[courses[2]["Key"]].get_active())
+                self.assertFalse(fx.request("get-courses",{"platform":"pta"})["selectionConfirmed"])
+            finally:picker.close()
+
+    def test_custom_course_and_user_exclusion_survive_review_and_restart(self):
+        from study_task_hub.course_picker import CoursePicker
+        with TestAppFixture() as fx:
+            courses=self.seed(fx)
+            picker=CoursePicker(fx.window,fx.bridge,"pta")
+            picker.present();fx.wait(lambda:len(picker.choices)==3)
+            self.assertTrue(hasattr(picker,"custom_name_entry"),"Custom course entry is missing")
+            picker.choices[courses[0]["Key"]].set_active(False)
+            picker.custom_name_entry.set_text("政治经济学")
+            picker.add_custom_button.emit("clicked")
+            self.assertEqual(len(picker.choices),4)
+            self.assertEqual(len(fx.request("get-courses",{"platform":"pta"})["courses"]),3)
+            picker.save_button.emit("clicked")
+            fx.wait(lambda:len(fx.request("get-courses",{"platform":"pta"})["courses"])==4)
+            plan=fx.request("get-course-plan",{"platform":"pta"})
+            self.assertFalse(next(c for c in plan["courses"] if c["course"]["key"]==courses[0]["Key"])["preselected"])
+            self.assertTrue(next(c for c in plan["courses"] if c["course"]["name"]=="政治经济学")["preselected"])
+            self.assertEqual(fx.request("snapshot")["total"],0)
+            from study_task_hub.bridge import BackendBridge
+            fx.bridge.close()
+            restarted=BackendBridge(fx.application.backend_path,fx.temp.name)
+            try:
+                restored=restarted.request_async("get-course-plan",{"platform":"pta"}).result(timeout=5)
+                self.assertTrue(next(c for c in restored["courses"] if c["course"]["name"]=="政治经济学")["preselected"])
+                self.assertFalse(next(c for c in restored["courses"] if c["course"]["key"]==courses[0]["Key"])["preselected"])
+            finally:restarted.close()
+
+    def test_cancel_discards_custom_course_and_search_preserves_choices(self):
+        from study_task_hub.course_picker import CoursePicker
+        with TestAppFixture() as fx:
+            courses=self.seed(fx)
+            picker=CoursePicker(fx.window,fx.bridge,"pta")
+            picker.present();fx.wait(lambda:len(picker.choices)==3)
+            self.assertTrue(hasattr(picker,"search_entry"),"Course search is missing")
+            picker.search_entry.set_text("数学")
+            picker.choices[courses[0]["Key"]].set_active(False)
+            picker.search_entry.set_text("")
+            self.assertFalse(picker.choices[courses[0]["Key"]].get_active())
+            picker.custom_name_entry.set_text("取消的自定义课程")
+            picker.add_custom_button.emit("clicked")
+            picker.close()
+            self.assertEqual(len(fx.request("get-courses",{"platform":"pta"})["courses"]),3)
+
 if __name__=="__main__":unittest.main()

@@ -76,6 +76,10 @@ sealed partial class BackendServer(Stream output,LinuxAppService service)
                 var input=Read<BrowserSessionInput>(args);return await MutatePlatformAsync(input.PlatformId,()=>service.CaptureBrowserSession(input),cancellation);
             case "clear-session":return await MutatePlatformAsync(Text(args,"platform"),()=>ClearSession(args),cancellation);
             case "get-courses":return service.GetCourses(Text(args,"platform"));
+            case "get-course-plan":return service.GetCourseSelectionPlan(Text(args,"platform"),args.TryGetProperty("semester",out var semester)?Read<AcademicSemester>(semester):null);
+            case "save-course-selection":
+                var selection=Read<ReviewedCourseSelection>(args);
+                return await MutatePlatformAsync(selection.Platform,()=>service.SaveReviewedCourseSelection(selection),cancellation);
             case "resolve-task":return await service.ResolveTaskAsync(Text(args,"id"),cancellation);
             case "take-notifications":return service.TakeDueNotifications();
             case "ack-notifications":service.AcknowledgeNotifications(Read<string[]>(args.GetProperty("ids")),args.GetProperty("success").GetBoolean());return null;

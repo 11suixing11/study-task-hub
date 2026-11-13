@@ -8,6 +8,7 @@ case "$taskGroup" in
   dashboard) python3 -m unittest discover -s tests -p test_linux_ui.py -k Dashboard ;;
   editor) python3 -m unittest discover -s tests -p test_linux_ui.py -k Editor ;;
   platforms) python3 -m unittest discover -s tests -p test_linux_ui.py -k Platform ;;
+  courses) python3 -m unittest discover -s tests -p test_linux_ui.py -k SmartCourse ;;
   webkit) python3 -m unittest discover -s tests -p test_linux_webkit.py ;;
   all) python3 -m unittest discover -s tests -p 'test_linux_ui.py'; python3 -m unittest discover -s tests -p test_linux_webkit.py ;;
   *) exit 2 ;;

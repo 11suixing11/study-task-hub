@@ -83,7 +83,12 @@ class PlatformWindow(Adw.Window):
 
     def pick_courses(self, platform):
         from .course_picker import CoursePicker
-        CoursePicker(self, self.bridge, platform, saved=lambda: (self.refresh(), self.parent.dashboard.refresh())).present()
+        def saved(recording):
+            self.refresh()
+            self.parent.dashboard.refresh()
+            if any(course["available"] and course["key"] in recording["selectedCourseKeys"] for course in recording["courses"]):
+                self.start_sync(platform, False)
+        CoursePicker(self, self.bridge, platform, saved=saved).present()
 
     def start_sync(self, platform, catalog_only=False):
         if platform in self.active_jobs:

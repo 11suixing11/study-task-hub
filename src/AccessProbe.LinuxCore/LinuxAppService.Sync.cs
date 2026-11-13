@@ -2,7 +2,7 @@ using AccessProbe.Mobile;
 namespace AccessProbe.Linux;
 public sealed partial class LinuxAppService
 {
-    public CourseRecordingSettings GetCourses(string platform)=>store.LoadCourseRecording(platform);
+    public CourseRecordingSettings GetCourses(string platform)=>store.LoadCourseRecordingOverview(platform);
     private readonly object syncLock=new();
     private MobileSync? sync;
     public CourseRecordingSettings SelectCourses(string platform,long revision,IReadOnlyList<string> keys,bool hideUnselected)
