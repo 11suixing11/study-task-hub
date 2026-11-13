@@ -37,6 +37,7 @@ class TestAppFixture:
     def wait(self, predicate):
         run_until(predicate)
     def close(self):
+        self.window.dashboard.stop()
         self.window.destroy()
         self.bridge.close()
         self.application.quit()

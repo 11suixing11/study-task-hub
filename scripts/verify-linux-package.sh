@@ -35,6 +35,8 @@ with tempfile.TemporaryDirectory(prefix='study-task-hub-manifest-') as tmp:
 core=json.loads((report/'core-checks.json').read_text().splitlines()[-1])
 log=(report/'python-checks.log').read_text()
 assert re.search(r'\nOK\s*$',log)
+assert 'Traceback (most recent call last)' not in log, 'Unhandled exception in GUI verification'
+assert 'CRITICAL **' not in log, 'Critical GTK/Adwaita diagnostic in GUI verification'
 tests=int(re.search(r'Ran (\d+) tests?',log).group(1))
 version=subprocess.check_output(['dpkg-deb','--field',str(package),'Version'],text=True).strip()
 summary={
