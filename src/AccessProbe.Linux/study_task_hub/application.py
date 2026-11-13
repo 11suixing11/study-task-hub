@@ -17,6 +17,7 @@ class StudyTaskHubApplication(Adw.Application):
         self.scheduler = None
         self.closing = False
         self.close_source = None
+        self.notifier=None
 
     def do_activate(self):
         if self.window:
@@ -57,10 +58,9 @@ class StudyTaskHubApplication(Adw.Application):
         return bool(self.owned_dialogs()) or self.closing
 
     def notify(self, item):
-        notification = Gio.Notification.new(item["title"])
-        notification.set_body(item["body"])
-        self.send_notification(item["id"], notification)
-        return True
+        from .notifications import DesktopNotifier
+        if self.notifier is None:self.notifier=DesktopNotifier()
+        return self.notifier.send(item)
 
     def request_close(self):
         if self.closing:

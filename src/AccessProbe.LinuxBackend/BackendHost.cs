@@ -96,7 +96,10 @@ sealed partial class BackendServer(Stream output,LinuxAppService service)
                 return await MutatePlatformAsync(selection.Platform,()=>service.SaveReviewedCourseSelection(selection),cancellation);
             case "resolve-task":return await service.ResolveTaskAsync(Text(args,"id"),cancellation);
             case "take-notifications":return service.TakeDueNotifications();
-            case "ack-notifications":service.AcknowledgeNotifications(Read<string[]>(args.GetProperty("ids")),args.GetProperty("success").GetBoolean());return null;
+            case "ack-notifications":service.AcknowledgeNotifications(Read<string[]>(args.GetProperty("ids")),args.GetProperty("success").GetBoolean(),args.TryGetProperty("errorCode",out var errorCode)?errorCode.GetString():null);return null;
+            case "get-notification-status":return service.GetNotificationStatus();
+            case "retry-notifications":return service.RetryFailedNotifications();
+            case "record-notification-test":service.RecordNotificationTest(args.GetProperty("accepted").GetBoolean(),args.TryGetProperty("errorCode",out var testCode)?testCode.GetString():null);return null;
             case "release-notifications":service.ReleaseNotifications(Read<string[]>(args.GetProperty("ids")));return null;
             case "select-courses":
                 var platform=Text(args,"platform");return await MutatePlatformAsync(platform,()=>service.SelectCourses(platform,args.GetProperty("revision").GetInt64(),Read<string[]>(args.GetProperty("keys")),args.GetProperty("hideUnselected").GetBoolean()),cancellation);

@@ -41,22 +41,31 @@ class AppScheduler:
         if not items:
             self.notification_done()
             return
-        outcomes = {True:[], False:[]}
-        for item in items:
-            try:
-                success = bool(self.send_notification(item))
-            except Exception:
-                success = False
-            outcomes[success].append(item["id"])
-        remaining = sum(bool(ids) for ids in outcomes.values())
-        def complete(_):
+        remaining = len(items)
+        def complete(identifier):
             nonlocal remaining
+            if identifier in self.claims:self.claims.remove(identifier)
             remaining -= 1
             if remaining == 0:
                 self.notification_done()
-        for success, ids in outcomes.items():
-            if ids:
-                on_result(self.bridge.request_async("ack-notifications", {"ids":ids,"success":success}), complete, complete)
+        def received(identifier,outcome):
+            if self.stopped:complete(identifier);return
+            success=outcome.accepted if hasattr(outcome,"accepted") else bool(outcome)
+            code=getattr(outcome,"error_code",None)
+            on_result(self.bridge.request_async("ack-notifications",{"ids":[identifier],"success":success,"errorCode":code}),
+                lambda _:complete(identifier),lambda _:complete(identifier))
+        for item in items:
+            identifier=item["id"]
+            try:result=self.send_notification(item)
+            except Exception:result=False
+            if hasattr(result,"add_done_callback"):
+                on_result(result,lambda outcome,i=identifier:received(i,outcome),lambda _,i=identifier:received(i,False))
+            else:received(identifier,result)
+
+    def retry_notifications(self):
+        if self.stopped:return
+        self.last_notifications=self.clock()-60
+        self.tick()
 
     def settings_loaded(self, settings):
         if self.stopped or self.busy() or not settings["automaticSyncEnabled"]:

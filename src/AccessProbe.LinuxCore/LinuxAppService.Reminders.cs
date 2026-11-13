@@ -13,10 +13,11 @@ public sealed partial class LinuxAppService
                 PlatformCatalog.Name(n.Task.PlatformId)+" · "+n.Task.CourseName+" · "+ToView(n.Task,utcNow()).DeadlineLabel)).ToArray();
         }
     }
-    public void AcknowledgeNotifications(IReadOnlyList<string> ids,bool success)
+    public void AcknowledgeNotifications(IReadOnlyList<string> ids,bool success,string? errorCode=null)
     {
         EnsureOpen();CheckNotificationIds(ids);
-        lock(notificationGate){var owned=ids.Where(notificationClaims.Contains).ToArray();store.RecordNotificationRequest(owned,success,utcNow());foreach(var id in owned)notificationClaims.Remove(id);}
+        errorCode=NotificationError(success,errorCode);
+        lock(notificationGate){var owned=ids.Where(notificationClaims.Contains).ToArray();store.RecordLinuxNotificationRequest(owned,success,errorCode,utcNow());foreach(var id in owned)notificationClaims.Remove(id);}
     }
     public void ReleaseNotifications(IReadOnlyList<string> ids)
     {

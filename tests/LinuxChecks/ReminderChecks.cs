@@ -20,6 +20,18 @@ static class ReminderChecks
         service.SaveSettings(service.LoadSettings() with{NotificationsEnabled=false});
         service.CreateTask(input with{Title="关闭提醒"});
         Check.Equal(0,service.TakeDueNotifications().Count);
+        using var statusRoot=new TestRoot();using var statusService=new LinuxAppService(statusRoot.Path,()=>now);
+        statusService.CreateTask(input with{DeadlineIso=now.AddHours(24).ToString("O")});
+        var statusDue=statusService.TakeDueNotifications();
+        statusService.AcknowledgeNotifications(statusDue.Select(n=>n.Id).ToArray(),false,"NOTIFY003");
+        Check.Equal("NOTIFY003",statusService.GetNotificationStatus().History.Single(h=>h.Id==statusDue[0].Id).ErrorCode);
+        Check.Equal(1,statusService.RetryFailedNotifications());
+        Check.Equal(1,statusService.TakeDueNotifications().Count);
+        statusService.AcknowledgeNotifications(statusDue.Select(n=>n.Id).ToArray(),true);
+        Check.Equal("requested",statusService.GetNotificationStatus().History.Single(h=>h.Id==statusDue[0].Id).State);
+        Check.Equal(0,statusService.RetryFailedNotifications());
+        statusService.RecordNotificationTest(false,"NOTIFY004");
+        Check.Equal("NOTIFY004",statusService.GetNotificationStatus().Test!.ErrorCode);
         return Task.CompletedTask;
     }
 }
