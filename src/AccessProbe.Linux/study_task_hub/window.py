@@ -65,9 +65,9 @@ class MainWindow(Adw.ApplicationWindow):
 
     def sync_all(self, *_):
         from .ui import on_result
+        from .sync_rules import can_sync_tasks
         def loaded(views):
-            eligible = [view for view in views if view["loginUri"] and view["session"]["canReuse"] and
-                view["recording"]["selectionConfirmed"] and (view["recording"]["selectedCourseKeys"] or view["recording"]["recordAllCourses"])]
+            eligible = [view for view in views if can_sync_tasks(view)]
             if not eligible:
                 self.dashboard.show_error("请先在“平台与课程”完成登录并确认课程。")
                 return

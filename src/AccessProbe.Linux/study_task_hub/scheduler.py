@@ -1,6 +1,7 @@
 import time
 from gi.repository import GLib
 from .ui import on_result
+from .sync_rules import can_sync_tasks
 
 class AppScheduler:
     def __init__(self, bridge, send_notification, clock=time.monotonic, busy=lambda:False):
@@ -66,8 +67,7 @@ class AppScheduler:
     def platforms_loaded(self, views):
         if not self.stopped and not self.busy():
             for view in views:
-                recording = view["recording"]
-                if view["loginUri"] and view["session"]["canReuse"] and recording["selectionConfirmed"] and (recording["selectedCourseKeys"] or recording["recordAllCourses"]):
+                if can_sync_tasks(view):
                     self.bridge.request_async("start-sync", {"platform":view["id"],"catalogOnly":False})
         self.sync_done()
 
