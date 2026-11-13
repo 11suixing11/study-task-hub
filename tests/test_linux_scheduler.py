@@ -45,6 +45,24 @@ class SchedulerChecks(unittest.TestCase):
                 fx.wait(lambda:not scheduler.sync_busy and not scheduler.notifications_busy)
                 self.assertEqual(attempts,[],"Automatic synchronization attempted to collect a manual-only platform")
             finally:scheduler.stop()
+    def test_platform_task_button_does_not_collect_manual_only_selection(self):
+        import concurrent.futures,time
+        from study_task_hub.platform_window import PlatformWindow
+        with TestAppFixture() as fx:
+            plan=fx.request("get-course-plan",{"platform":"pta"})
+            fx.request("save-course-selection",{"platform":"pta","revision":plan["revision"],"semester":plan["semester"],"keys":[],"customCourses":[{"name":"仅手动课程"}]})
+            attempts=[]
+            class BlockOfficialNetwork:
+                def subscribe_events(self,callback):return fx.bridge.subscribe_events(callback)
+                def request_async(self,command,args=None):
+                    if command=="start-sync":
+                        attempts.append(args);future=concurrent.futures.Future();future.set_result({"jobId":"blocked-fixture"});return future
+                    return fx.bridge.request_async(command,args)
+            window=PlatformWindow(fx.window,BlockOfficialNetwork());window.present();fx.wait(lambda:bool(window.views))
+            window.start_sync("pta",False)
+            until=time.monotonic()+0.1;fx.wait(lambda:time.monotonic()>until)
+            self.assertEqual(attempts,[],"The single-platform task button attempted official collection of manual-only courses")
+            window.destroy()
     def test_due_notification_is_acknowledged_once_and_stop_cancels_timer(self):
         self.assertIsNotNone(importlib.util.find_spec("study_task_hub.scheduler"), "Scheduler is not implemented")
         from study_task_hub.scheduler import AppScheduler

@@ -96,5 +96,13 @@ static class SyncChecks
         Check.Equal(0,cancellable.QueryTasks(new()).Total);
         Check.Equal("cancelled",cancellable.GetSyncReports("pta").Catalog!.Outcome);
         await jobs.StopAllAsync();
+        using var manualRoot=new TestRoot();var readersCreated=0;
+        using var manualOnly=new LinuxAppService(manualRoot.Path,readerFactory:_=>{readersCreated++;return new PtaFixtures.Handler();});
+        manualOnly.CaptureBrowserSession(new("pta","https://pintia.cn/course-class",[PtaFixtures.Cookie()],null,null,null));
+        var manualPlan=manualOnly.GetCourseSelectionPlan("pta");
+        manualOnly.SaveReviewedCourseSelection(new("pta",manualPlan.Revision,manualPlan.Semester,[],[new("仅手动课程")]));
+        try{await manualOnly.RunSyncAsync("pta",false,null,CancellationToken.None);throw new InvalidDataException("Manual-only direct synchronization was accepted");}
+        catch(TaskValidationException error){Check.Equal("COURSE001",error.Code);}
+        Check.Equal(0,readersCreated);
     }
 }

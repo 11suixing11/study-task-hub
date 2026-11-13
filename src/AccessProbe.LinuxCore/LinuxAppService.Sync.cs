@@ -16,6 +16,9 @@ public sealed partial class LinuxAppService
         var started=utcNow();
         try
         {
+            var qualification=GetCourses(platform);
+            if(!catalogOnly&&qualification.SelectionConfirmed&&!qualification.Courses.Any(c=>c.Available&&CourseRecordingRules.IsSelected(qualification,c.Key)))
+                throw new TaskValidationException("COURSE001","请先选择可采集的官方课程，自定义课程用于手动记录。");
             catalogOnly|=!GetCourses(platform).SelectionConfirmed;
             MobileSyncResult result;
             try

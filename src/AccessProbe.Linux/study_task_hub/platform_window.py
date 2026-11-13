@@ -108,6 +108,24 @@ class PlatformWindow(Adw.Window):
             self.status.set_text("该平台正在读取，请先停止当前操作。")
             return
         self.active_jobs[platform] = None
+        if not catalog_only:
+            from .sync_rules import can_sync_tasks
+            bridge=self.bridge
+            def qualified(views):
+                if self.disposed or bridge is not self.bridge:return
+                if not any(view["id"]==platform and can_sync_tasks(view) for view in views):
+                    self.active_jobs.pop(platform,None)
+                    self.status.set_text("请先完成官方登录并选择可采集课程。自定义课程用于手动记录。")
+                    return
+                self.begin_sync(platform,False)
+            def failed(message):
+                if self.disposed or bridge is not self.bridge:return
+                self.active_jobs.pop(platform,None);self.status.set_text(message)
+            on_result(bridge.request_async("platforms"),qualified,failed)
+            return
+        self.begin_sync(platform,catalog_only)
+
+    def begin_sync(self,platform,catalog_only):
         self.status.set_text("正在开始课程读取…" if catalog_only else "正在开始任务采集…")
         requested_bridge = self.bridge
         def started(result):
