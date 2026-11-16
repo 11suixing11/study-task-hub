@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=聚合平台
+Comment=学习任务、课程与本地提醒
+Exec=study-task-hub
+Icon=study-task-hub
+Terminal=false
+Categories=Education;
+StartupNotify=true
+StartupWMClass=io.github.studyTaskHub

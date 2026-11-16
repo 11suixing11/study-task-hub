@@ -1,0 +1,1 @@
+de3160bdcfce17c39aa41510e6835926a3abfe87b035f31a0d11f182d2cdd965  study-task-hub_1.2.0~ubuntu5_amd64.deb

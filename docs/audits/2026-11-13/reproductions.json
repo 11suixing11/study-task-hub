@@ -1,0 +1,21 @@
+{
+  "baselineCommit": "45150a1",
+  "officialNetworkAccessed": false,
+  "productionDataAccessed": false,
+  "settings_snapshot_overwrites_sync_result": {
+    "before": "completed",
+    "after": "not_started",
+    "reproduced": true
+  },
+  "semester_exclusion_not_saved_per_semester": {
+    "autumn_before": false,
+    "autumn_after_spring_save": true,
+    "reproduced": true
+  },
+  "automatic_sync_requests_manual_only_platform": {
+    "official_selected": 0,
+    "attempted_platforms": ["chaoxing"],
+    "reproduced": true,
+    "note": "The start-sync boundary was intercepted to prevent official network access."
+  }
+}

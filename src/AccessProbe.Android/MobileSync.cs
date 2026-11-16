@@ -7,6 +7,7 @@ public sealed record MobileSyncResult(string Platform, bool LoginRequired, bool 
     IReadOnlyList<string> Codes, string Message)
 {
     public bool AccountVerified { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore] public object? Summary { get; init; }
 }
 
 public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, HttpMessageHandler>? isolatedHandler = null,
@@ -53,7 +54,7 @@ public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, 
                 var outcome = summary.LoginRequired ? "login_required" : summary.Problems.Count == 0 && summary.CourseListCovered && summary.FullTaskListsCovered
                     && summary.CoursesRead == summary.SelectedCourses && (platform != "ucampus" || summary.LearningUnitListsCovered) ? "completed" : "partial";
                 if (!catalogOnly) store.RecordMetadataSyncResult(summary, outcome, DateTimeOffset.UtcNow, cancellation);
-                result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message))) { AccountVerified = summary.AccountVerified };
+                result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message))) { AccountVerified = summary.AccountVerified, Summary=summary };
             }
             else if (platform is "yuketang" or "changjiang")
             {
@@ -62,7 +63,7 @@ public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, 
                 var summary = await new RainSynchronizer(store, reader, rain, host, Validate).RunAsync(progress, cancellation, catalogOnly);
                 var codes = summary.Problems.Select(problem => problem.Code).Distinct().ToArray();
                 if (!catalogOnly) store.RecordPlatformSyncResult(summary, summary.LoginRequired ? "login_required" : codes.Length == 0 && summary.CourseListCovered && summary.CoursesRead == (summary.SelectedCourses ?? summary.Courses) ? "completed" : "partial", DateTimeOffset.UtcNow, cancellation);
-                result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message)));
+                result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message))) {Summary=summary};
             }
             else if (platform == "xuetang")
             {
@@ -73,7 +74,7 @@ public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, 
                 var summary = await new XuetangSynchronizer(store, reader, Validate).RunAsync(progress, cancellation, catalogOnly);
                 var codes = summary.Problems.Select(problem => problem.Code).Distinct().ToArray();
                 if (!catalogOnly) store.RecordXuetangSyncResult(summary, summary.LoginRequired ? "login_required" : codes.Length == 0 ? "completed" : "partial", DateTimeOffset.UtcNow, cancellation);
-                result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message)));
+                result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message))) {Summary=summary};
             }
             else if (platform == "mooc")
             {
@@ -86,7 +87,7 @@ public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, 
                 var summary = await new MoocSynchronizer(store, reader, session.AccountId!, Validate).RunAsync(progress, cancellation, catalogOnly);
                 var codes = summary.Problems.Select(problem => problem.Code).Distinct().ToArray();
                 if (!catalogOnly) store.RecordMoocSyncResult(summary, summary.LoginRequired ? "login_required" : codes.Length == 0 ? "completed" : "partial", DateTimeOffset.UtcNow, cancellation);
-                result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message)));
+                result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message))) {Summary=summary};
             }
             else
             {
@@ -94,7 +95,7 @@ public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, 
                 var summary = await new ChaoxingSynchronizer(store, new ValidatingChaoxingReader(reader, Validate)).RunAsync(new Progress<ChaoxingSyncProgress>(value => progress?.Report(value.Message)), cancellation, catalogOnly);
                 var codes = summary.Problems.Select(problem => problem.Code).Distinct().ToArray();
                 if (!catalogOnly) store.RecordSyncResult(summary, summary.LoginRequired ? "login_required" : codes.Length == 0 ? "completed" : "partial", DateTimeOffset.UtcNow, cancellation);
-                result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message)));
+                result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message))) {Summary=summary};
             }
             if (platform is not ("pta" or "ucampus" or "zhihuishu")) result = result with { AccountVerified = !result.LoginRequired && result.CatalogCovered };
             vault.Finish(session, result.LoginRequired, result.AccountVerified, cancellation);

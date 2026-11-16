@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+taskLauncherDir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+taskAppRoot="$(CDPATH= cd -- "$taskLauncherDir/../../opt/study-task-hub" && pwd -P)"
+exec /usr/bin/python3 "$taskAppRoot/ui/main.py" --backend "$taskAppRoot/backend/StudyTaskHub.LinuxBackend" "$@"
