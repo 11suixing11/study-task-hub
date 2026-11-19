@@ -1,0 +1,10 @@
+Package: study-task-hub
+Version: @VERSION@
+Section: education
+Priority: optional
+Architecture: amd64
+Maintainer: Study Task Hub <codex@local.invalid>
+Depends: python3 (>= 3.12), python3-gi, gir1.2-gtk-4.0 (>= 4.14), gir1.2-adw-1 (>= 1.5), gir1.2-webkit-6.0 (>= 2.44), libsqlite3-0 (>= 3.37), libc6 (>= 2.35), libgcc-s1, libstdc++6, zlib1g, libssl3t64 | libssl3, libicu78 | libicu74
+Description: Native desktop hub for study tasks
+ Aggregates course task metadata with official login, local task management
+ and reminders while running. Accounts and data stay in the user directory.

@@ -1,0 +1,6 @@
+
+(process:1048124): Gdk-WARNING **: 01:38:57.857: vkAcquireNextImageKHR(): A surface has changed in such a way that it is no longer compatible with the swapchain. (VK_ERROR_OUT_OF_DATE_KHR) (-1000001004)
+
+(process:1048124): Gdk-WARNING **: 01:38:58.238: vkAcquireNextImageKHR(): A swapchain no longer matches the surface properties exactly, but can still be used to present to the surface successfully. (VK_SUBOPTIMAL_KHR) (1000001003)
+
+(process:2): GLib-GIO-WARNING **: 01:38:59.950: Error releasing name io.github.studyTaskHub.DisplayCheckcbb6e3493dd74ebc8b2445ee962395f6.Sandboxed.WebProcess-3ffdea27-465a-4854-9083-8bd13ff437e6: The connection is closed

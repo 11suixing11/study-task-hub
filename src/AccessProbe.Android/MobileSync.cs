@@ -9,6 +9,7 @@ public sealed record MobileSyncResult(string Platform, bool LoginRequired, bool 
     public bool AccountVerified { get; init; }
     public bool FullTaskListsCovered { get; init; }
     public ConnectionReport? Connection { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore] public object? Summary { get; init; }
 }
 
 public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, HttpMessageHandler>? isolatedHandler = null,
@@ -118,7 +119,7 @@ public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, 
                 if (!catalogOnly) store.RecordMetadataSyncResult(summary, outcome, DateTimeOffset.UtcNow, cancellation);
                 result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message)))
                     { AccountVerified = summary.AccountVerified, FullTaskListsCovered = !catalogOnly && outcome == "completed",
-                        Connection = ConnectionReports.From(summary, store.LoadCourseRecording(platform), catalogOnly) };
+                        Connection = ConnectionReports.From(summary, store.LoadCourseRecording(platform), catalogOnly), Summary = summary };
             }
             else if (platform is "yuketang" or "changjiang")
             {
@@ -130,7 +131,7 @@ public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, 
                 result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message)))
                     { AccountVerified = summary.AccountVerified,
                         FullTaskListsCovered = !catalogOnly && !summary.LoginRequired && codes.Length == 0 && summary.CourseListCovered && summary.CoursesRead == (summary.SelectedCourses ?? summary.Courses),
-                        Connection = ConnectionReports.From(summary, store.LoadCourseRecording(platform), catalogOnly) };
+                        Connection = ConnectionReports.From(summary, store.LoadCourseRecording(platform), catalogOnly), Summary = summary };
             }
             else if (platform == "xuetang")
             {
@@ -145,7 +146,7 @@ public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, 
                 if (!catalogOnly) store.RecordXuetangSyncResult(summary, summary.LoginRequired ? "login_required" : codes.Length == 0 ? "completed" : "partial", DateTimeOffset.UtcNow, cancellation);
                 result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message)))
                     { AccountVerified = summary.AccountVerified, FullTaskListsCovered = !catalogOnly && !summary.LoginRequired && codes.Length == 0 && summary.CourseListCovered && summary.CoursesRead == summary.SelectedCourses,
-                        Connection = ConnectionReports.From(summary, store.LoadCourseRecording(platform), catalogOnly) };
+                        Connection = ConnectionReports.From(summary, store.LoadCourseRecording(platform), catalogOnly), Summary = summary };
             }
             else if (platform == "mooc")
             {
@@ -167,7 +168,7 @@ public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, 
                 result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message)))
                     { AccountVerified = summary.AccountVerified,
                         FullTaskListsCovered = !catalogOnly && !summary.LoginRequired && codes.Length == 0 && summary.CourseListCovered && summary.CoursesRead == (summary.SelectedCourses ?? summary.Courses),
-                        Connection = ConnectionReports.From(summary, store.LoadCourseRecording(platform), catalogOnly) };
+                        Connection = ConnectionReports.From(summary, store.LoadCourseRecording(platform), catalogOnly), Summary = summary };
             }
             else if (platform == "chaoxing")
             {
@@ -178,7 +179,7 @@ public sealed class MobileSync(TaskStore store, MobileVault vault, Func<string, 
                 result = new(platform, summary.LoginRequired, summary.CourseListCovered, summary.Tasks, codes, Format(summary.Tasks, summary.Problems.Select(problem => problem.Message)))
                     { AccountVerified = summary.AccountVerified,
                         FullTaskListsCovered = !catalogOnly && !summary.LoginRequired && codes.Length == 0 && summary.CourseListCovered && summary.CoursesRead == (summary.SelectedCourses ?? summary.Courses),
-                        Connection = ConnectionReports.From(summary, store.LoadCourseRecording(platform), catalogOnly) };
+                        Connection = ConnectionReports.From(summary, store.LoadCourseRecording(platform), catalogOnly), Summary = summary };
             }
             else throw new TaskValidationException("SYNC003", "该平台的同步适配器尚未接入。");
             if (!catalogOnly && !result.LoginRequired && !result.FullTaskListsCovered && platform != "uai")

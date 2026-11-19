@@ -1,0 +1,10 @@
+{
+  "version": "1.2.0~ubuntu1",
+  "assets": [
+    {
+      "file": "study-task-hub_1.2.0~ubuntu1_amd64.deb",
+      "bytes": 29020402,
+      "sha256": "930a808888c3868ef4f6a8abd441013652058c1ab51ac54a760c9ea1d6c79adc"
+    }
+  ]
+}
