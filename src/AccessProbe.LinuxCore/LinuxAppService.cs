@@ -15,7 +15,7 @@ public sealed partial class LinuxAppService : IDisposable
     {
         DataRoot=Path.GetFullPath(dataRoot); this.utcNow=utcNow??(()=>DateTimeOffset.UtcNow); this.timeZone=timeZone??TimeZoneInfo.Local;
         this.readerFactory=readerFactory; this.syntheticMetadataKey=syntheticMetadataKey;
-        LinuxRuntime.InitializeSqlite();LinuxDataPaths.EnsurePrivateDirectory(DataRoot);LinuxBackup.RecoverPendingRestore(DataRoot);protector=new(DataRoot);
+        LinuxRuntime.InitializeSqlite();LinuxDataPaths.EnsurePrivateDirectory(DataRoot);protector=new(DataRoot);
         try { store=new(Path.Combine(DataRoot,"tasks.db"),protector); }
         catch { protector.Dispose(); throw; }
         store.Changed+=Changed;

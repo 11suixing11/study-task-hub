@@ -16,8 +16,6 @@ class SettingsWindow(Adw.Window):
         self.automatic = Gtk.CheckButton(label="应用运行时每 30 分钟采集已选课程")
         body.append(self.notifications)
         body.append(self.automatic)
-        backup=Gtk.Button(label="备份与恢复")
-        backup.connect("clicked",self.open_backup);body.append(backup)
         notification_status=Gtk.Button(label="通知状态与测试")
         notification_status.connect("clicked",self.open_notification_status);body.append(notification_status)
         body.append(label("数据保存在：", "heading"))
@@ -47,10 +45,6 @@ class SettingsWindow(Adw.Window):
             self.save_button.set_sensitive(True)
         on_result(requested_bridge.request_async("get-settings"), loaded,
             lambda message: self.error.set_text(message) if not self.closed and self.bridge is requested_bridge else None)
-
-    def open_backup(self,*_):
-        from .backup_window import BackupWindow
-        BackupWindow(self.parent,self.bridge).present()
 
     def open_notification_status(self,*_):
         from .notification_window import NotificationWindow

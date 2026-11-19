@@ -68,7 +68,6 @@ public sealed class LinuxDataProtector : ILocalLinkProtector, IDisposable
         }
         finally { CryptographicOperations.ZeroMemory(plain); }
     }
-    internal byte[] ExportBackupKey(){ObjectDisposedException.ThrowIf(disposed,this);return key.ToArray();}
 
     public string Unprotect(byte[] value)
     {

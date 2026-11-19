@@ -22,6 +22,9 @@
     <Compile Include="../../src/AccessProbe/ChaoxingSessionStore.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../../src/AccessProbe/TaskDomain.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../../src/AccessProbe/CourseRecording.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/CourseLifecycle.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/ConnectionFeedback.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../src/AccessProbe/UaiPortal.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../../src/AccessProbe/TaskStore*.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../../src/AccessProbe/TaskNavigation.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../../src/AccessProbe/ChaoxingTaskMetadata.cs" Link="Shared/%(Filename)%(Extension)" />

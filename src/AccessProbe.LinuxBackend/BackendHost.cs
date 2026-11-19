@@ -81,10 +81,6 @@ sealed partial class BackendServer(Stream output,LinuxAppService service)
             case "get-courses":return service.GetCourses(Text(args,"platform"));
             case "get-manual-courses":return service.GetManualCourses(Text(args,"platform"));
             case "get-sync-reports":return service.GetSyncReports(Text(args,"platform"));
-            case "create-backup":return service.CreateBackup(Text(args,"path"),Text(args,"password"));
-            case "inspect-backup":return service.InspectBackup(Text(args,"path"),Text(args,"password"));
-            case "restore-backup":
-                await Jobs.StopAllAsync();return service.RestoreBackup(Text(args,"path"),Text(args,"password"),Text(args,"fingerprint"));
             case "edit-manual-course":
                 var courseEdit=Read<ManualCourseEdit>(args);
                 return await MutatePlatformAsync(courseEdit.Platform,()=>service.UpdateManualCourse(courseEdit),cancellation);

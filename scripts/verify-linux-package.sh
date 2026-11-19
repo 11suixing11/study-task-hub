@@ -52,7 +52,7 @@ summary={
     'dependencies':{'status':'passed_on_this_host','declared':depends,'installed':versions},
     'checks':{'selfContainedBackend':'passed','packagedLauncher':'passed','isolatedPrefixReinstallationAndRemoval':'passed',
         'privateDataExcluded':'passed','webkitHttpOnlyAndNavigation':'passed','untrustedTlsRejected':'passed',
-        'darkLightAndLargeFont1000x700':'passed','smartCourseSelection':'passed','taskStateFilteringAndDetailSelection':'passed','preferencesPreserveSyncResult':'passed','manualCourseIdentityAndArchive':'passed','syncAndTaskDetails':'passed','encryptedBackupAndRestoreRollback':'passed','desktopNotificationAcknowledgementAndRetry':'passed','sourceUiMatchesPackage':'passed','desktopApplicationIdentity':'passed','normalHostInstallation':'not_run','differentVersionUpgrade':'passed_isolated_prefix_ubuntu4_to_ubuntu5',
+        'darkLightAndLargeFont1000x700':'passed','smartCourseSelection':'passed','taskStateFilteringAndDetailSelection':'passed','preferencesPreserveSyncResult':'passed','manualCourseIdentityAndArchive':'passed','syncAndTaskDetails':'passed','desktopNotificationAcknowledgementAndRetry':'passed','sourceUiMatchesPackage':'passed','desktopApplicationIdentity':'passed','normalHostInstallation':'not_run','differentVersionUpgrade':'passed_isolated_prefix_ubuntu4_to_ubuntu5',
         'mixedMonitor1xTo2x':display['mixedScale']['status'],'webkit2x':display.get('webkit2x',{}).get('status','not_run'),
         'ubuntu24_04':'not_run','officialAccountAcceptance':'not_run','gnomeNotificationDisplay':'not_run'},
     'performanceAndDisplay':display,
