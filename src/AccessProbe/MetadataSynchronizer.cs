@@ -307,7 +307,7 @@ public sealed partial class MetadataSynchronizer(MetadataPlatform platform, Task
                     or "smart_version_unverified" or "agent_tasks_unverified" or "smart_other_tasks_unverified" ? "006"
                 : outcome.StartsWith("unrecognized", StringComparison.Ordinal) || outcome.StartsWith("partial", StringComparison.Ordinal)
                     || outcome is "conflicting_course" or "conflicting_task" or "account_mismatch" ? "003" : "002";
-            var detail = outcome == "login_required" ? "登录已失效，请在官网重新登录，已有任务保留。"
+            var detail = outcome == "login_required" ? "官网尚未认可本应用的当前登录，请完成官方授权后检查接入，已有任务保留。"
                 : outcome == "task_contract_unverified" ? "旧版课程、作业接口仍待核对，当前未自动导入；登录页或宣传页不作为任务数据。"
                 : outcome == "adaptation_disabled" ? "此平台暂不适配，已有任务保留，可继续手动记录。"
                 : outcome == "shared_homework_more_pages" ? "接口提示还有更多作业，每种提交状态目前只覆盖官网首批最多 100 条，请在官网核对剩余任务。"
@@ -320,7 +320,7 @@ public sealed partial class MetadataSynchronizer(MetadataPlatform platform, Task
                     or "course_session_expired" or "session_check_unavailable"
                     ? MetadataFailureText.Describe(outcome, lastResponse?.Outcome == outcome ? lastResponse.StatusCode : null) + "；已有任务保留。"
                 : "结构、分页或部分字段未完整确认；已有任务保留，请在官网核对。";
-            problems.Add(new(platform.CodePrefix + suffix, "", context + "：" + detail));
+            problems.Add(new(platform.CodePrefix + suffix, "", context + "：" + detail) { Outcome = outcome });
         }
         MetadataSyncSummary Summary() => new(platform.Id, courses.Count, readCount, selectedCount, tasks.Count, added, updated,
             loginRequired, covered, problems.ToArray())

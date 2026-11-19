@@ -76,6 +76,7 @@ public sealed partial class TaskStore
                     PlatformListTimeObservedAtUtc = now.ToUniversalTime(), CollectedAtUtc = now.ToUniversalTime(),
                     UpdatedAtUtc = now.ToUniversalTime(), AutomaticMetadataVersion = row.MetadataVersion, Revision = current is null ? 1 : current.Revision + 1
                 };
+                task = TaskRules.ObservePlatformState(task, current, row.State, now);
                 Write(connection, transaction, task); Reconcile(connection, transaction, task, now);
                 if (current is null)
                 { added++; if (notifications && TaskRules.IsActive(task)) InsertPlan(connection, transaction, ReminderPlanner.NewTask(task, now)); }

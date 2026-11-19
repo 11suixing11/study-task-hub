@@ -39,7 +39,7 @@ public sealed class MetadataSessionStore(MetadataPlatform platform, string path,
     public string LastLoadOutcome { get; private set; } = "not_loaded";
 
     public IReadOnlyList<MetadataSessionCookie> Load(DateTimeOffset now) => LoadCore(now, false);
-    public IReadOnlyList<MetadataSessionCookie> LoadForRevalidation(DateTimeOffset now) => LoadCore(now, platform.Id is "ucampus" or "zhihuishu");
+    public IReadOnlyList<MetadataSessionCookie> LoadForRevalidation(DateTimeOffset now) => LoadCore(now, platform.Id is "ucampus" or "zhihuishu" or "pta");
     private IReadOnlyList<MetadataSessionCookie> LoadCore(DateTimeOffset now, bool includeExpired)
     {
         Token = TokenBinding = TokenSource = null;
@@ -98,7 +98,7 @@ public sealed class MetadataSessionStore(MetadataPlatform platform, string path,
         finally { CryptographicOperations.ZeroMemory(plain); }
     }
     public void Clear() => archive.Clear();
-    public void Invalidate(DateTimeOffset now) => archive.Invalidate(now, platform.Id is "ucampus" or "zhihuishu");
+    public void Invalidate(DateTimeOffset now) => archive.Invalidate(now, platform.Id is "ucampus" or "zhihuishu" or "pta");
 
     public static bool IsValid(MetadataPlatform platform, MetadataSessionCookie? cookie)
     {

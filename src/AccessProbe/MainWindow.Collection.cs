@@ -8,7 +8,7 @@ using Microsoft.Web.WebView2.Core;
 
 namespace AccessProbe;
 
-public partial class MainWindow
+public partial class ChaoxingConnectionPage
 {
     private CancellationTokenSource? collectionCancellation;
     private long collectionRevision;
@@ -21,14 +21,14 @@ public partial class MainWindow
     private bool collectedCursorPresent;
     private NoticeHttpDiagnostic? lastNoticeHttpDiagnostic;
     private BrowserNoticeDiagnostic lastBrowserNoticeDiagnostic = new("not_attempted", false, false, null, null, null);
-    private Window? resultsWindow;
+    private WorkspacePage? resultsPage;
 
     private void InvalidateCollection(bool clearBrowserProbe = true, bool clearNoticeProbe = true)
     {
         collectionRevision++;
         collectionCancellation?.Cancel();
-        resultsWindow?.Close();
-        resultsWindow = null;
+        resultsPage?.Close();
+        resultsPage = null;
         ResetWorkReadDiagnostics();
         if (clearNoticeProbe)
         {
@@ -57,8 +57,7 @@ public partial class MainWindow
             StatusText.Text = "请先在内嵌浏览器打开官方 HTTPS 页面，再进行浏览器上下文验证。";
             return;
         }
-        if (MessageBox.Show("将从当前官方页面上下文向固定学习通通知接口发送一次只读 POST，使用 WebView 自身的会话规则；不会读取响应正文，也不会跟随重定向。浏览器可能因跨域策略拒绝页面读取，即使网络请求已发出。仅记录请求/响应钩子是否观察到、状态码和结果类别。继续？",
-            "授权浏览器上下文验证", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        if (!await ConfirmAsync("浏览器上下文验证", "使用当前官网页面发送一次只读通知接口请求；只记录状态码和结果类别，页面导航会取消本次验证。")) return;
 
         InvalidateCollection(false, false);
         var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(25));
@@ -190,8 +189,7 @@ public partial class MainWindow
             StatusText.Text = "请等待 60 秒冷却结束后重试，避免频繁请求。";
             return;
         }
-        if (MessageBox.Show($"将使用本窗口的登录会话，向学习通通知接口串行发送最多 {NoticeReader.MaximumPages} 次只读 POST 请求，以游标读取近期通知。不会重试、提交或保存正文、Cookie、游标。通知不是完整作业清单，提交状态仍未知。继续？",
-            "授权本次只读试验", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        if (!await ConfirmAsync("读取近期通知", $"使用当前登录读取最多 {NoticeReader.MaximumPages} 页近期通知；通知不是完整作业清单，平台提交状态仍待核对。")) return;
 
         InvalidateCollection(clearBrowserProbe: false);
         var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(25));
@@ -291,7 +289,7 @@ public partial class MainWindow
         foreach (var (header, property) in new[] { ("作业通知", "Title"), ("课程", "Course"), ("通知截止时间", "DeadlineText"), ("平台提交状态", "SubmissionState") })
             table.Columns.Add(new DataGridTextColumn { Header = header, Binding = new Binding(property), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
         panel.Children.Add(table);
-        resultsWindow = new Window { Owner = this, Title = "通知采集结果 · 覆盖不完整", Width = 1000, Height = 480, MinWidth = 700, MinHeight = 320, Content = panel };
-        resultsWindow.Show();
+        resultsPage = new WorkspaceContentPage("通知采集结果 · 覆盖不完整", panel);
+        ShowChildPage(resultsPage);
     }
 }

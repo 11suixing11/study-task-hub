@@ -8,7 +8,7 @@ using Microsoft.Web.WebView2.Wpf;
 
 namespace AccessProbe;
 
-public sealed class MoocSyncService : IDisposable
+public sealed partial class MoocSyncService : IDisposable
 {
     private readonly TaskStore store;
     private readonly string projectRoot;
@@ -40,7 +40,6 @@ public sealed class MoocSyncService : IDisposable
     public string SessionPersistenceOutcome { get; private set; } = "not_saved";
     public event Action<string, bool, bool>? StatusChanged;
     public event Action<MoocSyncSummary>? Completed;
-    public event Action? CourseSelectionRequired;
     public event Action<MoocSyncSummary>? CatalogCompleted;
 
     public MoocSyncService(TaskStore store, string root, WebView2 sessionBrowser,
@@ -126,31 +125,32 @@ public sealed class MoocSyncService : IDisposable
             if (identity.Outcome != "ok")
                 summary = new(0, 0, 0, 0, 0, identity.Outcome == "login_required", false,
                     [new(identity.Outcome == "login_required" ? "MOOC001" : "MOOC003", "", "账号检查：" + (identity.Outcome == "login_required"
-                        ? "请在连接窗口完成官方登录；本地已有任务保留。" : "官方账号身份结构暂未识别，未写入任务。"))]);
+                        ? "请在连接窗口完成官方登录；本地已有任务保留。" : "官方账号身份结构暂未识别，未写入任务。")) { Outcome = identity.Outcome }]);
             else
             {
                 await ValidateSessionAsync(scope, runCancellation.Token);
                 stage = "course_task_metadata";
                 using var reader = CreateReader(scope);
+                var acceptProgress = true;
                 var progress = new Progress<string>(message =>
-                { if (!disposed && !runCancellation.IsCancellationRequested) StatusChanged?.Invoke(message, true, false); });
+                { if (acceptProgress && ReferenceEquals(cancellation, runCancellation) && !disposed && !runCancellation.IsCancellationRequested) StatusChanged?.Invoke(message, true, false); });
                 summary = await new MoocSynchronizer(store, reader, identity.AccountId!, token => ValidateSessionAsync(scope, token)).RunAsync(progress, runCancellation.Token, catalogOnly);
+                acceptProgress = false;
             }
+            summary = summary with { AccountVerified = !summary.LoginRequired && (summary.AccountVerified || identity.Outcome == "ok") };
             stage = "session_persistence";
-            if (!await FinishSessionAsync(scope, summary.LoginRequired, runCancellation.Token))
+            var sessionSaved = await FinishSessionAsync(scope, summary.LoginRequired, runCancellation.Token, summary.AccountVerified);
+            if (!sessionSaved)
                 summary = summary with { Problems = summary.Problems.Concat([new MoocSyncProblem("MOOC004", "", "登录状态未能保存，重启后可能需要重新登录。")]).ToArray() };
             CheckScope(scope, runCancellation.Token);
+            var connectionFeedback = PublishConnection(summary, catalogOnly, sessionSaved);
             if (catalogOnly)
             {
                 var codes = summary.Problems.Select(problem => problem.Code).Distinct(StringComparer.Ordinal).Take(16).ToArray();
                 var catalogOutcome = CourseRecordingRules.CatalogRefreshOutcome(summary.CourseListCovered, summary.LoginRequired, codes);
                 store.RecordCourseCatalogResult("mooc", catalogOutcome, codes, DateTimeOffset.UtcNow, runCancellation.Token);
                 retryAfter = DateTimeOffset.UtcNow.AddMinutes(summary.LoginRequired ? 30 : 5);
-                StatusChanged?.Invoke(summary.LoginRequired ? "MOOC001：请在连接 MOOC 窗口完成官方登录后刷新课程。"
-                    : catalogOutcome == "completed" ? $"中国大学 MOOC 课程列表已刷新，共 {summary.Courses} 门课程。"
-                    : "中国大学 MOOC 课程列表未完整刷新；原有课程选择保留，请查看官方登录与网络。", false,
-                    catalogOutcome != "completed");
-                if (!summary.LoginRequired && summary.CourseListCovered && (needsSelection || afterLogin && loginOpen)) CourseSelectionRequired?.Invoke();
+                StatusChanged?.Invoke(connectionFeedback.Text, false, connectionFeedback.Warning);
                 CatalogCompleted?.Invoke(summary);
                 if (afterLogin && summary.LoginRequired && loginOpen) ScheduleLoginCheck();
                 return;
@@ -441,7 +441,7 @@ public sealed class MoocSyncService : IDisposable
         if (Enum.TryParse<CoreWebView2CookieSameSiteKind>(cookie.SameSite, out var sameSite)) value.SameSite = sameSite;
         manager.AddOrUpdateCookie(value);
     }
-    private async Task<bool> FinishSessionAsync(ReadScope scope, bool loginRequired, CancellationToken token)
+    private async Task<bool> FinishSessionAsync(ReadScope scope, bool loginRequired, CancellationToken token, bool accountVerified = true)
     {
         await cookieGate.WaitAsync(token);
         try
@@ -449,7 +449,7 @@ public sealed class MoocSyncService : IDisposable
             CheckScope(scope, token); var current = await ReadProfileAsync(); CheckScope(scope, token); CheckFingerprint(scope, current);
             if (loginRequired) { sessionRejected = true; sessionStore.Invalidate(DateTimeOffset.UtcNow); SessionPersistenceOutcome = "expired"; return true; }
             sessionRejected = false; var saved = SaveProfile(current);
-            if (saved) store.ConfirmPlatformSession("mooc", DateTimeOffset.UtcNow);
+            if (saved && accountVerified) store.ConfirmPlatformSession("mooc", DateTimeOffset.UtcNow);
             return saved;
         }
         finally { cookieGate.Release(); }

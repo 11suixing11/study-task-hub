@@ -107,7 +107,7 @@ internal static class Program
             store.SaveCourseRecording("chaoxing", false, selection.Courses.Select(course => course.Key).ToArray(), true, selection.Revision, DateTimeOffset.UtcNow);
             var firstLogin = await RunAsync(() => _ = service.RecordingCoursesChangedAsync());
             service.LoginConnectionClosed();
-            foreach (var manager in app.Windows.OfType<CourseSelectionWindow>().ToArray()) manager.Close();
+            dashboard.ShowDashboard();
             Check(firstLogin.Courses == 2 && firstLogin.CoursesRead == 2 && firstLogin.Added == 2 && firstLogin.Problems.Count == 0);
             Check(firstLogin.DetailsSaved == 2); // Dates survive the observed task -> view redirect without replacing task links.
             Check(store.LoadTasks().Count == 2 && store.LoadTasks().All(task => task.DetailTimeText.Length > 0));
@@ -199,7 +199,10 @@ internal static class Program
 
     private static async Task VerifyConnectionPopupAsync()
     {
-        var window = new MainWindow(runRoot, store, dashboard.ShowDashboard, service) { Title = "学习通 · 本地登录回跳验收" };
+        var window = new ChaoxingConnectionPage(runRoot, store, dashboard.ShowDashboard, service);
+        var catalogCompleted = new TaskCompletionSource<ChaoxingSyncSummary>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void CatalogCompleted(ChaoxingSyncSummary result) => catalogCompleted.TrySetResult(result);
+        service.CatalogCompleted += CatalogCompleted;
         var loginBrowser = (WebView2)window.FindName("Browser");
         loginBrowser.CoreWebView2InitializationCompleted += (_, result) =>
         {
@@ -210,7 +213,7 @@ internal static class Program
                 new MemoryStream(System.Text.Encoding.UTF8.GetBytes("<!doctype html><p>本地合成官方登录页</p>")), 200, "OK",
                 "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n");
         };
-        window.Show();
+        dashboard.ShowWorkspacePage("fixture-connection:" + Guid.NewGuid().ToString("N"), window);
         try
         {
             await WaitUntilAsync(() => loginBrowser.CoreWebView2 is not null && ((System.Windows.Controls.Button)window.FindName("LoginButton")).IsEnabled);
@@ -222,8 +225,14 @@ internal static class Program
             try { core.Navigate("https://i.chaoxing.com/__synthetic__/login"); await initialReady.Task.WaitAsync(TimeSpan.FromSeconds(10)); }
             finally { core.DOMContentLoaded -= InitialReady; }
             await PlatformConnectionTestData.ConnectionPopupChecks.VerifyAsync(core, "i.chaoxing.com", (condition, _) => Check(condition));
+            // Activating a connection page schedules a real session check. Let it finish before
+            // the next test changes the shared profile to exercise a different renewal race.
+            var catalog = await catalogCompleted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Check(!catalog.LoginRequired && catalog.CourseListCovered && app.Windows.Count == 1);
         }
-        finally { window.Close(); }
+        finally { window.Close(); service.CatalogCompleted -= CatalogCompleted; }
+        await WaitUntilAsync(() => !service.IsRunning);
+        Check(await service.CheckpointSessionAsync());
     }
 
     private static async Task VerifySessionRacesAsync(WebView2 browser)
@@ -458,7 +467,8 @@ internal static class Program
             else if (uri.AbsolutePath == "/visit/stucoursemiddle")
                 return new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri(
                     "https://mooc2-ans.chaoxing.com/mooc2-ans/mycourse/stu" + uri.Query + "&enc=SYNTHETIC%2BONLY&v=2") } };
-            else if (uri.AbsolutePath == "/mooc2-ans/mycourse/stu") html = "<input id='workEnc' value='SYNTHETIC+ENC'><input id='enc' value='SYNTHETIC+PAGE'><input id='openc' value='SYNTHETIC+OPEN'>";
+            else if (uri.AbsolutePath == "/mooc2-ans/mycourse/stu") html = "<input id='workEnc' value='SYNTHETIC+ENC'><input id='examEnc' value='SYNTHETIC+EXAM'>"
+                + "<input id='enc' value='SYNTHETIC+PAGE'><input id='openc' value='SYNTHETIC+OPEN'><input id='t' value='1700000000000'>";
             else if (uri.AbsolutePath == "/mooc2/work/list")
             {
                 var first = uri.Query.Contains("courseId=101", StringComparison.Ordinal);
@@ -466,6 +476,8 @@ internal static class Program
                     + (first ? "courseId=101&amp;classId=201&amp;cpi=301&amp;workId=401" : "courseId=102&amp;classId=202&amp;cpi=302&amp;workId=402") + "&amp;enc=SYNTHETIC%2BONLY";
                 html = $"<ul id='workList'><li onclick='goTask(this);' data='{target}'><div class='right-content'><p class='overHidden2'>合成作业 {(first ? "A" : "B")}</p><p class='status'>已完成</p></div><div class='time'>剩余 48 小时</div></li></ul>";
             }
+            else if (uri.AbsolutePath == "/exam-ans/mooc2/exam/exam-list")
+                html = "<div class='main task-list'><div class='has-content' style='display: none;'><div class='bottomList'><ul></ul></div></div></div>";
             else if (uri.AbsolutePath == "/mooc-ans/mooc2/work/task")
                 return new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri(
                     "https://mooc1.chaoxing.com/mooc-ans/mooc2/work/" + taskRoute + uri.Query) } };

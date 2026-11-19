@@ -132,7 +132,7 @@ internal static class Program
         var collapsedManagersFit = true;
         var courseChoicesWork = true;
         var cancelKeepsSelections = true;
-        foreach (var platform in PlatformCatalog.Sites.Where(site => CourseRecordingRules.SupportsAutomatic(site.Id)))
+        foreach (var platform in PlatformCatalog.Sites.Where(site => CourseRecordingRules.SupportsDesktopAutomatic(site.Id)))
         {
             var demo = Enumerable.Range(1, 3).Select(index => dialogStore.Create(new TaskDraft(
                 $"界面验收任务 {index}", platform.Id, $"演示课程 {index}", DeadlineKind.Unknown,
@@ -142,27 +142,27 @@ internal static class Program
             var catalog = dialogStore.ObserveRecordingCourses(platform.Id, courses, true, now);
             var saved = dialogStore.SaveCourseRecording(platform.Id, false, courses.Take(2).Select(course => course.Course.Key).ToArray(),
                 true, catalog.Revision, now);
-            var manager = new CourseSelectionWindow(dialogStore, platform.Id, _ => Task.CompletedTask, _ => Task.CompletedTask,
-                _ => { }, true, (_, _) => { }, _ => { }) { Owner = dashboard, ShowActivated = false };
+            var manager = new CourseSelectionPage(dialogStore, platform.Id, _ => Task.CompletedTask, _ => Task.CompletedTask,
+                _ => { }, true, (_, _) => { }, _ => { });
             try
             {
-                manager.Show();
+                dashboard.ShowWorkspacePage("preview-manager:" + platform.Id, manager);
                 var list = (ListBox)manager.FindName("RecordingCourseList");
                 for (var attempt = 0; attempt < 100 && list.ItemsSource is null; attempt++) await Task.Delay(20);
                 if (list.ItemsSource is null) throw new InvalidOperationException("The manager course list did not load.");
                 manager.UpdateLayout();
                 var brand = (ProductIcon)manager.FindName("RecordingPlatformArtwork");
-                managerIconsMatch &= manager.Icon is not null && brand.Key == platform.Id && RendersInk(brand)
+                managerIconsMatch &= dashboard.Icon is not null && brand.Key == platform.Id && RendersInk(brand)
                     && new[] { "RecordingConnectionButton", "RecordingSaveButton", "RecordingRefreshButton", "PlatformSyncButton" }
                         .All(name => ((Wpf.Ui.Controls.Button)manager.FindName(name)).Icon is ProductIcon icon && RendersInk(icon));
                 if (platform.Id == "pta") Capture(manager, Path.Combine(runRoot, "preview-courses.png"));
-                manager.Width = manager.MinWidth; manager.Height = manager.MinHeight;
+                dashboard.Width = dashboard.MinWidth; dashboard.Height = dashboard.MinHeight;
                 await Task.Delay(60); manager.UpdateLayout();
                 var expected = new[] { "RecordingCourseSearch", "RecordingCourseList", "RecordingSaveButton",
                     "RecordingCancelButton", "RecordingHideHistory", "RecordingConnectionButton", "PlatformSyncButton" };
                 var fits = expected.All(name => FitsContent(manager, (FrameworkElement)manager.FindName(name))) && list.ActualHeight >= 70;
                 managerLayoutsFit &= fits;
-                managerMetrics.Add(new { platform = platform.Id, width = manager.Width, height = manager.Height,
+                managerMetrics.Add(new { platform = platform.Id, width = manager.ActualWidth, height = manager.ActualHeight,
                     courseListHeight = list.ActualHeight, controlsFit = fits, iconSize = brand.ActualWidth });
                 if (platform.Id == "pta") Capture(manager, Path.Combine(runRoot, "preview-courses-small.png"));
                 ((Button)manager.FindName("PlatformCollapseButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -175,7 +175,7 @@ internal static class Program
                 var search = (TextBox)manager.FindName("RecordingCourseSearch"); search.Text = "演示课程 2";
                 manager.UpdateLayout();
                 ((Button)manager.FindName("RecordingSelectNoneButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                var choices = ((IEnumerable<CourseSelectionWindow.CourseChoice>)list.ItemsSource).ToArray();
+                var choices = ((IEnumerable<CourseSelectionPage.CourseChoice>)list.ItemsSource).ToArray();
                 courseChoicesWork &= list.Items.Count == 1 && choices.Single(choice => choice.Name == "演示课程 1").Selected
                     && !choices.Single(choice => choice.Name == "演示课程 2").Selected;
                 ((Button)manager.FindName("RecordingSelectAllButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -196,7 +196,9 @@ internal static class Program
         Check(courseChoicesWork, "course search and bulk choices affect only the visible courses", labels);
         Check(cancelKeepsSelections, "closing a manager preserves the previously saved course selection", labels);
 
-        var editor = new TaskEditorWindow { Owner = dashboard, ShowActivated = false };
+        var editor = new TaskEditorPage();
+        var editorCompleted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        editor.Saved += _ => { editorCompleted.TrySetResult(true); dashboard.NavigateBack(); };
         Exception? editorFailure = null;
         var editorFits = false;
         var validationShows = false;
@@ -207,7 +209,7 @@ internal static class Program
             {
                 await Task.Delay(60); editor.UpdateLayout();
                 Capture(editor, Path.Combine(runRoot, "preview-editor.png"));
-                editor.Width = editor.MinWidth; editor.Height = editor.MinHeight;
+                dashboard.Width = dashboard.MinWidth; dashboard.Height = dashboard.MinHeight;
                 await Task.Delay(60); editor.UpdateLayout();
                 var save = (Wpf.Ui.Controls.Button)editor.FindName("TaskEditorSave");
                 var cancel = (Button)editor.FindName("TaskEditorCancel");
@@ -223,9 +225,10 @@ internal static class Program
                 Capture(editor, Path.Combine(runRoot, "preview-editor-small.png"));
                 save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             }
-            catch (Exception error) { editorFailure = error; editor.Close(); }
+            catch (Exception error) { editorFailure = error; editorCompleted.TrySetResult(false); editor.Close(); }
         }));
-        var accepted = editor.ShowDialog();
+        dashboard.ShowWorkspacePage("preview-editor", editor);
+        var accepted = await editorCompleted.Task;
         if (editorFailure is not null) throw editorFailure;
         Check(editorFits, "minimum-size editor retains a scrollable form and visible save controls", labels);
         Check(validationShows, "editor rejects an empty title and displays the validation message", labels);
@@ -278,7 +281,7 @@ internal static class Program
         finally { firstDashboard.CloseForExit(); }
     }
 
-    private static bool FitsContent(Window window, FrameworkElement element)
+    private static bool FitsContent(ContentControl window, FrameworkElement element)
     {
         var content = (FrameworkElement)window.Content;
         var bounds = element.TransformToAncestor(content).TransformBounds(new Rect(element.RenderSize));

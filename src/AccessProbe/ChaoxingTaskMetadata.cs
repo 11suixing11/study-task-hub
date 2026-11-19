@@ -18,6 +18,8 @@ public static class ChaoxingTaskMetadata
     {
         "已完成" or "已提交" or "已交" or "待批阅" or "已批阅" or "已批改" or "已提交待批阅" => TaskState.Completed,
         "未交" or "未完成" or "未提交" or "待提交" or "待完成" or "进行中" or "作答中" or "未开始" => TaskState.Pending,
+        // An exam that closed without an answer keeps its platform status; it is not silently completed.
+        "已结束" or "已过期" or "已关闭" => TaskState.NeedsReview,
         "被打回" or "已打回" or "退回重做" or "需重做" => TaskState.Returned,
         _ => null
     };
@@ -86,7 +88,7 @@ public static class ChaoxingTaskMetadata
                     platformState ?? state, listTimeText, observedAt);
         }
         time ??= countdown;
-        return task with
+        var updated = task with
         {
             State = state, Overrides = overrides, AutomaticMetadataVersion = 1,
             PlatformListTimeText = listTimeText, PlatformListTimeObservedAtUtc = observedAt.ToUniversalTime(),
@@ -98,6 +100,7 @@ public static class ChaoxingTaskMetadata
             DeadlineUtc = !overrides.HasFlag(TaskOverrides.Deadline) && time is not null ? time.DeadlineUtc : task.DeadlineUtc,
             DeadlineEvidence = !overrides.HasFlag(TaskOverrides.Deadline) && time is not null ? time.Evidence : task.DeadlineEvidence
         };
+        return TaskRules.ObservePlatformState(updated, task, platformState, observedAt);
     }
 
     private static DateTimeOffset? Date(WorkDisplayedTime value, int year)

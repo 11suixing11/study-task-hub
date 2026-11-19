@@ -91,7 +91,7 @@ internal static partial class Program
                 var archive = new MetadataSessionStore(platform, Path.Combine(runRoot, ".local", "sessions", platform.Id + ".bin"), store);
                 Check(archive.Load(DateTimeOffset.UtcNow).Any(cookie => cookie.Value == "synthetic-session-renewed"), "renewed session saved with DPAPI");
             }
-            foreach (var manager in app.Windows.OfType<CourseSelectionWindow>().ToArray()) manager.Close();
+            dashboard.ShowDashboard();
             await WaitAsync(() => Table.Items.Count == Data.SchoolExamTaskCount + U.TaskCount + 1);
             Check(Text("AggregationSummaryText").Contains("智慧树 14 条", StringComparison.Ordinal) && Text("AggregationSummaryText").Contains("U 校园 " + U.TaskCount + " 条", StringComparison.Ordinal)
                 && Text("AggregationSummaryText").Contains("Fi 口语 1 条", StringComparison.Ordinal), "enabled sources and retained FiF manual task included in unified counts");
@@ -145,24 +145,25 @@ internal static partial class Program
         fixture.UnknownCatalog = true; await service.RefreshCourseCatalogAsync(); fixture.UnknownCatalog = false;
         Check(store.LoadCourseRecording("zhihuishu").Courses.Count == 3 && store.LoadCourseRecording("zhihuishu").LastCatalogRefresh!.Outcome == "partial", "unknown catalog keeps existing courses");
         Check(store.LoadPlatformSessionInfo("zhihuishu").State == "ready" && service.LoginDiagnostics.Snapshot().AccountConfirmed
-            && Text("ZhihuishuPlatformSummary").Contains("已登录", StringComparison.Ordinal), "catalog parse failure preserves verified login and visible card status");
+            && Text("ZhihuishuPlatformSummary").Contains("需要重试", StringComparison.Ordinal), "catalog parse failure keeps the login ready and shows the retry card status");
         ((ComboBox)dashboard.FindName("PlatformFilter")).SelectedItem = "智慧树"; Click("ChooseRecordingCoursesButton"); await Task.Delay(60);
-        var window = app.Windows.OfType<CourseSelectionWindow>().Single(value =>
-            (value.FindName("RecordingPlatformSelector") as ComboBox)?.SelectedItem is PlatformSite { Id: "zhihuishu" });
+        var window = (CourseSelectionPage)dashboard.ActivePage!;
         Check((window.FindName("RecordingPlatformSelector") as ComboBox)?.SelectedItem is PlatformSite { Id: "zhihuishu" }, "unified course picker selects new platform");
         window.Close(); Click("ShowAllTasksButton");
     }
     private static async Task VerifySettingsAsync()
     {
-        Click("OpenSettingsButton"); await Task.Delay(60); var window = app.Windows.OfType<Window>().Single(value => value.Title == "设置与平台状态");
+        Click("OpenSettingsButton"); await Task.Delay(60); WorkspacePage window = dashboard.ActivePage!;
+        Check(window.Title == "设置与平台状态" && app.Windows.Count == 1, "settings is a main-window page");
         Check(!Visuals<CheckBox>(window).Any(box => (string?)box.Content == "自动检查Fi 口语"), "FiF settings contain no automatic sync toggle");
         Check(!Visuals<CheckBox>(window).Any(box => (string?)box.Content == "自动检查智慧树"), "platform controls are consolidated in platform managers");
         window.Close();
         foreach (var platform in new[] { MetadataPlatform.Ucampus, MetadataPlatform.Zhihuishu })
         {
             Click(platform.Id == "ucampus" ? "UcampusConnectionButton" : "ZhihuishuConnectionButton"); await Task.Delay(100);
-            window = app.Windows.OfType<CourseSelectionWindow>().Single(value =>
-                (value.FindName("RecordingPlatformSelector") as ComboBox)?.SelectedItem is PlatformSite selected && selected.Id == platform.Id);
+            window = dashboard.ActivePage!;
+            Check((window.FindName("RecordingPlatformSelector") as ComboBox)?.SelectedItem is PlatformSite selected && selected.Id == platform.Id,
+                "platform settings uses the matching main-window page");
             var checkbox = (CheckBox)window.FindName("PlatformAutomaticSync");
             checkbox.IsChecked = false; checkbox.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(!store.LoadMetadataSettings(platform.Id).AutomaticSyncEnabled, "per-platform switch persists");
@@ -171,7 +172,8 @@ internal static partial class Program
             await services[platform.Id].StartAsync(true); Check(fixtures[platform.Id].Requests > requests, "manual sync works with auto disabled");
             window.Close();
         }
-        Click("SyncDetailsButton"); await Task.Delay(60); window = app.Windows.OfType<Window>().Single(value => value.Title == "各平台同步详情");
+        Click("SyncDetailsButton"); await Task.Delay(60); window = dashboard.ActivePage!;
+        Check(window.Title == "各平台同步详情" && app.Windows.Count == 1, "sync details is a main-window page");
         Check(MetadataPlatform.Enabled.All(platform => Visuals<TextBlock>(window).Any(text => text.Text == platform.Name + "同步详情")), "details covers enabled added platforms");
         Check(Visuals<TextBlock>(window).Any(text => text.Text.Contains("单元学习", StringComparison.Ordinal)
             && text.Text.Contains("必学", StringComparison.Ordinal)), "learning-unit coverage and required-progress totals visible"); window.Close();
@@ -207,12 +209,12 @@ internal static partial class Program
     private static async Task VerifyConnectionAsync()
     {
         lastCheck = "current official login return and student iframe";
-        var service = services["zhihuishu"]; var connection = new MetadataConnectionWindow(service, () => { });
+        var service = services["zhihuishu"]; var connection = new MetadataConnectionPage(service, () => { });
         var fixture = fixtures["zhihuishu"]; fixture.DelayStudentToken = fixture.IncludeUnrelatedTokenFrame = true;
         fixture.InjectLoginScript = fixture.FailLoginScript = true;
-        var field = typeof(MetadataConnectionWindow).GetField("browser", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var field = typeof(MetadataConnectionPage).GetField("browser", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
         var browser = (WebView2)field.GetValue(connection)!; fixtures["zhihuishu"].BlockBrowser(browser);
-        connection.Show(); await WaitAsync(() => browser.CoreWebView2 is not null && fixtures["zhihuishu"].BrowserRequests > 0);
+        dashboard.ShowWorkspacePage("fixture-connection:" + Guid.NewGuid().ToString("N"), connection); await WaitAsync(() => browser.CoreWebView2 is not null && fixtures["zhihuishu"].BrowserRequests > 0);
         await VerifyZhihuishuCacheRetryAsync(connection, browser, service, fixture);
         fixture.SimulateZhihuishuLoginReturn = true;
         var routesBeforeLogin = fixture.BrowserDocumentRoutes.Count;
@@ -270,8 +272,8 @@ internal static partial class Program
         connection.Close();
         foreach (var platform in new[] { MetadataPlatform.Ucampus })
         {
-            connection = new MetadataConnectionWindow(services[platform.Id], () => { }); browser = (WebView2)field.GetValue(connection)!; fixtures[platform.Id].BlockBrowser(browser);
-            connection.Show(); await WaitAsync(() => browser.CoreWebView2 is not null && fixtures[platform.Id].BrowserRequests > 0);
+            connection = new MetadataConnectionPage(services[platform.Id], () => { }); browser = (WebView2)field.GetValue(connection)!; fixtures[platform.Id].BlockBrowser(browser);
+            dashboard.ShowWorkspacePage("fixture-connection:" + Guid.NewGuid().ToString("N"), connection); await WaitAsync(() => browser.CoreWebView2 is not null && fixtures[platform.Id].BrowserRequests > 0);
             Check(connection.Title.Contains(platform.Name, StringComparison.Ordinal), "dedicated official connection window");
             await PlatformConnectionTestData.ConnectionPopupChecks.VerifyAsync(browser.CoreWebView2, platform.Host, Check);
             await VerifyUcampusStudentPopupAsync(connection, browser, services[platform.Id], fixtures[platform.Id]);

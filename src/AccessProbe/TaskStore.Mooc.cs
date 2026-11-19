@@ -65,6 +65,7 @@ public sealed partial class TaskStore
                     CollectedAtUtc = now.ToUniversalTime(), UpdatedAtUtc = now.ToUniversalTime(), AutomaticMetadataVersion = 1,
                     Revision = current is null ? 1 : current.Revision + 1
                 };
+                task = TaskRules.ObservePlatformState(task, current, row.State, now);
                 Write(connection, transaction, task); Reconcile(connection, transaction, task, now);
                 if (current is null)
                 {

@@ -7,9 +7,9 @@ public sealed record PlatformSessionInfo(string PlatformId, string State, DateTi
     public bool CanReuse => State is "saved" or "ready";
     public string Description => State switch
     {
-        "ready" => "登录已确认 · 下次自动复用",
-        "saved" => "登录已保存 · 使用时自动校验",
-        "expired" => "登录已过期 · 请重新登录",
+        "ready" => "上次登录已确认 · 使用时会再次检查",
+        "saved" => "登录已保存，接入待确认 · 使用时自动校验",
+        "expired" => "官网要求重新确认登录 · 请打开连接页",
         _ => "尚未保存登录 · 请连接平台"
     };
 }
@@ -93,7 +93,7 @@ public sealed partial class TaskStore
                 ON CONFLICT(platform_id) DO UPDATE SET protected_cookies=CASE WHEN $preserve THEN platform_sessions.protected_cookies ELSE NULL END,
                 state='expired',checked_utc=excluded.checked_utc;
                 """, ("$platform", platformId), ("$checked", now.ToUnixTimeMilliseconds()),
-                ("$preserve", preserveForRevalidation && platformId is "ucampus" or "zhihuishu"));
+                ("$preserve", preserveForRevalidation && platformId is "ucampus" or "zhihuishu" or "uai" or "pta"));
         }
         Changed?.Invoke();
     }
@@ -105,6 +105,7 @@ public sealed partial class TaskStore
         {
             using var connection = Open();
             Execute(connection, null, "DELETE FROM platform_sessions WHERE platform_id=$platform;", ("$platform", platformId));
+            Execute(connection, null, "DELETE FROM settings WHERE key=$key;", ("$key", ConnectionReportKey(platformId)));
         }
         Changed?.Invoke();
     }

@@ -1,0 +1,91 @@
+{
+  "auditDate": "2026-11-11",
+  "baselineCommit": "4a10b16ce0c7de113aa8a93a806ce2190c4795a3",
+  "verificationType": "isolated_current_source_behavior_observation",
+  "outcome": "observed",
+  "checks": 9,
+  "officialNetworkAccessed": false,
+  "productionDataAccessed": false,
+  "results": [
+    {
+      "label": "imported pending task has reminder plans",
+      "observed": true,
+      "evidence": {
+        "initialReminderCount": 3
+      }
+    },
+    {
+      "label": "manual completion survives official returned status",
+      "observed": true,
+      "evidence": {
+        "state": "Completed",
+        "PlatformStatusText": "退回重做",
+        "isActive": false,
+        "reminderCount": 0
+      }
+    },
+    {
+      "label": "returned task with manual completion has no active reminder",
+      "observed": true,
+      "evidence": {
+        "reminderCount": 0
+      }
+    },
+    {
+      "label": "estimated date is usable for ordering but not reminders",
+      "observed": true,
+      "evidence": {
+        "usable": true,
+        "trusted": false,
+        "display": "约 2026-11-11 15:00",
+        "timedReminders": 0
+      }
+    },
+    {
+      "label": "deadline reminders use fixed 24 hours before and 2 hours after",
+      "observed": true,
+      "evidence": [
+        {
+          "kind": "DueSoon",
+          "DueAtUtc": "2026-11-10T07:00:00+00:00"
+        },
+        {
+          "kind": "Overdue",
+          "DueAtUtc": "2026-11-11T09:00:00+00:00"
+        }
+      ]
+    },
+    {
+      "label": "PTA expiration does not preserve synthetic protected session",
+      "observed": true,
+      "evidence": {
+        "state": "expired",
+        "preserved": false
+      }
+    },
+    {
+      "label": "manual task after selecting official courses is stored but hidden",
+      "observed": true,
+      "evidence": {
+        "stored": true,
+        "visible": false,
+        "manualReminderCount": 0
+      }
+    },
+    {
+      "label": "hidden manually added task has no deadline reminder",
+      "observed": true,
+      "evidence": {
+        "manualReminderCount": 0
+      }
+    },
+    {
+      "label": "manual course exists only in overview not raw mobile catalog",
+      "observed": true,
+      "evidence": {
+        "rawCatalogContainsManualCourse": false,
+        "overviewContainsManualCourse": true
+      }
+    }
+  ]
+}

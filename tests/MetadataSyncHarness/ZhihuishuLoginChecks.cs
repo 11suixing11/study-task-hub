@@ -9,11 +9,11 @@ namespace MetadataSyncHarness;
 
 internal static partial class Program
 {
-    private static async Task VerifyZhihuishuCacheRetryAsync(MetadataConnectionWindow connection, WebView2 browser,
+    private static async Task VerifyZhihuishuCacheRetryAsync(MetadataConnectionPage connection, WebView2 browser,
         MetadataSyncService service, Fixtures fixture)
     {
         lastCheck = "local failed login JavaScript response";
-        var status = (TextBlock)typeof(MetadataConnectionWindow).GetField("status", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection)!;
+        var status = (TextBlock)typeof(MetadataConnectionPage).GetField("status", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection)!;
         await WaitAsync(() => service.LoginDiagnostics.Snapshot().Events.Any(item => item.Result == MetadataLoginResult.ScriptUnavailable));
         Check(status.Text.Contains("官方登录脚本未能加载", StringComparison.Ordinal)
             && service.LoginDiagnostics.Snapshot().Events.Any(item => item is { Stage: MetadataLoginStage.Resource, Result: MetadataLoginResult.ScriptUnavailable, Status: 200 }),

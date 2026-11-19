@@ -14,9 +14,10 @@ internal static class Program
     public static int Main(string[] args)
     {
         var verify = args.Contains("--verify", StringComparer.Ordinal);
+        var onboardingOnly = args.Contains("--onboarding-only", StringComparer.Ordinal);
         var syntheticLinks = args.Contains("--synthetic-links", StringComparer.Ordinal);
         if (syntheticLinks && !verify) return 2;
-        var options = args.Where(arg => arg is not ("--verify" or "--synthetic-links")).ToArray();
+        var options = args.Where(arg => arg is not ("--verify" or "--synthetic-links" or "--onboarding-only")).ToArray();
         if (options.Length is not (2 or 4) || options[0] != "--project-root"
             || options.Length == 4 && options[2] != "--run-root") return 2;
         var root = Path.GetFullPath(options[1]);
@@ -32,7 +33,7 @@ internal static class Program
         Environment.SetEnvironmentVariable("TMP", runRoot);
         var database = Path.Combine(runRoot, "tasks.db");
         if (syntheticLinks && File.Exists(database)) return 2;
-        var store = FixtureTaskStore.Create(database, syntheticLinks ? new SyntheticLinkProtector() : null);
+        var store = FixtureTaskStore.Create(database, syntheticLinks ? new SyntheticLinkProtector() : null, pendingPlatforms: ["mooc"]);
         if (store.LoadTasks().Count == 0)
         {
             var now = DateTimeOffset.UtcNow;
@@ -77,7 +78,7 @@ internal static class Program
         }
         if (verify) dashboard.Loaded += (_, _) => dashboard.Dispatcher.BeginInvoke(new Action(async () =>
         {
-            passed = await VerifyAsync(dashboard, store, opened, runRoot, syntheticLinks);
+            passed = onboardingOnly ? await OnboardingChecks.RunAsync(dashboard, store, runRoot) : await VerifyAsync(dashboard, store, opened, runRoot, syntheticLinks);
             Exit();
         }));
         dashboard.ShowSuccess("离线合成清单；任务保存在独立测试目录，可重启本程序验证。");
@@ -113,6 +114,13 @@ internal static class Program
                 && Find<ComboBox>("StateFilter").Template is not null && table.Template is not null,
                 "WPF UI and adapted control templates resolve at runtime");
             Check(Find<ComboBox>("StateFilter").SelectedIndex == 1, "initial view retains all task states");
+            Check(dashboard.FindName("OnboardingBanner") is Border { IsVisible: true },
+                "dashboard exposes a first-use connection summary");
+            Check(Find<Button>("OnboardingActionButton").Content is "开始接入",
+                "first-use summary exposes one plain-language connection action");
+            Check(Find<TextBlock>("OnboardingDescriptionText").Text.Contains("作业"),
+                "connection summary explains the value in user terms");
+            Check(Find<TextBlock>("PtaPlatformSummary").Text == "未接入", "sidebar uses the same unconnected state as the access center");
             Capture(dashboard, runRoot, "windows-desktop.png");
             foreach (var (width, height, label) in new[] { (1440d, 960d, "desktop"), (1180d, 800d, "minimum") })
             {
@@ -121,7 +129,7 @@ internal static class Program
                 await Task.Delay(100); dashboard.UpdateLayout();
                 var content = (FrameworkElement)dashboard.Content;
                 foreach (var name in new[] { "ChaoxingConnectionButton", "PtaConnectionButton", "AggregationTitleText",
-                    "AddTaskButton", "ChooseRecordingCoursesButton", "ShowAllTasksButton", "SearchBox", "StateFilter",
+                    "AddTaskButton", "ChooseRecordingCoursesButton", "ShowAllTasksButton", "OnboardingBanner", "OnboardingActionButton", "SearchBox", "StateFilter",
                     "PlatformFilter", "SortFilter", "TaskTable", "TaskDetailPanel", "GoButton", "CompleteButton", "EditButton", "MoreTaskActionsButton" })
                 {
                     var element = Find<FrameworkElement>(name);
@@ -159,7 +167,7 @@ internal static class Program
             Find<Expander>("PlatformSyncExpander").IsExpanded = true;
             await Task.Delay(100); dashboard.UpdateLayout();
             Check(table.ActualHeight >= 250 && table.Columns.Sum(column => column.ActualWidth) <= table.ActualWidth,
-                "short window retains usable task rows and columns");
+                $"short window retains usable task rows and columns (table {table.ActualWidth:F0} × {table.ActualHeight:F0}, columns {table.Columns.Sum(column => column.ActualWidth):F0}, banner {Find<Border>("OnboardingBanner").ActualHeight:F0}, sync {Find<Expander>("PlatformSyncExpander").ActualHeight:F0})");
             var shortContent = (FrameworkElement)dashboard.Content;
             foreach (var name in new[] { "SearchBox", "StateFilter", "PlatformFilter", "SortFilter", "ShowAllTasksButton", "GoButton", "CompleteButton" })
             {
@@ -267,6 +275,14 @@ internal static class Program
             Find<Expander>("PlatformSyncExpander").IsExpanded = false;
             Find<Expander>("SelectedDetailsExpander").IsExpanded = false;
             Capture(dashboard, runRoot, "windows-minimum.png");
+            Check(await OnboardingChecks.RunAsync(dashboard, store, runRoot), "access center, direct login and banner dismissal checks pass");
+            await ConnectionUxChecks.VerifyAsync(dashboard, runRoot, Check);
+            await ConnectionLayoutChecks.VerifyAsync(dashboard, runRoot, Check);
+            await ConnectionFlowChecks.VerifyAsync(dashboard, store, runRoot, Check);
+            await TaskFilterChecks.VerifyAsync(dashboard, store, runRoot, Check);
+            await CourseLifecycleDesktopChecks.VerifyAsync(dashboard, runRoot, Check);
+            // This suite exercises permanent workspace shutdown and must run last.
+            await WorkspaceNavigationChecks.VerifyAsync(dashboard, store, runRoot, Check);
             passed = true;
         }
         catch (Exception error) { failure = error.ToString(); }

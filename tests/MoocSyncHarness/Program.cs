@@ -58,14 +58,15 @@ internal static partial class Program
             service.StartAutomatic(); await Task.Delay(100);
             Check(fixture.Requests == 0 && fixture.HomeRequests == 0 && !service.IsRunning, "unconnected MOOC makes no requests");
             Click("MoocConnectionButton");
-            await WaitAsync(() => app.Windows.OfType<CourseSelectionWindow>().Any());
-            var manager = app.Windows.OfType<CourseSelectionWindow>().Single();
+            await WaitAsync(() => dashboard.ActivePage is CourseSelectionPage);
+            var manager = (CourseSelectionPage)dashboard.ActivePage!;
             await WaitAsync(() => manager.FindName("RecordingCourseList") is ListBox { ItemsSource: not null });
             ((Button)manager.FindName("RecordingConnectionButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(connections.SequenceEqual(new[] { "mooc" }), "MOOC connection button selects its platform");
             var noLogin = await RunAsync(service.ConnectionOpened);
             Check(noLogin.LoginRequired && fixture.Requests == 0 && store.LoadTasks().Count == 3, "logged-out official home never imports another platform");
-            Check(store.LoadCourseRecording("mooc").LastCatalogRefresh?.Outcome == "login_required" && Text("MoocSyncStatusText").Contains("MOOC001", StringComparison.Ordinal), "login-required catalog outcome and banner are visible");
+            Check(store.LoadCourseRecording("mooc").LastCatalogRefresh?.Outcome == "login_required" && Text("MoocSyncStatusText").Contains("官网仍要求登录", StringComparison.Ordinal)
+                && service.Connection?.ProblemCodes.Contains("MOOC001") == true, "login-required catalog outcome and authorization explanation are visible");
             Check(((Expander)dashboard.FindName("PlatformSyncExpander")).IsExpanded && Text("SyncOverviewText").Contains("MOOC", StringComparison.Ordinal), "MOOC warning enters common platform status");
             fixture.RenewNext = true; Fixtures.SetCookie(browser, fixture.ExpectedToken);
             var catalog = await RunAsync(() => service.LoginNavigationCompleted(MoocPlatform.Home.AbsoluteUri), summary => !summary.LoginRequired);
@@ -293,8 +294,8 @@ internal static partial class Program
 
     private static async Task VerifyConnectionWindowAsync()
     {
-        var window = new MoocConnectionWindow(service, dashboard.ShowDashboard);
-        var loginBrowser = ((DockPanel)window.Content).Children.OfType<WebView2>().Single(); fixture.BlockBrowser(loginBrowser); window.Show();
+        var window = new MoocConnectionPage(service, dashboard.ShowDashboard);
+        var loginBrowser = ((Panel)window.Content).Children.OfType<WebView2>().Single(); fixture.BlockBrowser(loginBrowser); dashboard.ShowWorkspacePage("fixture-connection:" + Guid.NewGuid().ToString("N"), window);
         await WaitAsync(() => loginBrowser.CoreWebView2?.Source == MoocPlatform.Login.AbsoluteUri);
         Check(loginBrowser.CoreWebView2.Environment.UserDataFolder == browser.CoreWebView2.Environment.UserDataFolder, "official login window shares only MOOC profile");
         Check(new Uri(loginBrowser.CoreWebView2.Source).AbsolutePath == "/member/login.htm"

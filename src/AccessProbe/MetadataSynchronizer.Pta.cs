@@ -200,7 +200,7 @@ public sealed partial class MetadataSynchronizer
             problems.Add(new(code, context, context + "：" + (loginRequired ? MetadataFailureText.Describe("login_required", lastResponse?.StatusCode) + "，已有任务保留。"
                 : outcome == "partial_tasks" ? "已确认的题目集保留；完成状态、个人截止时间或特殊流程需在官网核对。"
                 : MetadataFailureText.Describe(outcome, lastResponse?.Outcome == outcome ? lastResponse.StatusCode : null)
-                    + "；不能视为没有课程或任务，已有记录保留。")));
+                    + "；不能视为没有课程或任务，已有记录保留。")) { Outcome = outcome });
         }
         MetadataSyncSummary Summary() => new(platform.Id, courses.Count, readCount, selected, taskResults.Count, added, updated, loginRequired, covered, problems.ToArray())
         {

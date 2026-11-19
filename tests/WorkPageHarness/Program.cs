@@ -36,7 +36,9 @@ internal static class Program
         Environment.SetEnvironmentVariable("TMP", runRoot);
 
         var app = new Application();
-        var main = new MainWindow(runRoot) { Title = "学习通 · 离线合成页面验证" };
+        var main = new ChaoxingConnectionPage(runRoot);
+        var dashboard = new TaskDashboardWindow(new TaskStore(Path.Combine(runRoot, "tasks.db")), runRoot,
+            () => { }, () => app.Shutdown()) { Title = "学习通 · 离线合成页面验证" };
         var browser = (WebView2)main.FindName("Browser");
         var controls = new WrapPanel { Margin = new Thickness(0, 0, 0, 10), IsEnabled = false };
         var status = new TextBlock { Text = "离线检查准备中", Margin = new Thickness(6), TextWrapping = TextWrapping.Wrap };
@@ -51,8 +53,10 @@ internal static class Program
             controls.Children.Add(button);
         }
         controls.Children.Add(status);
-        DockPanel.SetDock(controls, Dock.Top);
-        ((DockPanel)main.Content).Children.Insert(0, controls);
+        var connectionContent = (UIElement)main.Content;
+        main.Content = null;
+        var fixtureHost = new DockPanel(); DockPanel.SetDock(controls, Dock.Top);
+        fixtureHost.Children.Add(controls); fixtureHost.Children.Add(connectionContent); main.Content = fixtureHost;
 
         browser.CoreWebView2InitializationCompleted += (_, result) =>
         {
@@ -93,7 +97,8 @@ internal static class Program
             }));
         };
 
-        app.Run(main);
+        dashboard.ShowWorkspacePage("work-page-fixture", main);
+        app.Run(dashboard);
         return 0;
     }
 

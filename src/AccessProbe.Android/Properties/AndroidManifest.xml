@@ -10,6 +10,12 @@
     <package android:name="cn.unipus.ucampus.student" />
     <package android:name="com.able.wisdomtree" />
     <package android:name="com.tencent.mm" />
+    <package android:name="com.netease.edu.ucmooc" />
+    <package android:name="cn.unipus.cloud" />
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+      <category android:name="android.intent.category.APP_BROWSER" />
+    </intent>
   </queries>
   <application android:allowBackup="false" android:usesCleartextTraffic="false" android:theme="@style/AppTheme" android:label="聚合平台" android:icon="@mipmap/app_launcher" android:roundIcon="@mipmap/app_launcher" android:supportsRtl="true" />
 </manifest>

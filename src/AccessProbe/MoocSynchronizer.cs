@@ -16,7 +16,7 @@ public sealed class MoocSynchronizer(TaskStore store, IMoocMetadataReader reader
         var problems = new List<MoocSyncProblem>(); var courses = new Dictionary<string, MoocCourse>(StringComparer.Ordinal);
         var allTasks = new Dictionary<string, MoocTask>(StringComparer.Ordinal);
         var coursesRead = 0; var added = 0; var updated = 0; var duplicates = 0; var requests = 0; var pagesRead = 0;
-        var loginRequired = false; var covered = false; var stopped = false; var rawCourses = 0;
+        var loginRequired = false; var covered = false; var stopped = false; var rawCourses = 0; var accountVerified = false;
         var pageSignatures = new HashSet<string>(StringComparer.Ordinal); int? totalPages = null, totalCount = null;
         var recordingRevision = store.LoadCourseRecording("mooc").Revision;
         var selectedCourses = 0;
@@ -30,6 +30,7 @@ public sealed class MoocSynchronizer(TaskStore store, IMoocMetadataReader reader
             if (response.Outcome != "ok") { Problem("", response.Outcome, "课程列表"); break; }
             var batch = MoocParser.Catalog(response.Json); pagesRead++;
             if (batch.Outcome is not ("ok" or "partial_catalog")) { Problem("", batch.Outcome, "课程结构"); break; }
+            accountVerified = true;
             foreach (var issue in batch.Issues) Problem("", issue, "课程列表");
             if (batch.PageIndex is { } observedIndex && observedIndex != page) { Problem("", "pagination_loop", "课程分页"); break; }
             if (page > 1 && (totalPages != batch.TotalPages || totalCount != batch.TotalCount))
@@ -40,7 +41,14 @@ public sealed class MoocSynchronizer(TaskStore store, IMoocMetadataReader reader
             if (batch.RawCount > 0 && !pageSignatures.Add(fingerprint)) { Problem("", "pagination_loop", "课程分页"); break; }
             rawCourses += batch.RawCount; duplicates += batch.DuplicateRows;
             foreach (var course in batch.Courses)
-                if (!courses.TryAdd(course.Id + ":" + course.TermId, course)) duplicates++;
+            {
+                var key = course.Id + ":" + course.TermId;
+                if (!courses.TryAdd(key, course))
+                {
+                    duplicates++;
+                    if (courses[key].EndUtc != course.EndUtc) courses[key] = courses[key] with { EndUtc = null };
+                }
+            }
             if (courses.Count > MaximumCourses) { Problem("", "course_limit", "课程列表"); stopped = true; break; }
             if (totalPages is null || totalCount is null) { Problem("", "pagination_unrecognized", "课程分页"); break; }
             if (totalPages > 100) { Problem("", "page_limit", "课程分页"); }
@@ -105,7 +113,8 @@ public sealed class MoocSynchronizer(TaskStore store, IMoocMetadataReader reader
             TasksWithDeadline = allTasks.Values.Count(task => task.DeadlineUtc is not null),
             TasksWithLink = allTasks.Values.Count(task => task.Link is not null), StatusNeedsReview = allTasks.Values.Count(task => task.State is null),
             DuplicateRows = duplicates, Requests = requests, CatalogPages = pagesRead, SpocCourses = courses.Values.Count(course => course.IsSpoc),
-            NewExamTasks = allTasks.Values.Count(task => task.Kind == "exam_new"), SelectedCourses = selectedCourses
+            NewExamTasks = allTasks.Values.Count(task => task.Kind == "exam_new"), SelectedCourses = selectedCourses,
+            AccountVerified = accountVerified && !loginRequired
         };
         void Problem(string course, string outcome, string context)
         {
@@ -114,7 +123,7 @@ public sealed class MoocSynchronizer(TaskStore store, IMoocMetadataReader reader
                 : outcome is "timeout" or "network_error" or "http_error" or "rate_limited" or "request_limit" ? "MOOC002" : "MOOC003";
             var message = outcome switch
             {
-                "login_required" => "官方会话已失效，请重新连接登录；已有任务保留。",
+                "login_required" => "官网尚未认可本应用的当前登录，请完成官方授权后检查接入；已有任务保留。",
                 "csrf_rejected" => "官方拒绝当前请求的会话校验，请在连接窗口刷新官方登录后重试。",
                 "rate_limited" => "官方限制请求频率，本轮已停止，请稍后重试。",
                 "network_error" or "timeout" => "网络请求失败或超时，已有任务保留。",
@@ -122,7 +131,7 @@ public sealed class MoocSynchronizer(TaskStore store, IMoocMetadataReader reader
                 "page_limit" or "course_limit" or "request_limit" => "达到本轮读取上限，清单可能不完整，请查看官方课程列表。",
                 _ => "返回的元数据暂未完整适配（" + outcome + "），已保留可确认的任务。"
             };
-            if (problems.Count < 250) problems.Add(new(code, course, context + "：" + message));
+            if (problems.Count < 250) problems.Add(new(code, course, context + "：" + message) { Outcome = outcome });
         }
     }
 }

@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "version": "1.1.3",
+  "outcome": "passed",
+  "verifiedAtUtc": "2026-11-11T15:06:15.951627Z",
+  "basis": "Regenerated with collect-android-licenses.py using the exact APK build restore assets; all notice files equal the prior bundle.",
+  "restoredDependencyVersions": 9,
+  "mappedSourceHashes": 16,
+  "runtimeAbiLicenseComparisons": 12,
+  "generatedMitNotices": 5,
+  "generatedMitBasis": "Runtime MIT text with copyright taken from each exact package nuspec; no original package license-file claim.",
+  "notices": 24,
+  "files": [
+    {
+      "file": ".NET/LICENSE.txt",
+      "bytes": 1116,
+      "sha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310"
+    },
+    {
+      "file": ".NET/ThirdPartyNotices.txt",
+      "bytes": 76623,
+      "sha256": "66f1d4e44973185519bb4aa8a9718eb22fc7af2cc532e3ae9cfc4c127ee7fc54"
+    },
+    {
+      "file": "Android/LICENSE.txt",
+      "bytes": 1116,
+      "sha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310"
+    },
+    {
+      "file": "Android/ThirdPartyNotices.txt",
+      "bytes": 144846,
+      "sha256": "f7b09b6ee5286596d12bd4eb6f82e203b59bcf0b10e48845eacb56f4c3f2b227"
+    },
+    {
+      "file": "Android-Mono/LICENSE.txt",
+      "bytes": 1116,
+      "sha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310"
+    },
+    {
+      "file": "Android-Mono/ThirdPartyNotices.txt",
+      "bytes": 144846,
+      "sha256": "f7b09b6ee5286596d12bd4eb6f82e203b59bcf0b10e48845eacb56f4c3f2b227"
+    },
+    {
+      "file": "AngleSharp/LICENSE.txt",
+      "bytes": 1102,
+      "sha256": "0ecff6d65dd94bd8d02354b8fdca42e37473a544c04cbafd9dcdddda9589ebe4"
+    },
+    {
+      "file": "license-manifest.json",
+      "bytes": 6227,
+      "sha256": "899b70d6772b30f7accc949dd14650e6241af50cfb51e07f062b30174771947b"
+    },
+    {
+      "file": "Microsoft.Data.Sqlite/LICENSE.txt",
+      "bytes": 1116,
+      "sha256": "0d4331c53c43a19af1502f314bf5ee94aade7bfa427073e87038d106c32163fa"
+    },
+    {
+      "file": "Microsoft.Data.Sqlite.Core/LICENSE.txt",
+      "bytes": 1116,
+      "sha256": "0d4331c53c43a19af1502f314bf5ee94aade7bfa427073e87038d106c32163fa"
+    },
+    {
+      "file": "Microsoft.NET.ILLink.Tasks/LICENSE.txt",
+      "bytes": 1116,
+      "sha256": "0d4331c53c43a19af1502f314bf5ee94aade7bfa427073e87038d106c32163fa"
+    },
+    {
+      "file": "package-metadata/anglesharp.nuspec",
+      "bytes": 1772,
+      "sha256": "712dc3db8153deff180cc4d8f8bbc67cb0414c5c0cb4bbc4fb2a1d98af9d70c6"
+    },
+    {
+      "file": "package-metadata/microsoft.data.sqlite.core.nuspec",
+      "bytes": 1733,
+      "sha256": "ab42befb78a634e50af1ce4e1b6ad39ae068f6dd7f822fba10abe117fef92814"
+    },
+    {
+      "file": "package-metadata/microsoft.data.sqlite.nuspec",
+      "bytes": 1716,
+      "sha256": "8df9424d472c0d2693f11a287e20f5549dfa2938973d5c4ac8004c9258de3203"
+    },
+    {
+      "file": "package-metadata/microsoft.net.illink.tasks.nuspec",
+      "bytes": 970,
+      "sha256": "02b10043fae820493c7824c3bce839ce1f7a663c5c8e4f87b7069c7ce2fcd137"
+    },
+    {
+      "file": "package-metadata/sqlitepclraw.bundle_e_sqlite3.nuspec",
+      "bytes": 4416,
+      "sha256": "f8204aad2733babf578b5935a7c75acac78eafd22eb7467cef25d305b7e06a10"
+    },
+    {
+      "file": "package-metadata/sqlitepclraw.core.nuspec",
+      "bytes": 1232,
+      "sha256": "6561e062a5e659ded08feb24f13b70606678c1912bb655a3c24599a75490d4ae"
+    },
+    {
+      "file": "package-metadata/sqlitepclraw.lib.e_sqlite3.android.nuspec",
+      "bytes": 1814,
+      "sha256": "3f34d66556d31532f317c1c52125cbc5b6b1fa4600c92a9799a059f50b9a4dec"
+    },
+    {
+      "file": "package-metadata/sqlitepclraw.provider.e_sqlite3.nuspec",
+      "bytes": 1405,
+      "sha256": "55c4de0d90d48c4b2365ff63ce939a7d87346dcb4d932830d28fc2c316439f07"
+    },
+    {
+      "file": "package-metadata/system.security.cryptography.protecteddata.nuspec",
+      "bytes": 1530,
+      "sha256": "6f2769743da544fc8bcca74ffd58b319185aa24964cd737ad91c08473f159e6c"
+    },
+    {
+      "file": "README.txt",
+      "bytes": 366,
+      "sha256": "131f7457bc5f23456e9415b443370282a73aa358c294a0e5e4cc471c529b70e1"
+    },
+    {
+      "file": "SQLitePCLRaw/LICENSE-2.0.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "file": "SQLitePCLRaw/NOTICE.txt",
+      "bytes": 235,
+      "sha256": "1af2c0fe9e620d91e44de24065c50b666ddf48b8d20ffea617235986c3cec399"
+    },
+    {
+      "file": "System.Security.Cryptography.ProtectedData/LICENSE.txt",
+      "bytes": 1116,
+      "sha256": "0d4331c53c43a19af1502f314bf5ee94aade7bfa427073e87038d106c32163fa"
+    }
+  ]
+}

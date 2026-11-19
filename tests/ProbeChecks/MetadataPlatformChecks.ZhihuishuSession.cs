@@ -74,10 +74,10 @@ internal static partial class MetadataPlatformChecks
         Check((await fallback.ReadAsync(new("courses"), default)).Outcome == "ok" && otherCalls == 1, "CAS fallback continues ordinary metadata collection");
         if (!OperatingSystem.IsWindows()) return;
         var root = Path.Combine(Path.GetTempPath(), "session-revalidation-" + Guid.NewGuid().ToString("N")); var store = new TaskStore(Path.Combine(root, "tasks.db"));
-        foreach (var platform in new[] { Zhs, MetadataPlatform.Ucampus })
+        foreach (var platform in new[] { Zhs, MetadataPlatform.Ucampus, MetadataPlatform.Pta })
         {
             var archive = new MetadataSessionStore(platform, Path.Combine(root, platform.Id + ".bin"), store);
-            var account = platform.Id == "ucampus" ? UcampusFixtures.Cookie() : Fixtures.Cookie();
+            var account = platform.Id == "ucampus" ? UcampusFixtures.Cookie() : platform.Id == "pta" ? PtaFixtures.Cookie() : Fixtures.Cookie();
             archive.Save([account, account with { Name = "synthetic-login", Value = "synthetic-preserved" }], DateTimeOffset.UtcNow);
             archive.Invalidate(DateTimeOffset.UtcNow);
             Check(archive.Load(DateTimeOffset.UtcNow).Count == 0 && store.LoadPlatformSessionInfo(platform.Id).State == "expired"

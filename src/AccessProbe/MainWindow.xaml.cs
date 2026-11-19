@@ -5,7 +5,7 @@ using Microsoft.Web.WebView2.Core;
 
 namespace AccessProbe;
 
-public partial class MainWindow : Window
+public partial class ChaoxingConnectionPage : WorkspacePage
 {
     private readonly string projectRoot;
     private readonly TaskStore taskStore;
@@ -15,27 +15,43 @@ public partial class MainWindow : Window
     private bool closing;
     private bool clearing;
     private bool initialized;
+    private bool initializing;
     private ulong activeNavigationId;
     private ulong? blockedNavigationId;
     private string navigationOutcome = "not_started";
     private string blockedCategory = "none";
+    private ConnectionStatusPanel? connectionPanel;
     public event Action<string>? OfficialNavigationCompleted;
     public event Action? SessionClearing;
     public event Action<bool>? SessionClearCompleted;
 
-    public MainWindow(string root, TaskStore? store = null, Action? openDashboard = null, ChaoxingSyncService? sessionService = null)
+    public ChaoxingConnectionPage(string root, TaskStore? store = null, Action? openDashboard = null, ChaoxingSyncService? sessionService = null)
     {
         projectRoot = root;
         taskStore = store ?? new TaskStore(Path.Combine(root, ".local", "data", "tasks.db"));
         showDashboard = openDashboard;
         this.sessionService = sessionService;
         InitializeComponent();
+        Title = "连接学习通 · 官方登录";
+        if (sessionService is not null)
+        {
+            connectionPanel = new ConnectionStatusPanel(async () =>
+            {
+                if (!initialized || clearing) { connectionPanel!.Show(ConnectionFeedback.PageFailed("session_unavailable")); return; }
+                await sessionService.RefreshCourseCatalogAsync();
+            }, sessionService.RequestCourseSelection, sessionService.Connection);
+            ConnectionPanelHost.Content = connectionPanel; sessionService.ConnectionChanged += ShowConnection;
+        }
         Loaded += InitializeBrowser;
-        Closed += (_, _) => { closing = true; InvalidateCollection(); Browser.Dispose(); };
+        Activated += (_, _) => sessionService?.LoginConnectionOpened();
+        Deactivated += (_, _) => sessionService?.LoginConnectionClosed();
+        Closed += (_, _) => { closing = true; if (sessionService is not null) sessionService.ConnectionChanged -= ShowConnection; InvalidateCollection(); Browser.Dispose(); };
     }
 
     private async void InitializeBrowser(object sender, RoutedEventArgs args)
     {
+        if (initialized || initializing || closing) return;
+        initializing = true;
         try
         {
             var profile = Path.Combine(projectRoot, ".local", "webview-profile");
@@ -78,21 +94,33 @@ public partial class MainWindow : Window
             core.NewWindowRequested += (_, request) => NewWindowRequested(core, request);
             core.PermissionRequested += (_, request) => request.State = CoreWebView2PermissionState.Deny;
             core.DownloadStarting += (_, download) => download.Cancel = true;
-            core.ServerCertificateErrorDetected += (_, error) => error.Action = CoreWebView2ServerCertificateErrorAction.Cancel;
+            core.ServerCertificateErrorDetected += (_, error) =>
+            {
+                error.Action = CoreWebView2ServerCertificateErrorAction.Cancel;
+                connectionPanel?.ShowPageFailure("certificate_failed", "官方页面证书验证失败，请检查设备时间和网络。");
+            };
+            core.ProcessFailed += (_, _) =>
+            {
+                CanReuse = false;
+                connectionPanel?.ShowPageFailure("renderer_failed", "登录页面运行异常，请返回后重新打开连接页。");
+            };
             core.NavigationCompleted += (_, navigation) =>
             {
                 if (closing || clearing || navigation.NavigationId != activeNavigationId) return;
                 OriginText.Text = Uri.TryCreate(core.Source, UriKind.Absolute, out var uri)
                     ? "当前站点：" + uri.Host : "当前站点：未打开";
                 if (blockedNavigationId == navigation.NavigationId) return;
-                if (navigation.IsSuccess) mainHttpsUpgrade.Reset();
-                navigationOutcome = navigation.IsSuccess ? "loaded" : navigation.WebErrorStatus.ToString();
-                StatusText.Text = navigation.IsSuccess
-                    ? "页面已加载。登录成功后保存 Cookie 并返回课程列表；回到平台管理窗口选择课程后采集任务。"
+                var loaded = navigation.IsSuccess && navigation.HttpStatusCode < 400;
+                if (loaded) mainHttpsUpgrade.Reset();
+                navigationOutcome = loaded ? "loaded" : navigation.WebErrorStatus.ToString();
+                StatusText.Text = loaded
+                    ? "官网页面已加载。扫码后请确认授权；左侧会显示接入检查结果。"
                     : navigation.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled
                         ? "本次页面导航已取消（例如刷新或跳转），不等同于账号登录失败。可重新打开官方登录。"
                         : $"页面导航失败：{navigation.WebErrorStatus}，HTTP {navigation.HttpStatusCode}。未跳过证书验证；此提示不能判断账号状态。";
-                if (navigation.IsSuccess) OfficialNavigationCompleted?.Invoke(core.Source);
+                if (loaded) OfficialNavigationCompleted?.Invoke(core.Source);
+                else if (navigation.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
+                    connectionPanel?.ShowPageFailure(ConnectionPageFailures.Outcome(navigation.WebErrorStatus, navigation.HttpStatusCode), StatusText.Text);
             };
             core.WebResourceResponseReceived += (_, response) =>
             {
@@ -108,32 +136,43 @@ public partial class MainWindow : Window
             CollectButton.IsEnabled = true;
             BrowserProbeButton.IsEnabled = true;
             ReadWorkButton.IsEnabled = true;
-            StatusText.Text = "正在打开官方登录。登录后返回课程列表，在平台管理窗口保存选择后采集任务。";
+            StatusText.Text = "正在打开官方登录。登录后返回课程列表，在平台管理页保存选择后采集任务。";
             if (OfficialNavigationCompleted is not null) core.Navigate("https://i.chaoxing.com/");
         }
         catch
         {
-            if (!closing) StatusText.Text = "登录环境初始化失败。请确认 WebView2 运行时可用，且项目目录可写。未记录异常正文或账号数据。";
+            if (!closing)
+            {
+                CanReuse = false;
+                StatusText.Text = "登录环境初始化失败。请确认 WebView2 运行时可用，且项目目录可写。未记录异常正文或账号数据。";
+                connectionPanel?.ShowPageFailure("environment_failed", StatusText.Text);
+            }
         }
+        finally { initializing = false; }
     }
 
     private void OpenTaskDashboard(object sender, RoutedEventArgs args)
     {
         if (showDashboard is not null) showDashboard();
-        else new TaskDashboardWindow(taskStore, projectRoot, () => Activate(), () => Close()) { Owner = this }.Show();
+        else RequestBack();
     }
 
-    public void ShowSyncStatus(string message, bool warning)
+    public void ShowSyncStatus(string message, bool warning, bool running = false)
     {
         if (closing) return;
         LoginSyncStatusText.Text = message;
         LoginSyncStatusText.Foreground = warning ? System.Windows.Media.Brushes.Firebrick
             : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(36, 90, 195));
+        connectionPanel?.SetRunning(running);
+        if (!running && warning && connectionPanel?.HasResultForRun != true)
+            connectionPanel?.ShowFailure(message);
     }
+    private void ShowConnection(ConnectionReport report) { if (!closing) connectionPanel?.Show(report); }
+    public void ShowSyncStatusForPage(string message, bool running, bool warning) => ShowSyncStatus(message, warning, running);
 
     private void OpenLogin(object sender, RoutedEventArgs args)
     {
-        if (initialized && !clearing) Browser.CoreWebView2.Navigate("https://i.chaoxing.com/");
+        if (initialized && !clearing) { connectionPanel?.ClearPageFailure(); Browser.CoreWebView2.Navigate("https://i.chaoxing.com/"); }
     }
 
     private void RefreshLogin(object sender, RoutedEventArgs args)
@@ -141,6 +180,7 @@ public partial class MainWindow : Window
         if (!initialized || clearing) return;
         InvalidateCollection();
         var address = Browser.CoreWebView2.Source;
+        connectionPanel?.ClearPageFailure();
         if (address == "about:blank" || !ProbePolicy.IsAllowedNavigation(address))
             Browser.CoreWebView2.Navigate("https://i.chaoxing.com/");
         else
@@ -170,8 +210,8 @@ public partial class MainWindow : Window
     private async void ClearSession(object sender, RoutedEventArgs args)
     {
         if (!initialized || clearing) return;
-        if (MessageBox.Show("将清除此独立登录环境的 Cookie 和浏览数据，不影响你平常使用的浏览器。继续？",
-            "清除登录数据", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        if (!await ConfirmAsync("清除学习通登录", "清除此平台的 Cookie 和浏览数据？任务、课程选择和个人标记保留。")) return;
+        if (closing || !IsPageActive) return;
         clearing = true;
         SessionClearing?.Invoke();
         InvalidateCollection();
@@ -201,6 +241,7 @@ public partial class MainWindow : Window
             OriginText.Text = "当前站点：未打开";
             StatusText.Text = "登录数据已清理。可以直接点击“打开官方登录”重新登录，无需重启；二维码过期可点击“刷新登录页”。";
             cleared = true;
+            connectionPanel?.Reset();
         }
         catch
         {
@@ -210,6 +251,7 @@ public partial class MainWindow : Window
         {
             clearing = false;
             SessionClearCompleted?.Invoke(cleared);
+            if (cleared) connectionPanel?.Reset();
             if (!closing)
             {
                 Browser.Visibility = Visibility.Visible;

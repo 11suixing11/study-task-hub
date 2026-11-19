@@ -12,7 +12,7 @@ public sealed class RainSynchronizer(TaskStore store, IRainMetadataReader reader
         var problems = new List<RainSyncProblem>();
         var allTasks = new Dictionary<string, CollectedTask>(StringComparer.Ordinal);
         var coursesRead = 0; var added = 0; var updated = 0; var duplicates = 0; var loginRequired = false;
-        var covered = false;
+        var covered = false; var accountVerified = false;
         var requests = 0; var stopped = false; var problemCount = 0;
         var recordingRevision = store.LoadCourseRecording(platform.Id).Revision;
         var selectedCourses = 0;
@@ -38,6 +38,7 @@ public sealed class RainSynchronizer(TaskStore store, IRainMetadataReader reader
             Problem("", "unrecognized_user", "账号归属检查");
             return Summary(0);
         }
+        accountVerified = true;
         progress?.Report(platform.Name + "：正在读取学生课程…");
         var list = await ReadAsync(RainAddressPolicy.Api(host, "/v2/api/web/courses/list", ("identity", "2")));
         if (list.Outcome != "ok") { Problem("", list.Outcome, "课程列表"); return Summary(0); }
@@ -129,7 +130,7 @@ public sealed class RainSynchronizer(TaskStore store, IRainMetadataReader reader
             TasksWithDeadline = allTasks.Values.Count(task => task.DeadlineUtc is not null),
             TasksWithLink = allTasks.Values.Count(task => task.Link is not null),
             StatusNeedsReview = allTasks.Values.Count(task => task.State is null), DuplicateRows = duplicates, Requests = requests,
-            SelectedCourses = selectedCourses
+            SelectedCourses = selectedCourses, AccountVerified = accountVerified && !loginRequired
         };
         void Problem(string course, string outcome, string context)
         {
@@ -145,7 +146,7 @@ public sealed class RainSynchronizer(TaskStore store, IRainMetadataReader reader
                 "forbidden" => "平台拒绝访问当前课程，请核对官方页面中的权限。",
                 _ => "平台返回尚未完整适配的元数据（" + outcome + "），本轮覆盖不完整。"
             };
-            if (problems.Count < 250) problems.Add(new(code, course, context + "：" + message));
+            if (problems.Count < 250) problems.Add(new(code, course, context + "：" + message) { Outcome = outcome });
         }
         void AddBatch(RainTaskBatch batch, Dictionary<string, CollectedTask> destination, bool chapter, string courseName)
         {

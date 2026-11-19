@@ -27,3 +27,6 @@ design/stageshow/shots/windows-redesign/vite-error.log
 # 登录会话与 profile（DPAPI 加密，仅本机可解密）
 *.bin
 webview-profile*/
+
+.workbuddy-ai/
+__pycache__/

@@ -22,7 +22,8 @@ public partial class TaskDashboardWindow
             if (warning) PlatformSyncExpander.IsExpanded = true; UpdateSyncControls();
         };
         service.Completed += _ => RefreshTasks();
-        service.CourseSelectionRequired += () => PromptCourseSelection(platform.Id);
+        service.CourseSelectionRequested += () => ShowPlatformManager(platform.Id);
+        service.ConnectionChanged += ObserveConnectionReport;
     }
     private void OpenMetadataConnection(object sender, RoutedEventArgs args)
     {

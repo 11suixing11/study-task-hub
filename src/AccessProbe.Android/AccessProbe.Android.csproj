@@ -32,10 +32,14 @@
     <Compile Include="../AccessProbe/WorkListParser.cs" Link="Shared/WorkListParser.cs" />
     <Compile Include="../AccessProbe/WorkDetailParser.cs" Link="Shared/WorkDetailParser.cs" />
     <Compile Include="../AccessProbe/ChaoxingSync.cs" Link="Shared/ChaoxingSync.cs" />
+    <Compile Include="../AccessProbe/ChaoxingExamParser.cs" Link="Shared/ChaoxingExamParser.cs" />
     <Compile Include="../AccessProbe/ChaoxingHttpReader.cs" Link="Shared/ChaoxingHttpReader.cs" />
     <Compile Include="../AccessProbe/ChaoxingSessionStore.cs" Link="Shared/ChaoxingSessionStore.cs" />
     <Compile Include="../AccessProbe/TaskDomain.cs" Link="Shared/TaskDomain.cs" />
+    <Compile Include="../AccessProbe/TaskFiltering.cs" Link="Shared/TaskFiltering.cs" />
     <Compile Include="../AccessProbe/CourseRecording.cs" Link="Shared/CourseRecording.cs" />
+    <Compile Include="../AccessProbe/CourseLifecycle.cs" Link="Shared/CourseLifecycle.cs" />
+    <Compile Include="../AccessProbe/ConnectionFeedback.cs" Link="Shared/ConnectionFeedback.cs" />
     <Compile Include="../AccessProbe/TaskStore*.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../AccessProbe/TaskNavigation.cs" Link="Shared/TaskNavigation.cs" />
     <Compile Include="../AccessProbe/ChaoxingTaskMetadata.cs" Link="Shared/ChaoxingTaskMetadata.cs" />
@@ -68,5 +72,6 @@
     <Compile Include="../AccessProbe/MetadataTaskNavigation*.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../AccessProbe/MetadataFailureText.cs" Link="Shared/MetadataFailureText.cs" />
     <Compile Include="../AccessProbe/ZhihuishuMetadataCrypto.cs" Link="Shared/ZhihuishuMetadataCrypto.cs" />
+    <Compile Include="../AccessProbe/UaiPortal.cs" Link="Shared/UaiPortal.cs" />
   </ItemGroup>
 </Project>

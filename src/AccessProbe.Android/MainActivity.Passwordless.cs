@@ -34,7 +34,7 @@ public sealed partial class MainActivity
             await Evaluate(loginWeb, MobilePasswordlessLogin.SelectQrScript(platform));
             if (IsCurrentQrPage(loginWeb, platform, navigation)) status.Text = "请等待官网二维码显示；然后保存并在官方 App 内扫码确认。";
         }
-        catch { if (alive) status.Text = "二维码页面尚未准备好，请加载完成后重试。"; }
+        catch { if (IsCurrentQrPage(loginWeb, platform, navigation)) status.Text = "二维码页面尚未准备好，请加载完成后重试。"; }
     }
 
     private async Task SaveOfficialQr(string platform, bool openApp)
@@ -231,30 +231,36 @@ public sealed partial class MainActivity
     private void LoginPageStarted()
     {
         qrNavigationRevision++;
+        loginPageFailure = null;
+        if (connectionPageProblem is not null) { connectionPageProblem.Text = ""; connectionPageProblem.Visibility = Android.Views.ViewStates.Gone; }
         if (savedLoginQr is not null && resumed && !awaitingOfficialApp) DeleteSavedLoginQr();
     }
 
     private async Task ResumeOfficialAppLogin(string platform)
     {
         var loginWeb = web;
+        var expectedViewRevision = viewRevision;
+        bool CurrentLogin() => alive && resumed && loginWeb is not null && web == loginWeb
+            && loginPlatform == platform && viewRevision == expectedViewRevision;
         try
         {
             await Task.Delay(700, loginLifetime?.Token ?? CancellationToken.None);
-            if (!alive || !resumed || loginPlatform != platform || loginWeb is null || web != loginWeb) return;
-            loginWeb.OnResume();
+            if (!CurrentLogin()) return;
+            loginWeb!.OnResume();
             status.Text = "正在确认官网登录结果；未完成时请在官方 App 内确认后返回。";
             await CaptureLogin(platform, false);
-            if (alive && resumed && web == loginWeb && loginPlatform == platform && !busy
+            if (CurrentLogin() && !busy && !checkingLogin && loginReport?.AccountVerified != true
                 && !HasLoginEvidence(platform, MobilePlatforms.ReadBrowserCookies(platform)))
-                status.Text = "官网尚未确认登录。请在官方 App 内扫码确认；二维码过期时请刷新并重新保存。";
+                ShowWaitingForLogin("官网尚未确认登录。请核对官方 App 内的扫码授权；二维码过期时请刷新并重新保存。");
         }
         catch (OperationCanceledException) { }
-        catch { if (alive && web == loginWeb) status.Text = "请等待官网返回课程主页，也可点击“登录完成并读取课程”重试。"; }
+        catch { if (CurrentLogin()) ShowWaitingForLogin("请等待官网返回课程主页，再点击“" + ConnectionFeedback.CheckLabel + "”重试。"); }
     }
 
     public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Android.Content.PM.Permission[] grantResults)
     {
         base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (HandleMobileNotificationPermissionResult(requestCode, permissions, grantResults)) return;
         if (requestCode != QrStoragePermission || pendingQrSave is not { } pending) return;
         pendingQrSave = null;
         if (!IsCurrentQrPage(pending.Web, pending.Platform, pending.Navigation)) return;

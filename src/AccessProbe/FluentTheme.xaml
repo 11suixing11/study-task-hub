@@ -48,6 +48,13 @@
   <GradientStop Color="#007AFF" Offset="0"/><GradientStop Color="#6558DE" Offset="1"/>
  </LinearGradientBrush>
  <CornerRadius x:Key="ControlCornerRadius">6</CornerRadius>
+ <Style x:Key="OnboardingSummaryCard" TargetType="Border">
+  <Setter Property="Background" Value="{DynamicResource PrimarySoftBrush}"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource InputLineBrush}"/>
+  <Setter Property="BorderThickness" Value="1"/>
+  <Setter Property="CornerRadius" Value="8"/>
+  <Setter Property="Padding" Value="12,8"/>
+ </Style>
  <Color x:Key="SystemAccentColor">#006BE6</Color>
  <Color x:Key="SystemAccentColorPrimary">#006BE6</Color>
  <Color x:Key="SystemAccentColorSecondary">#005BCE</Color>

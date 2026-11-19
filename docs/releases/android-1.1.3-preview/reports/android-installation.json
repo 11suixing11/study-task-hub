@@ -1,0 +1,32 @@
+{
+  "visualAcceptance": "pending",
+  "officialNetworkAccessed": false,
+  "upgradePreservesData": true,
+  "chineseAccessibilityText": true,
+  "installation": true,
+  "apkSha256": "c86dcd50f1c50d66ef31424d550ec06d4bb0c9a37d3f2693aba5dfcea28d4d0e",
+  "nativeSyntheticChecks": 47,
+  "systemInsets": true,
+  "upgradeChecks": 4,
+  "realAccountAcceptance": "pending",
+  "bootReceiver": true,
+  "avd": "aggregator-install-test",
+  "tasks": 2,
+  "schema": 1,
+  "serial": "emulator-5560",
+  "finishedAtUtc": "2026-11-11T14:11:47.2438082+00:00",
+  "restartChecks": 4,
+  "keystore": true,
+  "coldReminderReceiver": true,
+  "api": 35,
+  "outcome": "passed",
+  "improvementChecks": 74,
+  "dashboardStartup": true,
+  "evidence": "20261111-141112",
+  "productionDataAccessed": false,
+  "export": {
+    "type": "sanitized_copy",
+    "sourceSha256": "cad1d35f7e5ee244316c48ce7146e49e638f2523083b6d1a29a688bead21ead0",
+    "removedFields": []
+  }
+}

@@ -1,5 +1,6 @@
 using AccessProbe;
 using Android.Webkit;
+using Android.Views;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -118,17 +119,39 @@ public sealed partial class MainActivity
             await WaitForCoursePage(https);
             Check(web!.Url == https, "official popup callback also upgrades to HTTPS");
             await Evaluate("location.href='https://chaoxing.com.example.invalid/finish'");
-            await WaitFor(() => status.Text?.Contains("尚未适配", StringComparison.Ordinal) == true);
+            await WaitFor(() => status.Text?.Contains("官网登录页面跳转未完成", StringComparison.Ordinal) == true);
             Check(web!.Url == https && client.Requests.All(address => !address.Contains("example.invalid", StringComparison.Ordinal)), "unrelated navigation remains blocked");
 
+            await Evaluate("location.href='chaoxing://synthetic-login'");
+            await WaitFor(() => status.Text?.Contains("继续应用内官网确认", StringComparison.Ordinal) == true);
+            Check(web!.Url == https && client.Requests.All(address => !address.StartsWith("chaoxing:", StringComparison.Ordinal)), "external protocol keeps the official WebView and exposes in-app recovery");
+
             await CaptureLogin("chaoxing");
-            Check(web is null && loginPlatform is null, "successful course validation returns from login to platform page");
+            Check(web is not null && loginPlatform == "chaoxing", "successful validation keeps official page visible until user continues");
             Check(store.LoadPlatformSessionInfo("chaoxing").State == "ready" && vault.Load("chaoxing") is not null, "validated official session is encrypted and confirmed");
             var recording = store.LoadCourseRecording("chaoxing");
             Check(recording.Courses.Count == 1 && !recording.SelectionConfirmed, "course catalog is shown before task collection");
             Check(handlers.Count == 1 && handlers[0].CatalogRequests == 1 && handlers[0].CourseCookieAccepted, "captured course cookie reaches the existing course reader");
             Check(store.LoadTasks().Count == 0, "login alone does not import unselected tasks");
-            Check(status.Text?.Contains("登录已保存", StringComparison.Ordinal) == true, "saved login status is visible");
+            Check(connectionTitle?.Text == "已接入，待选择课程" && connectionContinue?.Visibility == ViewStates.Visible, "verified connection exposes a visible course-selection action");
+            Check(connectionDetails?.Text?.Contains("课程：1 门", StringComparison.Ordinal) == true, "connection detail reports verified catalog count");
+            await CaptureLogin("chaoxing", false);
+            Check(handlers.Count == 1, "unchanged verified official page avoids repeated automatic login requests");
+            ShowLoginPageFailure("certificate_failed");
+            Check(connectionTitle?.Text == "已接入，待选择课程" && connectionPageProblem?.Text?.Contains("证书", StringComparison.Ordinal) == true,
+                "browser failure explains the page problem without erasing verified account result");
+            ContinueConnectedPlatform("chaoxing");
+            Check(web is null && loginPlatform is null, "explicit continue opens platform course selection");
+            Check(store.LoadConnectionReport("chaoxing") is { AccountVerified: true, CatalogCovered: true }, "verified connection status survives leaving official page");
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            sync = new(store, vault, _ => new SyntheticLoginHandler(entered, release));
+            var pending = RunSync("chaoxing", true);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            SettingsPage(); status.Text = "合成新页面提示";
+            release.SetResult(); await pending; await Task.Delay(50);
+            Check(status.Text == "合成新页面提示" && rootPage == "settings", "late synchronization progress and result cannot overwrite a newly opened page");
+            Platform("chaoxing");
             Report("passed");
         }
         catch (Exception error) { Report("failed", error.GetType().Name + ": " + error.Message); }
@@ -155,23 +178,27 @@ public sealed partial class MainActivity
         }
     }
 
-    private sealed class SyntheticLoginHandler : HttpMessageHandler
+    private sealed class SyntheticLoginHandler(TaskCompletionSource? entered = null, TaskCompletionSource? release = null) : HttpMessageHandler
     {
         public int CatalogRequests { get; private set; }
         public bool CourseCookieAccepted { get; private set; }
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var address = request.RequestUri!;
             var cookies = request.Headers.TryGetValues("Cookie", out var values) ? string.Join(";", values) : "";
             if (address.AbsoluteUri == ChaoxingSyncParser.Portal && cookies.Contains("_uid=900001", StringComparison.Ordinal))
-                return Task.FromResult(Page("<input id='fid' value='700001'>"));
+            {
+                entered?.TrySetResult();
+                if (release is not null) await release.Task.WaitAsync(cancellationToken);
+                return Page("<input id='fid' value='700001'>");
+            }
             if (address.Host == "mooc2-ans.chaoxing.com" && address.AbsolutePath == "/mooc2-ans/visit/courselistdata")
             {
                 CatalogRequests++;
                 CourseCookieAccepted = cookies.Contains("SyntheticCourseSession=SYNTHETIC-COURSE", StringComparison.Ordinal);
-                return Task.FromResult(CourseCookieAccepted
+                return CourseCookieAccepted
                     ? Page("<div class='course-list'><a href='https://mooc1.chaoxing.com/visit/stucoursemiddle?courseid=710001&amp;clazzid=720001&amp;cpi=730001'><span class='course-name'>扫码验证课程</span></a></div>")
-                    : new HttpResponseMessage(HttpStatusCode.Unauthorized));
+                    : new HttpResponseMessage(HttpStatusCode.Unauthorized);
             }
             throw new InvalidDataException("Unexpected synthetic course request.");
         }

@@ -52,6 +52,7 @@ public sealed record MoocCourse(string Name,
     string School, int Mode)
 {
     public bool IsSpoc => Mode is 10 or 15 or 20;
+    public DateTimeOffset? EndUtc { get; init; }
     public override string ToString() => nameof(MoocCourse);
 }
 
@@ -67,10 +68,14 @@ public sealed record MoocTask(
     public override string ToString() => nameof(MoocTask);
 }
 
-public sealed record MoocSyncProblem(string Code, string Course, string Message);
+public sealed record MoocSyncProblem(string Code, string Course, string Message)
+{
+    public string Outcome { get; init; } = "";
+}
 public sealed record MoocSyncSummary(int Courses, int CoursesRead, int Tasks, int Added, int Updated,
     bool LoginRequired, bool CourseListCovered, IReadOnlyList<MoocSyncProblem> Problems)
 {
+    public bool AccountVerified { get; init; }
     public int TasksWithDeadline { get; init; }
     public int TasksWithLink { get; init; }
     public int StatusNeedsReview { get; init; }

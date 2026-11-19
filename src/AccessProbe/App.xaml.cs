@@ -6,18 +6,14 @@ namespace AccessProbe;
 public partial class App : Application
 {
     private TaskDashboardWindow? dashboard;
-    private MainWindow? connectionWindow;
     private ReminderService? reminders;
     private ChaoxingSyncService? sync;
     private MoocSyncService? moocSync;
-    private MoocConnectionWindow? moocConnection;
     private XuetangSyncService? xuetangSync;
-    private XuetangConnectionWindow? xuetangConnection;
     private readonly Dictionary<string, RainSyncService> rainServices = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, RainConnectionWindow> rainConnections = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MetadataSyncService> metadataServices = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, MetadataConnectionWindow> metadataConnections = new(StringComparer.Ordinal);
     private TaskStore? store;
+    private string? applicationRoot;
     private bool exiting;
     private Mutex? instanceMutex;
     private bool instanceHeld;
@@ -68,6 +64,7 @@ public partial class App : Application
             Shutdown(1); return;
         }
         var root = location.Root;
+        applicationRoot = root;
         var temporary = Path.Combine(root, ".local", "temp");
         Directory.CreateDirectory(temporary);
         Environment.SetEnvironmentVariable("TEMP", temporary);
@@ -89,7 +86,6 @@ public partial class App : Application
             sync = new ChaoxingSyncService(store, root,
                 (Microsoft.Web.WebView2.Wpf.WebView2)dashboard.FindName("SessionBrowser"));
             dashboard.AttachSync(sync);
-            sync.StatusChanged += (message, running, warning) => connectionWindow?.ShowSyncStatus(message, warning);
             dashboard.AutomaticSyncSettingChanged += sync.SettingsChanged;
             foreach (var platform in RainPlatform.All)
             {
@@ -115,20 +111,17 @@ public partial class App : Application
             dashboard.PlatformConnectionRequested += ShowPlatformConnection;
             dashboard.Closed += (_, _) => { if (!exiting) ExitApplication(); };
             var settings = store.LoadSettings();
-            if (!settings.DisclaimerSeen)
-            {
-                MessageBox.Show(dashboard, TaskRules.Disclaimer, "首次使用说明", MessageBoxButton.OK, MessageBoxImage.Information);
-                store.SaveSettings(settings with { DisclaimerSeen = true });
-            }
+            var firstUse = settings.DisclaimerSeen ? Task.CompletedTask : ShowFirstUseAsync();
             reminders?.Tick();
-            dashboard.Dispatcher.BeginInvoke(new Action(() =>
+            dashboard.Dispatcher.BeginInvoke(new Action(async () =>
             {
                 sync?.StartAutomatic();
                 foreach (var service in rainServices.Values) service.StartAutomatic();
                 moocSync?.StartAutomatic();
                 xuetangSync?.StartAutomatic();
                 foreach (var service in metadataServices.Values) service.StartAutomatic();
-                if (location.ConnectPlatform is { } platform) ShowPlatformConnection(platform);
+                await firstUse;
+                if (!exiting && dashboard.ActivePage is null && location.ConnectPlatform is { } platform) ShowPlatformConnection(platform);
             }));
         }
         catch (TaskValidationException error)
@@ -146,41 +139,23 @@ public partial class App : Application
     private void ShowRainConnection(string platformId)
     {
         if (exiting || dashboard is null || !rainServices.TryGetValue(platformId, out var service)) return;
-        if (!rainConnections.TryGetValue(platformId, out var window))
-        {
-            window = new RainConnectionWindow(service, () => dashboard.ShowDashboard());
-            rainConnections.Add(platformId, window);
-            window.Closed += (_, _) => rainConnections.Remove(platformId);
-        }
-        else service.ConnectionOpened();
-        window.Show(); window.WindowState = WindowState.Normal; window.Activate();
+        dashboard.ShowConnectionPage(platformId, () => new RainConnectionPage(service, dashboard.ShowDashboard));
     }
 
     private void ShowPlatformConnection(string platformId)
     {
+        if (platformId == "chaoxing" && applicationRoot is not null) { ShowConnection(applicationRoot); return; }
         if (metadataServices.ContainsKey(platformId)) { ShowMetadataConnection(platformId); return; }
         if (platformId == XuetangPlatform.Id) { ShowXuetangConnection(); return; }
         if (platformId != MoocPlatform.Id) { ShowRainConnection(platformId); return; }
         if (exiting || dashboard is null || moocSync is null) return;
-        if (moocConnection is null)
-        {
-            moocConnection = new MoocConnectionWindow(moocSync, () => dashboard.ShowDashboard());
-            moocConnection.Closed += (_, _) => moocConnection = null;
-        }
-        else moocSync.ConnectionOpened();
-        moocConnection.Show(); moocConnection.WindowState = WindowState.Normal; moocConnection.Activate();
+        dashboard.ShowConnectionPage("mooc", () => new MoocConnectionPage(moocSync, dashboard.ShowDashboard));
     }
 
     private void ShowXuetangConnection()
     {
         if (exiting || dashboard is null || xuetangSync is null) return;
-        if (xuetangConnection is null)
-        {
-            xuetangConnection = new XuetangConnectionWindow(xuetangSync, () => dashboard.ShowDashboard());
-            xuetangConnection.Closed += (_, _) => xuetangConnection = null;
-        }
-        else xuetangSync.ConnectionOpened();
-        xuetangConnection.Show(); xuetangConnection.WindowState = WindowState.Normal; xuetangConnection.Activate();
+        dashboard.ShowConnectionPage("xuetang", () => new XuetangConnectionPage(xuetangSync, dashboard.ShowDashboard));
     }
 
     private static string MetadataBrowserName(string platformId) => platformId switch
@@ -188,28 +163,32 @@ public partial class App : Application
     private void ShowMetadataConnection(string platformId)
     {
         if (exiting || dashboard is null || !metadataServices.TryGetValue(platformId, out var service)) return;
-        if (!metadataConnections.TryGetValue(platformId, out var window))
-        {
-            window = new MetadataConnectionWindow(service, () => dashboard.ShowDashboard());
-            metadataConnections.Add(platformId, window); window.Closed += (_, _) => metadataConnections.Remove(platformId);
-        }
-        else service.ConnectionOpened();
-        window.Show(); window.WindowState = WindowState.Normal; window.Activate();
+        dashboard.ShowConnectionPage(platformId, () => new MetadataConnectionPage(service, dashboard.ShowDashboard));
     }
 
     private void ShowConnection(string root)
     {
         if (exiting || store is null || dashboard is null) return;
-        sync?.LoginConnectionOpened();
-        if (connectionWindow is null)
+        dashboard.ShowConnectionPage("chaoxing", () =>
         {
-            connectionWindow = new MainWindow(root, store, () => dashboard.ShowDashboard(), sync);
-            connectionWindow.OfficialNavigationCompleted += address => sync?.LoginNavigationCompleted(address);
-            connectionWindow.SessionClearing += () => sync?.SessionClearing();
-            connectionWindow.SessionClearCompleted += succeeded => sync?.SessionClearCompleted(succeeded);
-            connectionWindow.Closed += (_, _) => { sync?.LoginConnectionClosed(); connectionWindow = null; };
-        }
-        connectionWindow.Show(); connectionWindow.WindowState = WindowState.Normal; connectionWindow.Activate();
+            var page = new ChaoxingConnectionPage(root, store, dashboard.ShowDashboard, sync);
+            page.OfficialNavigationCompleted += address => sync?.LoginNavigationCompleted(address);
+            page.SessionClearing += () => sync?.SessionClearing();
+            page.SessionClearCompleted += succeeded => sync?.SessionClearCompleted(succeeded);
+            if (sync is { } service)
+            {
+                service.StatusChanged += page.ShowSyncStatusForPage;
+                page.Closed += (_, _) => service.StatusChanged -= page.ShowSyncStatusForPage;
+            }
+            return page;
+        });
+    }
+
+    private async Task ShowFirstUseAsync()
+    {
+        if (dashboard is null || store is null) return;
+        if (await dashboard.ConfirmAsync("首次使用说明", TaskRules.Disclaimer, "开始使用", cancel: null))
+            store.SaveSettings(store.LoadSettings() with { DisclaimerSeen = true });
     }
 
     private async void ExitApplication()
@@ -220,38 +199,33 @@ public partial class App : Application
             dashboard.ShowSuccess("正在保存登录状态并退出，请稍候……");
             dashboard.IsEnabled = false;
         }
-        connectionWindow?.Close();
-        moocConnection?.Close();
-        xuetangConnection?.Close();
-        foreach (var window in metadataConnections.Values.ToArray()) window.Close();
-        foreach (var window in rainConnections.Values.ToArray()) window.Close();
+        dashboard?.DisposeWorkspaceForExit();
+        var persistenceWarnings = new List<string>();
         foreach (var service in rainServices.Values)
         {
-            if (!await service.SaveForExitAsync()) dashboard?.ShowError("SESSION001", service.Platform.Name + "登录未能保存，下次可能需要重新登录。");
+            if (!await service.SaveForExitAsync()) persistenceWarnings.Add(service.Platform.Name + "：登录未能保存，下次可能需要重新登录。");
             service.Dispose();
         }
         rainServices.Clear();
         if (moocSync is not null && !await moocSync.SaveForExitAsync())
-            MessageBox.Show("MOOC004：MOOC 登录状态未能保存，下次启动可能需要重新登录。已有任务已保留。",
-                "登录状态保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            persistenceWarnings.Add("MOOC004：中国大学 MOOC 登录状态未能保存，下次可能需要重新登录。");
         moocSync?.Dispose(); moocSync = null;
         if (xuetangSync is not null && !await xuetangSync.SaveForExitAsync())
-            MessageBox.Show("XT004：学堂在线登录状态未能保存，下次启动可能需要重新登录。已有任务已保留。",
-                "登录状态保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            persistenceWarnings.Add("XT004：学堂在线登录状态未能保存，下次可能需要重新登录。");
         xuetangSync?.Dispose(); xuetangSync = null;
         foreach (var service in metadataServices.Values)
         {
             if (!await service.SaveForExitAsync())
-                MessageBox.Show(service.Platform.CodePrefix + "004：" + service.Platform.Name + "登录状态未能保存，下次启动可能需要重新登录。已有任务保留。",
-                    "登录状态保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+                persistenceWarnings.Add(service.Platform.CodePrefix + "004：" + service.Platform.Name + "登录状态未能保存，下次可能需要重新登录。");
             service.Dispose();
         }
         metadataServices.Clear();
         if (sync is not null && !await sync.SaveForExitAsync())
-            MessageBox.Show("SESSION001：登录状态未能保存到本地，下次启动可能需要重新登录。任务已保留；请检查项目目录是否可写。",
-                "登录状态保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            persistenceWarnings.Add("SESSION001：学习通登录状态未能保存，下次可能需要重新登录；请检查项目目录是否可写。");
         sync?.Dispose(); sync = null;
         reminders?.Dispose(); reminders = null;
+        if (persistenceWarnings.Count > 0 && dashboard is { IsVisible: true })
+            await dashboard.ShowExitNoticeAsync(string.Join("\n", persistenceWarnings) + "\n\n已有任务已保留。");
         dashboard?.CloseForExit(); Shutdown();
     }
 

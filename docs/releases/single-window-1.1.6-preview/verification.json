@@ -1,0 +1,131 @@
+{
+  "schema": 1,
+  "version": "1.1.6",
+  "buildId": "20261115-145307-3ed3528f",
+  "preview": true,
+  "date": "2026-11-15",
+  "outcome": "automated_and_isolated_checks_passed",
+  "scope": {
+    "clientsChanged": [
+      "Windows"
+    ],
+    "androidPreviewUnchanged": "1.1.5, VersionCode 7",
+    "accountModel": "one current personal account per platform on each local client",
+    "crossDeviceSync": false,
+    "normalBusinessWindows": 1,
+    "internalPages": [
+      "platform_manager",
+      "official_login",
+      "course_selection",
+      "task_editor",
+      "settings",
+      "sync_details",
+      "reminder_history",
+      "confirmations"
+    ],
+    "firstConfirmedLoginAdvancesToSelection": true,
+    "knownSelectionAutomaticallySynchronizes": true,
+    "completeSavedConnectionReturnsHome": true,
+    "confirmedEmptyCatalogReturnsHomeWithExplanation": true,
+    "unverifiedOrIncompleteResultStaysOnPage": true,
+    "lateCallbacksCannotTakeOverAnotherWorkflow": true,
+    "backRetainsOfficialBrowserAndProfile": true,
+    "failedBrowserPageRecreatedOnReentry": true,
+    "officialTaskOpensSystemBrowser": true,
+    "startupFailureAndDuplicateInstanceSystemMessagesRetained": true,
+    "uaiWindows": "manual_only; full automatic task collection pending",
+    "chaoxingIndependentListsPreservedFrom1_1_5": true
+  },
+  "packages": [
+    {
+      "file": "聚合平台-1.1.6-Setup-win-x64.exe",
+      "bytes": 59137325,
+      "sha256": "7247fc70b2729ebabb223dfbbf6b899a38842533a20a1dad4b808dee98984744"
+    },
+    {
+      "file": "聚合平台-1.1.6-便携测试版-win-x64.zip",
+      "bytes": 81117780,
+      "sha256": "565fd81e9d06260d23e934db9e120b8b4fc7043b7348ee819d91a04796f20857"
+    }
+  ],
+  "windows": {
+    "buildId": "20261115-145307-3ed3528f",
+    "projects": 11,
+    "businessChecks": 3092,
+    "desktopAndRestartChecks": {
+      "dashboardUi": 288,
+      "automaticSync": 36,
+      "taskNavigation": 12,
+      "sessionRaces": 13,
+      "chaoxingProcessRestarts": 77,
+      "rainAndUnifiedDashboard": 98,
+      "moocAndCourseSelection": 107,
+      "moocProcessRestarts": 81,
+      "xuetangAndUnifiedDashboard": 72,
+      "xuetangProcessRestarts": 81,
+      "otherPlatformConnections": 261,
+      "otherPlatformProcessRestarts": 136,
+      "ptaAndTeachingCourses": 46,
+      "ptaProcessRestarts": 73,
+      "total": 1381
+    },
+    "pythonDiagnosticChecks": 63,
+    "buildWarnings": 0,
+    "buildErrors": 0,
+    "executionMode": "full_regression_completed",
+    "navigationScenarios": 36,
+    "webviewConnectionFlowScenarios": 11,
+    "bothSingleWindowReportsAssertOneWindowForEachScenario": true,
+    "navigationAndFlowScenariosIncludedInDashboardTotal": true,
+    "layout": {
+      "platforms": 8,
+      "scenes": 24,
+      "screenshots": 32,
+      "metrics": "passed",
+      "visualAcceptance": "pending"
+    },
+    "previewChecks": {
+      "outcome": "passed",
+      "checks": 26,
+      "data": "synthetic_only",
+      "visualAcceptance": "pending"
+    },
+    "installer": {
+      "outcome": "passed",
+      "variant": "TestInstallation",
+      "sameDeliveryPayload": true,
+      "deliverySetupExecuted": false,
+      "upgradeFrom": "1.1.2",
+      "upgradePreservesData": true,
+      "uninstallPreservesExternalData": true
+    },
+    "portable": {
+      "outcome": "passed",
+      "files": 524,
+      "payloadFiles": 520,
+      "allFilesHashMatched": true,
+      "zipCrcPassed": true,
+      "isolatedEntryConfigured": true,
+      "startupScope": "resource dictionaries and isolated database initialization, no official login"
+    },
+    "runtime": "10.0.13",
+    "selfContained": true,
+    "dependencyPackages": 10,
+    "licenseSourceFilesHashMatched": 21,
+    "embeddedIconFrames": 10
+  },
+  "preservation": {
+    "productionCurrentBuild": "20261111-060027-e533c14f",
+    "currentHashUnchanged": true,
+    "productionTaskDatabaseHashUnchanged": true,
+    "previous1_1_5DeliveryRetained": true,
+    "githubReleaseUpdated": false,
+    "sourcePushed": false
+  },
+  "officialNetworkAccessed": false,
+  "productionDataAccessed": false,
+  "realPhoneOperated": false,
+  "realAccountAcceptance": "pending",
+  "visualAcceptance": "pending",
+  "verifiedAtUtc": "2026-11-15T15:06:42.262907+00:00"
+}

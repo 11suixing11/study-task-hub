@@ -31,7 +31,8 @@ public sealed partial class TaskStore
                 || settings.LastCatalogRefresh is { } refresh && !CourseRecordingRules.IsCatalogRefresh(refresh)
                 || settings.SelectedCourseKeys.Any(key => !CourseRecordingRules.IsKey(platformId, key))
                 || settings.Courses.Any(course => course is null || !CourseRecordingRules.IsKey(platformId, course.Key)
-                    || string.IsNullOrWhiteSpace(course.Name) || course.Name.Length > 200 || course.Detail is null || course.Detail.Length > 200)
+                    || string.IsNullOrWhiteSpace(course.Name) || course.Name.Length > 200 || course.Detail is null || course.Detail.Length > 200
+                    || !CourseLifecycleRules.IsValid(course.Lifecycle))
                 || settings.Courses.Select(course => course.Key).Distinct(StringComparer.Ordinal).Count() != settings.Courses.Count)
                 throw new JsonException();
             return settings;
@@ -49,11 +50,11 @@ public sealed partial class TaskStore
         lock (gate) { using var connection = Open(); return ReadCourseRecording(connection, null, platformId); }
     }
 
-    private IReadOnlyList<TaskItem> ReadRecordingTasks(SqliteConnection connection, SqliteTransaction? transaction, string platformId)
+    private IReadOnlyList<TaskItem> ReadRecordingTasks(SqliteConnection connection, SqliteTransaction? transaction, string platformId, bool readLink = true)
     {
-        using var command = Command(connection, transaction, "SELECT id,revision,payload,protected_link FROM tasks WHERE json_extract(payload,'$.PlatformId')=$platform;", ("$platform", platformId));
+        using var command = Command(connection, transaction, $"SELECT id,revision,payload,{(readLink ? "protected_link" : "NULL")} FROM tasks WHERE json_extract(payload,'$.PlatformId')=$platform;", ("$platform", platformId));
         using var reader = command.ExecuteReader(); var tasks = new List<TaskItem>();
-        while (reader.Read()) tasks.Add(ReadItem(reader));
+        while (reader.Read()) tasks.Add(ReadItem(reader, readLink));
         return tasks;
     }
 
@@ -78,7 +79,7 @@ public sealed partial class TaskStore
         {
             using var connection = Open(); using var transaction = connection.BeginTransaction();
             var settings = ReadCourseRecording(connection, transaction, platformId);
-            return settings with { Courses = RecordingCourses(settings, ReadRecordingTasks(connection, transaction, platformId)) };
+            return settings with { Courses = RecordingCourses(settings, ReadRecordingTasks(connection, transaction, platformId, readLink: false)) };
         }
     }
 
@@ -87,7 +88,8 @@ public sealed partial class TaskStore
     {
         CheckRecordingPlatform(platformId);
         if (observed.Any(item => !CourseRecordingRules.IsKey(platformId, item.Course.Key)
-            || string.IsNullOrWhiteSpace(item.Course.Name) || item.Course.Name.Length > 200 || item.Course.Detail.Length > 200))
+            || string.IsNullOrWhiteSpace(item.Course.Name) || item.Course.Name.Length > 200 || item.Course.Detail.Length > 200
+            || !CourseLifecycleRules.IsValid(item.Course.Lifecycle)))
             throw new TaskValidationException("COURSE001", "课程信息无法确认，未更新记录课程设置。");
         CourseRecordingSettings result;
         lock (gate)
@@ -98,7 +100,13 @@ public sealed partial class TaskStore
             var selectedKeys = current.SelectedCourseKeys.ToHashSet(StringComparer.Ordinal);
             var courses = current.Courses.ToDictionary(course => course.Key,
                 course => complete ? course with { Available = false } : course, StringComparer.Ordinal);
-            foreach (var item in observed) courses[item.Course.Key] = item.Course with { Available = true };
+            // Replace lifecycle evidence for every observed course, including Unknown. A renewed course
+            // must not stay hidden because a previous catalog supplied an obsolete end date.
+            foreach (var item in observed) courses[item.Course.Key] = item.Course with
+            {
+                Available = true,
+                Lifecycle = item.Course.Lifecycle with { ObservedAtUtc = now.ToUniversalTime() }
+            };
             // Upgrade old tasks by their verified task identity, never by their editable course name.
             foreach (var task in ReadRecordingTasks(connection, transaction, platformId).Where(task => task.Source != TaskSource.Manual && task.RecordingCourseKey.Length == 0))
             {

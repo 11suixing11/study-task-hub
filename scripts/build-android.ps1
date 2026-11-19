@@ -2,7 +2,8 @@
     [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '1.1.2',
     [ValidateRange(1,2147483647)][int]$VersionCode = 4,
     [string]$AndroidSdkDirectory,
-    [string]$JavaSdkDirectory
+    [string]$JavaSdkDirectory,
+    [string]$OutputDirectory
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -47,7 +48,7 @@ try {
     }
     $taskBuildId=[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')+'-'+[Guid]::NewGuid().ToString('N').Substring(0,8)
     $taskBuild=Join-Path $taskRoot ('.local\android-release-builds\'+$taskBuildId)
-    $taskOutput=Join-Path $taskRoot 'artifacts\android'
+    $taskOutput=if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $taskRoot 'artifacts\android' }
     New-Item -ItemType Directory -Force -Path $taskOutput | Out-Null
     $ErrorActionPreference='Continue'
     & (Join-Path $env:DOTNET_ROOT 'dotnet.exe') publish (Join-Path $taskRoot 'src\AccessProbe.Android\AccessProbe.Android.csproj') -c Release --artifacts-path $taskBuild --output (Join-Path $taskBuild 'publish') --disable-build-servers --configfile (Join-Path $taskRoot 'NuGet.Config') ('-p:AndroidSdkDirectory='+$taskSdk) ('-p:JavaSdkDirectory='+$taskJdk) -p:NuGetAudit=false -p:AndroidKeyStore=true ('-p:AndroidSigningKeyStore='+$taskKey) ('-p:AndroidSigningKeyAlias='+$taskKeyAlias) -p:AndroidSigningStorePass=env:AGGREGATOR_SIGNING_PASSWORD -p:AndroidSigningKeyPass=env:AGGREGATOR_SIGNING_PASSWORD ('-p:ApplicationDisplayVersion='+$Version) ('-p:ApplicationVersion='+$VersionCode) 2>&1 | Out-File -LiteralPath (Join-Path $taskOutput 'build.log') -Encoding UTF8
@@ -57,7 +58,9 @@ try {
     if(-not $taskApk){throw 'Signed Android APK is missing.'}
     $taskTarget=Join-Path $taskOutput ('聚合平台-'+$Version+'-android.apk')
     Copy-Item -LiteralPath $taskApk.FullName -Destination $taskTarget -Force
-    Copy-Item -LiteralPath (Join-Path $taskRoot 'packaging\android\使用说明.txt') -Destination (Join-Path $taskOutput '使用说明.txt') -Force
+    $taskVersionInstructions=Join-Path $taskRoot ('packaging\android\使用说明-'+$Version+'测试版.txt')
+    $taskInstructions=if(Test-Path -LiteralPath $taskVersionInstructions){$taskVersionInstructions}else{Join-Path $taskRoot 'packaging\android\使用说明.txt'}
+    Copy-Item -LiteralPath $taskInstructions -Destination (Join-Path $taskOutput '使用说明.txt') -Force
     $ErrorActionPreference='Continue'
     & (Join-Path $taskSdk 'build-tools\36.0.0\apksigner.bat') verify --verbose --print-certs $taskTarget 2>&1 | Out-File -LiteralPath (Join-Path $taskOutput 'signature-checks.log') -Encoding UTF8
     $taskExitCode=$LASTEXITCODE; $ErrorActionPreference='Stop'

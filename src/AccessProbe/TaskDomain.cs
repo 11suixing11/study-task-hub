@@ -35,6 +35,10 @@ public sealed record TaskItem
     public string PlatformTitle { get; init; } = "";
     public string PlatformStatusText { get; init; } = "";
     public string PlatformStateEvidence { get; init; } = "";
+    public TaskState? PlatformObservedState { get; init; }
+    public DateTimeOffset? PlatformStateObservedAtUtc { get; init; }
+    public string PlatformAttentionToken { get; init; } = "";
+    public string PlatformAttentionAcknowledgedToken { get; init; } = "";
     public string AutomaticStatusExplanation { get; init; } = "";
     public string CollectedLearningEvidence { get; init; } = "";
     public string CollectedNavigationKey { get; init; } = "";
@@ -75,14 +79,15 @@ public static class PlatformCatalog
     public static readonly IReadOnlyList<PlatformSite> Sites =
     [
         new("mooc", "中国大学 MOOC", "icourse163.org", "官方手机号 / 邮箱 / 微信登录", "先选择课程，再采集作业、测验及考试；覆盖范围以同步详情为准"),
-        new("chaoxing", "学习通", "chaoxing.com / xuexitong.com", "官方扫码 / 账号登录", "先选择课程，再同步已选课程作业；覆盖范围以最近同步结果为准"),
+        new("chaoxing", "学习通", "chaoxing.com / xuexitong.com", "官方扫码 / 账号登录", "先选择课程，再同步已选课程作业与考试；考试按平台状态入库，覆盖范围以最近同步结果为准"),
         new("changjiang", "长江雨课堂", "changjiang.yuketang.cn", "官方扫码 / 账号登录", "先选择课程，再采集作业与测验；实际覆盖范围见同步详情"),
         new("yuketang", "雨课堂", "www.yuketang.cn / pro.yuketang.cn", "官方扫码 / 账号登录", "先选择课程，再采集作业与测验；实际覆盖范围见同步详情"),
         new("ucampus", "U 校园", "u.unipus.cn", "官方登录", "先选择班课，再采集作业、测试与单元截止日期和必学进度；特殊课件的覆盖情况见同步详情"),
         new("fif", "Fi 口语", "fifedu.com", "手动记录", "FiF 暂不适配；已有任务保留，可继续手动记录"),
         new("xuetang", "学堂在线", "www.xuetangx.com", "官方登录", "先选择课程，再采集新版主站普通课程的练习与考试；旧版、多课项目暂未覆盖"),
         new("zhihuishu", "智慧树", "zhihuishu.com", "官方登录", "先列出翻转课、共享课、智慧课程及 AI 智课，保存选择后采集已支持的作业、考试；其他学习任务与旧版课程的限制见同步详情"),
-        new("pta", "PTA", "pintia.cn", "官方登录", "先选择教学课程，再同步题目集、答卷状态与截止时间；互评和特殊题目集需核对")
+        new("pta", "PTA", "pintia.cn", "官方登录", "先选择教学课程，再同步题目集、答卷状态与截止时间；互评和特殊题目集需核对"),
+        new("uai", "U 校园 AI 版", "uai.unipus.cn", "应用内官方登录（安卓预览）", UaiPortal.CoverageText)
     ];
     public static string Name(string id) => Sites.FirstOrDefault(site => site.Id == id)?.Name ?? id;
 }
@@ -103,8 +108,34 @@ public static class TaskRules
         TaskState.Ignored => "已忽略", TaskState.Returned => "被打回", TaskState.NeedsReview => "待核对", _ => "未知"
     };
 
-    public static bool IsActive(TaskItem task) => task.State is TaskState.Pending or TaskState.Returned or TaskState.NeedsReview;
+    public static bool HasPlatformAttention(TaskItem task) => IsCollected(task) && task.Overrides.HasFlag(TaskOverrides.State)
+        && task.State is TaskState.Completed or TaskState.Ignored
+        && task.PlatformObservedState is TaskState.Returned or TaskState.Pending
+        && task.PlatformAttentionToken.Length > 0 && task.PlatformAttentionToken != task.PlatformAttentionAcknowledgedToken;
+
+    public static bool IsActive(TaskItem task) => task.State is TaskState.Pending or TaskState.Returned or TaskState.NeedsReview || HasPlatformAttention(task);
     public static bool IsCollected(TaskItem task) => task.Source != TaskSource.Manual;
+
+    public static string StateName(TaskItem task) => StateName(task.State)
+        + (HasPlatformAttention(task) ? task.PlatformObservedState == TaskState.Returned ? " · 官网要求重做" : " · 官网再次待办" : "");
+
+    public static TaskItem ObservePlatformState(TaskItem task, TaskItem? previous, TaskState? observed, DateTimeOffset now)
+    {
+        // Missing/unknown state is not evidence that an earlier official requirement went away.
+        if (observed is null or TaskState.NeedsReview) return task;
+        if (observed == TaskState.Pending && task.PlatformStateEvidence is not ("explicit" or "platform_progress") && task.Source != TaskSource.Chaoxing) return task;
+        var conflict = task.Overrides.HasFlag(TaskOverrides.State) && task.State is TaskState.Completed or TaskState.Ignored
+            && (observed == TaskState.Returned || observed == TaskState.Pending
+                && (previous?.PlatformObservedState == TaskState.Completed
+                    || previous?.PlatformObservedState is TaskState.Pending or TaskState.Returned && previous.PlatformAttentionToken.Length > 0));
+        var sameRequirement = conflict && previous?.PlatformObservedState is TaskState.Pending or TaskState.Returned && previous.PlatformAttentionToken.Length > 0;
+        return task with
+        {
+            PlatformObservedState = observed, PlatformStateObservedAtUtc = now.ToUniversalTime(),
+            PlatformAttentionToken = conflict ? sameRequirement ? previous!.PlatformAttentionToken : Guid.NewGuid().ToString("N") : "",
+            PlatformAttentionAcknowledgedToken = sameRequirement ? previous!.PlatformAttentionAcknowledgedToken : ""
+        };
+    }
 
     public static bool CanComplete(TaskItem task) => task.Source == TaskSource.Manual
         || task.ProgressPercent is null or 100m;

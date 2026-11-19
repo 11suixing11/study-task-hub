@@ -8,7 +8,7 @@ using Microsoft.Web.WebView2.Wpf;
 
 namespace AccessProbe;
 
-public sealed class MetadataSyncService : IDisposable
+public sealed partial class MetadataSyncService : IDisposable
 {
     public MetadataPlatform Platform { get; }
     private readonly TaskStore store;
@@ -26,6 +26,8 @@ public sealed class MetadataSyncService : IDisposable
     private TaskCompletionSource<bool>? finished;
     private bool disposed, clearing, stopping, loginOpen, loginPending, sessionRejected;
     private long generation;
+    private DateTimeOffset? validatedConnectionAtUtc;
+    private long validatedConnectionGeneration, validatedConnectionRevision;
     private DateTimeOffset retryAfter;
     private string? metadataToken, tokenCookieBinding;
     private string? metadataTokenSource;
@@ -42,8 +44,23 @@ public sealed class MetadataSyncService : IDisposable
     public MetadataLoginDiagnostics LoginDiagnostics { get; }
     public event Action<string, bool, bool>? StatusChanged;
     public event Action<MetadataSyncSummary>? Completed;
-    public event Action? CourseSelectionRequired;
     public event Action<MetadataSyncSummary>? CatalogCompleted;
+
+    public bool IsCurrentConnection(ConnectionReport report) => Platform.Id != "pta"
+        || !disposed && !stopping && !clearing && validatedConnectionAtUtc == report.CheckedAtUtc
+            && validatedConnectionGeneration == generation && validatedConnectionRevision > 0
+            && validatedConnectionRevision == LoginDiagnostics.AccountValidationRevision;
+
+    private void InvalidateConnectionValidation()
+    {
+        validatedConnectionAtUtc = null; validatedConnectionRevision = 0;
+    }
+
+    public void LoginPreparationStarted()
+    {
+        if (Platform.Id == "pta") { generation++; InvalidateConnectionValidation(); Cancel(); }
+        LoginDiagnostics.Record(MetadataLoginStage.Preparation, MetadataLoginResult.Started);
+    }
 
     public MetadataSyncService(MetadataPlatform platform, TaskStore store, string root, WebView2 sessionBrowser,
         Func<HttpMessageHandler>? handlerFactory = null, TimeSpan? loginCheckInterval = null, ReadOnlyMemory<byte>? testMetadataKey = null)
@@ -83,7 +100,7 @@ public sealed class MetadataSyncService : IDisposable
     public void ConnectionOpened()
     {
         if (disposed || stopping || clearing || !Platform.AdaptationEnabled) return;
-        loginOpen = true; generation++; Cancel();
+        loginOpen = true; generation++; InvalidateConnectionValidation(); Cancel();
         var settings = store.LoadMetadataSettings(Platform.Id);
         if (!settings.Connected) store.SaveMetadataSettings(Platform.Id, settings with { Connected = true });
         timer.Start(); ScheduleLoginCheck();
@@ -103,11 +120,18 @@ public sealed class MetadataSyncService : IDisposable
             var current = await ReadProfileAsync();
             if (disposed || stopping || clearing) return;
             if (!sessionRejected) SaveProfile(current);
-            else if (Platform.Id is "ucampus" or "zhihuishu")
+            else if (Platform.Id is "ucampus" or "zhihuishu" or "pta")
             {
-                var account = Platform.Id == "ucampus" ? MetadataPlatformParser.UcampusAccount(current) : MetadataPlatformParser.ZhihuishuAccount(current);
+                // PTA confirms the account through the official profile API instead of a cookie, so before that
+                // check runs, any retained account cookie is the available new-login evidence.
+                var hasAccount = Platform.Id switch
+                {
+                    "ucampus" => MetadataPlatformParser.UcampusAccount(current) is not null,
+                    "zhihuishu" => MetadataPlatformParser.ZhihuishuAccount(current) is not null,
+                    _ => current.Any(cookie => Platform.IsAccountCookie(cookie) && cookie.Value.Length > 0)
+                };
                 var rejected = sessionStore.LoadForRevalidation(DateTimeOffset.UtcNow);
-                if (account is not null && current.Any(cookie => Platform.IsAccountCookie(cookie) && cookie.Value.Length > 0
+                if (hasAccount && current.Any(cookie => Platform.IsAccountCookie(cookie) && cookie.Value.Length > 0
                     && !rejected.Any(previous => previous.Key == cookie.Key && previous.Value == cookie.Value)))
                 {
                     // A newly completed login can close before the timer checks it. Save it as unverified, without reviving the rejected session.
@@ -166,18 +190,22 @@ public sealed class MetadataSyncService : IDisposable
                 if (account is null)
                 {
                     LoginDiagnostics.Record(MetadataLoginStage.SessionCheck, MetadataLoginResult.AwaitingLogin);
-                    StatusChanged?.Invoke($"正在等待{Platform.Name}官方登录完成；登录后请等待返回学生课程主页，Cookie 会自动更新。", false, false);
+                    PublishConnection(new(Platform.Id, 0, 0, 0, 0, 0, 0, false, false, []), true, true);
+                    StatusChanged?.Invoke($"正在等待{Platform.Name}官网确认登录。已扫码时请核对官方 App 中的授权，等待返回学生课程主页后点击“检查接入”。", false, false);
                     if (loginOpen) ScheduleLoginCheck(); return;
                 }
             }
             stage = "course_task_metadata";
             using var reader = CreateReader(scope);
+            var acceptProgress = true;
             var progress = new Progress<string>(message =>
-            { if (!disposed && !runCancellation.IsCancellationRequested) StatusChanged?.Invoke(message, true, false); });
+            { if (acceptProgress && ReferenceEquals(cancellation, runCancellation) && !disposed && !runCancellation.IsCancellationRequested) StatusChanged?.Invoke(message, true, false); });
             var summary = await new MetadataSynchronizer(Platform, store, reader, token => ValidateSessionAsync(scope, token))
                 .RunAsync(progress, runCancellation.Token, catalogOnly);
+            acceptProgress = false;
             stage = "session_persistence";
-            if (!await FinishSessionAsync(scope, summary.LoginRequired, runCancellation.Token, summary.AccountVerified))
+            var sessionSaved = await FinishSessionAsync(scope, summary.LoginRequired, runCancellation.Token, summary.AccountVerified);
+            if (!sessionSaved)
                 summary = summary with { Problems = summary.Problems.Concat([new MetadataSyncProblem(Platform.CodePrefix + "004", "", "登录状态未能保存，重启后可能需要重新登录。")]).ToArray() };
             CheckScope(scope, runCancellation.Token);
             LoginDiagnostics.Record(MetadataLoginStage.SessionCheck, summary.LoginRequired ? MetadataLoginResult.LoginRequired
@@ -188,13 +216,10 @@ public sealed class MetadataSyncService : IDisposable
                 var codes = summary.Problems.Select(problem => problem.Code).Distinct(StringComparer.Ordinal).Take(16).ToArray();
                 var catalogOutcome = CourseRecordingRules.CatalogRefreshOutcome(summary.CourseListCovered, summary.LoginRequired, codes);
                 store.RecordCourseCatalogResult(Platform.Id, catalogOutcome, codes, DateTimeOffset.UtcNow, runCancellation.Token);
+                CheckScope(scope, runCancellation.Token);
+                var connectionFeedback = PublishConnection(summary, catalogOnly, sessionSaved);
                 retryAfter = DateTimeOffset.UtcNow.AddMinutes(summary.LoginRequired ? 30 : 5);
-                StatusChanged?.Invoke(summary.LoginRequired ? $"{Platform.CodePrefix}001：请在连接{Platform.Name}窗口完成官方登录后刷新课程。"
-                    : catalogOutcome == "completed" ? $"{Platform.Name} 课程列表已刷新，共 {summary.Courses} 门课程。"
-                    : summary.AccountVerified ? $"{Platform.Name} 登录已确认，课程列表未完整刷新；已有课程可选择，请查看课程刷新详情后重试。"
-                    : $"{Platform.Name} 课程列表未完整刷新；原有课程选择保留，请查看登录诊断。", false,
-                    catalogOutcome != "completed");
-                if (!summary.LoginRequired && summary.CourseListCovered && (needsSelection || afterLogin && loginOpen)) CourseSelectionRequired?.Invoke();
+                StatusChanged?.Invoke(connectionFeedback.Text, false, connectionFeedback.Warning);
                 CatalogCompleted?.Invoke(summary);
                 if (afterLogin && summary.LoginRequired && loginOpen) ScheduleLoginCheck();
                 return;
@@ -203,6 +228,8 @@ public sealed class MetadataSyncService : IDisposable
                 || !summary.FullTaskListsCovered || Platform.Id == "ucampus" && !summary.LearningUnitListsCovered ? "partial" : "completed";
             stage = "result_persistence";
             store.RecordMetadataSyncResult(summary, outcome, DateTimeOffset.UtcNow, runCancellation.Token);
+            CheckScope(scope, runCancellation.Token);
+            var taskFeedback = PublishConnection(summary, catalogOnly, sessionSaved);
             retryAfter = DateTimeOffset.UtcNow.AddMinutes(summary.LoginRequired ? 30 : 5);
             var readProgress = Platform.Id == "pta" && summary.TaskListCoursesRead is { } listCount
                 ? $"PTA 已读取 {listCount}/{summary.SelectedCourses} 门已选课程的题目集，完整核对答卷 {summary.CoursesRead} 门（发现 {summary.Courses} 门）；采集 {summary.Tasks} 条任务；新增 {summary.Added}、更新 {summary.Updated}。"
@@ -218,26 +245,29 @@ public sealed class MetadataSyncService : IDisposable
                         "pta" => "覆盖教学课程题目集；互评、特殊题目集及逐题进度的范围见同步详情。",
                         _ => "覆盖翻转课、共享课和新版智慧课程已确认的作业、考试，完整范围见同步详情。"
                     });
-            StatusChanged?.Invoke(message, false, outcome != "completed"); Completed?.Invoke(summary);
+            StatusChanged?.Invoke(message, false, taskFeedback.Warning); Completed?.Invoke(summary);
             if (afterLogin && summary.LoginRequired && loginOpen) ScheduleLoginCheck();
         }
         catch (SessionChangedException error)
         {
+            InvalidateConnectionValidation();
             LoginDiagnostics.RecordSessionChange(error.Message);
             if (!disposed && !stopping) StatusChanged?.Invoke($"{Platform.CodePrefix}003：登录会话在同步期间更新，已停止旧请求；请重新同步，已保存任务保留。", false, true);
             if (loginOpen) ScheduleLoginCheck();
         }
         catch (CourseRecordingChangedException)
-        { if (!disposed && !stopping) StatusChanged?.Invoke($"{Platform.Name} 记录课程已更新，本轮旧请求已停止；下次同步按新选择采集。", false, false); }
+        { InvalidateConnectionValidation(); if (!disposed && !stopping) StatusChanged?.Invoke($"{Platform.Name} 记录课程已更新，本轮旧请求已停止；下次同步按新选择采集。", false, false); }
         catch (OperationCanceledException)
-        { if (!disposed && !stopping) StatusChanged?.Invoke($"{Platform.Name} 本轮同步已停止；已有任务保留。", false, true); }
+        { InvalidateConnectionValidation(); if (!disposed && !stopping) StatusChanged?.Invoke($"{Platform.Name} 本轮同步已停止；已有任务保留。", false, true); }
         catch (TaskValidationException error)
         {
+            InvalidateConnectionValidation();
             if (catalogOnly && !disposed && !stopping && !clearing) RecordCatalogFailure(error.Code, runCancellation.Token);
             if (!disposed && !stopping) StatusChanged?.Invoke(error.Code + "：" + error.Message, false, true);
         }
         catch (Exception error)
         {
+            InvalidateConnectionValidation();
             if (!disposed && !stopping && !clearing)
             {
                 var detail = error.GetType().Name;
@@ -553,7 +583,7 @@ public sealed class MetadataSyncService : IDisposable
     public async Task ClearSessionAsync()
     {
         if (disposed || stopping || clearing) return;
-        clearing = true; generation++; timer.Stop(); var pending = finished?.Task; Cancel();
+        clearing = true; generation++; InvalidateConnectionValidation(); timer.Stop(); var pending = finished?.Task; Cancel();
         StatusChanged?.Invoke($"正在清除{Platform.Name} 登录数据，已有任务保留。", false, true);
         try
         {

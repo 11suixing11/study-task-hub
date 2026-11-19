@@ -23,16 +23,25 @@
     <Compile Include="../../src/AccessProbe/WorkDetailParser.cs" Link="WorkDetailParser.cs" />
     <Compile Include="../../src/AccessProbe/WorkPageSnapshot.cs" Link="WorkPageSnapshot.cs" />
     <Compile Include="../../src/AccessProbe/ChaoxingSync.cs" Link="ChaoxingSync.cs" />
+    <Compile Include="../../src/AccessProbe/ChaoxingExamParser.cs" Link="ChaoxingExamParser.cs" />
     <Compile Include="../../src/AccessProbe/ChaoxingHttpReader.cs" Link="ChaoxingHttpReader.cs" />
     <Compile Include="../../src/AccessProbe/ChaoxingSessionStore.cs" Link="ChaoxingSessionStore.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../src/AccessProbe/TaskDomain.cs" Link="TaskDomain.cs" />
+    <Compile Include="../../src/AccessProbe/TaskFiltering.cs" Link="TaskFiltering.cs" />
+    <Compile Include="../../src/AccessProbe/UaiPortal.cs" Link="UaiPortal.cs" />
     <Compile Include="../../src/AccessProbe/CourseRecording.cs" Link="CourseRecording.cs" />
+    <Compile Include="../../src/AccessProbe/CourseLifecycle.cs" Link="CourseLifecycle.cs" />
+    <Compile Include="../../src/AccessProbe/ConnectionFeedback.cs" Link="ConnectionFeedback.cs" />
+    <Compile Include="../../src/AccessProbe/WindowsConnectionFeedback.cs" Link="WindowsConnectionFeedback.cs" />
+    <Compile Include="../../src/AccessProbe/PlatformAccessPresentation.cs" Link="PlatformAccessPresentation.cs" />
+    <Compile Include="../../src/AccessProbe/TaskStore.Connection.cs" Link="TaskStore.Connection.cs" />
     <Compile Include="../../src/AccessProbe/TaskStore.CourseRecording.cs" Link="TaskStore.CourseRecording.cs" />
     <Compile Include="../../src/AccessProbe/TaskNavigation.cs" Link="TaskNavigation.cs" />
     <Compile Include="../../src/AccessProbe/ChaoxingTaskMetadata.cs" Link="ChaoxingTaskMetadata.cs" />
     <Compile Include="../../src/AccessProbe/TaskStore.cs" Link="TaskStore.cs" />
+    <Compile Include="../../src/AccessProbe/TaskStore.Display.cs" Link="TaskStore.Display.cs" />
     <Compile Include="../../src/AccessProbe/TaskStore.PlatformSessions.cs" Link="TaskStore.PlatformSessions.cs" />
     <Compile Include="../../src/AccessProbe/PlatformSessionArchive.cs" Link="PlatformSessionArchive.cs" />
     <Compile Include="../../src/AccessProbe/TaskStore.Platforms.cs" Link="TaskStore.Platforms.cs" />

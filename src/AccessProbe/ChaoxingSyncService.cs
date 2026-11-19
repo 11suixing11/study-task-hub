@@ -9,7 +9,7 @@ using Microsoft.Web.WebView2.Wpf;
 
 namespace AccessProbe;
 
-public sealed class ChaoxingSyncService : IDisposable
+public sealed partial class ChaoxingSyncService : IDisposable
 {
     private readonly TaskStore store;
     private readonly string projectRoot;
@@ -43,7 +43,6 @@ public sealed class ChaoxingSyncService : IDisposable
     public string SessionPersistenceOutcome { get; private set; } = "not_saved";
     public event Action<string, bool, bool>? StatusChanged;
     public event Action<ChaoxingSyncSummary>? Completed;
-    public event Action? CourseSelectionRequired;
     public event Action<ChaoxingSyncSummary>? CatalogCompleted;
 
     public ChaoxingSyncService(TaskStore store, string root, WebView2 sessionBrowser,
@@ -181,15 +180,18 @@ public sealed class ChaoxingSyncService : IDisposable
             await EnsureSessionAsync(runCancellation.Token);
             var scope = new ReadScope(sessionGeneration);
             reader = CreateReader(scope);
+            var acceptProgress = true;
             var progress = new Progress<ChaoxingSyncProgress>(value =>
             {
-                if (!disposed && !stopping && !runCancellation.IsCancellationRequested)
+                if (acceptProgress && ReferenceEquals(cancellation, runCancellation) && !disposed && !stopping && !runCancellation.IsCancellationRequested)
                     StatusChanged?.Invoke(value.Message, true, false);
             });
             var result = await new ChaoxingSynchronizer(store, reader).RunAsync(progress, runCancellation.Token, catalogOnly);
+            acceptProgress = false;
             runCancellation.Token.ThrowIfCancellationRequested();
             if (disposed || stopping || sessionClearing) return;
-            var persisted = await FinishSessionAsync(scope, result.LoginRequired, runCancellation.Token);
+            var persisted = await FinishSessionAsync(scope, result.LoginRequired, runCancellation.Token, result.AccountVerified);
+            var connectionFeedback = PublishConnection(result, catalogOnly, persisted);
             awaitingLogin = result.LoginRequired;
             if (catalogOnly)
             {
@@ -198,11 +200,7 @@ public sealed class ChaoxingSyncService : IDisposable
                 var catalogOutcome = CourseRecordingRules.CatalogRefreshOutcome(result.CourseListCovered, result.LoginRequired, codes);
                 store.RecordCourseCatalogResult("chaoxing", catalogOutcome, codes, DateTimeOffset.UtcNow, runCancellation.Token);
                 retryAfter = DateTimeOffset.UtcNow.AddMinutes(result.LoginRequired ? 30 : 5);
-                StatusChanged?.Invoke(result.LoginRequired ? "SYNC001：请在连接学习通窗口完成官方登录后刷新课程。"
-                    : catalogOutcome == "completed" ? $"学习通课程列表已刷新，共 {result.Courses} 门课程。"
-                    : "学习通课程列表未完整刷新，请查看官方登录与网络状态；原有课程选择保留。", false,
-                    catalogOutcome != "completed");
-                if (!result.LoginRequired && result.CourseListCovered && (needsSelection || afterLogin && loginWindowOpen)) CourseSelectionRequired?.Invoke();
+                StatusChanged?.Invoke(connectionFeedback.Text, false, connectionFeedback.Warning);
                 if (afterLogin && result.LoginRequired && loginWindowOpen) ScheduleLoginCheck();
                 CatalogCompleted?.Invoke(result);
                 return;
@@ -215,6 +213,9 @@ public sealed class ChaoxingSyncService : IDisposable
             var message = result.LoginRequired
                 ? "SYNC001：学习通需要登录。请在平台管理窗口点击“连接平台”完成登录，再保存课程选择并采集；已有任务保留。"
                 : $"学习通已同步 {result.CoursesRead}/{result.SelectedCourses ?? result.Courses} 门已选课程（发现 {result.Courses} 门）；新增 {result.Added} 条、更新 {result.Updated} 条。"
+                    + (result.ExamsAdded + result.ExamsUpdated + result.ExamsUnresolved > 0
+                        ? $"考试列表新增 {result.ExamsAdded} 条、更新 {result.ExamsUpdated} 条"
+                            + (result.ExamsUnresolved > 0 ? $"，{result.ExamsUnresolved} 条名称或入口待核对。" : "。") : "")
                     + (result.Problems.Count > 0 ? $"有 {result.Problems.Count} 项未完成，点击“同步详情”查看。" : "")
                     + (result.DetailsUnavailable + result.DetailsRequireAction + result.DetailsRequirePreview > 0
                         ? $"其中 {result.DetailsUnavailable + result.DetailsRequireAction + result.DetailsRequirePreview} 条任务未取得详情作答时间，列表信息已保留。" : "")
@@ -441,7 +442,7 @@ public sealed class ChaoxingSyncService : IDisposable
         manager.AddOrUpdateCookie(value);
     }
 
-    private async Task<bool> FinishSessionAsync(ReadScope scope, bool loginRequired, CancellationToken token)
+    private async Task<bool> FinishSessionAsync(ReadScope scope, bool loginRequired, CancellationToken token, bool accountVerified = true)
     {
         await cookieGate.WaitAsync(token);
         try
@@ -456,7 +457,7 @@ public sealed class ChaoxingSyncService : IDisposable
             }
             sessionRejected = false;
             var saved = SaveProfile(current);
-            if (saved) store.ConfirmPlatformSession("chaoxing", DateTimeOffset.UtcNow);
+            if (saved && accountVerified) store.ConfirmPlatformSession("chaoxing", DateTimeOffset.UtcNow);
             return saved;
         }
         finally { cookieGate.Release(); }

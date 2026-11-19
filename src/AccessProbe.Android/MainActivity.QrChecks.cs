@@ -86,7 +86,7 @@ public sealed partial class MainActivity
                 await Task.Delay(1600);
                 Check(resumed && !awaitingOfficialApp && web == loginWeb, "return from app retains the original WebView");
                 Check(qrNavigationRevision == revision, "return from app does not reload the official login page");
-                Check(status.Text?.Contains("尚未确认登录", StringComparison.Ordinal) == true, "unconfirmed official login remains unconfirmed");
+                Check(connectionExplanation?.Text?.Contains("尚未确认登录", StringComparison.Ordinal) == true, "unconfirmed official login remains unconfirmed");
                 Check(savedLoginQr is not null && QrTestImageExists(savedLoginQr), "QR remains available when confirmation is incomplete");
                 CloseLogin("chaoxing");
                 Check(RememberedQrImages().Length == 0, "app handoff QR is cleaned on exit");

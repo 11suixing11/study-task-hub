@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -6,7 +6,7 @@ using System.Windows.Media;
 
 namespace AccessProbe;
 
-public sealed class CourseSelectionWindow : Window
+public sealed class CourseSelectionPage : WorkspacePage
 {
     private readonly TaskStore store;
     private readonly Func<string, Task> refreshCatalog;
@@ -31,6 +31,8 @@ public sealed class CourseSelectionWindow : Window
         Margin = new Thickness(0, 10, 0, 0)
     };
     private readonly CheckBox recordAll = new() { Visibility = Visibility.Collapsed };
+    private readonly ComboBox lifecycleFilter = new() { MinWidth = 170, Margin = new Thickness(0, 6, 8, 0) };
+    private DateTimeOffset filterNow = DateTimeOffset.UtcNow;
     private readonly CheckBox hideHistory = new() { Content = "隐藏未选课程的历史任务（保留数据，重新勾选可恢复）", Margin = new Thickness(0, 8, 0, 6) };
     private readonly TextBlock catalogStatus = new() { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray };
     private readonly TextBlock selectedCount = new() { Margin = new Thickness(0, 4, 0, 4), TextWrapping = TextWrapping.Wrap };
@@ -40,21 +42,21 @@ public sealed class CourseSelectionWindow : Window
     private readonly Button login = Button("连接平台");
     private readonly Button save = Button("保存选择并采集");
     private readonly Dictionary<string, Draft> drafts = new(StringComparer.Ordinal);
+    private string? connectionPageFailure;
+    public bool HasUnsavedChanges => drafts.Values.Any(draft => draft.Dirty);
     private Draft? current;
     private bool loading, busy, closing, catalogRefreshing, syncRunning;
-    private double expandedHeight = 800;
     private readonly TextBlock syncDetails = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8), Foreground = Brushes.DimGray };
     private string PlatformId => (platforms.SelectedItem as PlatformSite)?.Id ?? "chaoxing";
 
-    public CourseSelectionWindow(TaskStore store, string platformId, Func<string, Task> refreshCatalog,
+    public CourseSelectionPage(TaskStore store, string platformId, Func<string, Task> refreshCatalog,
         Func<string, Task> applySelection, Action<string> connect, bool fixedPlatform = false,
         Action<string, bool>? setAutomatic = null, Action<string>? cancelSync = null)
     {
         this.store = store; this.refreshCatalog = refreshCatalog; this.applySelection = applySelection; this.connect = connect;
         this.fixedPlatform = fixedPlatform; initialPlatformId = platformId; this.setAutomatic = setAutomatic; this.cancelSync = cancelSync;
-        Title = PlatformCatalog.Name(platformId) + " · 平台管理"; Width = 880; Height = 800; MinWidth = 760; MinHeight = 620;
-        Icon = ProductIcons.AppImage;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner; FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI"); FontSize = 13;
+        Title = PlatformCatalog.Name(platformId) + " · 平台管理";
+        FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI"); FontSize = 13;
         Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/AccessProbe;component/FluentTheme.xaml", UriKind.Relative) });
         SetResourceReference(BackgroundProperty, "CanvasBrush"); UseLayoutRounding = true;
         NameScope.SetNameScope(this, new NameScope());
@@ -90,7 +92,19 @@ public sealed class CourseSelectionWindow : Window
         connectionBody.Children.Add(automatic); header.Children.Add(connectionArea);
         var courseHeader = new StackPanel(); courseHeader.Children.Add(recordAll);
         search.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, "搜索课程"); search.ToolTip = "搜索课程名称、班级或开课期";
-        courseHeader.Children.Add(search);
+        var filterRow = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        filterRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        filterRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        search.Margin = new Thickness(0, 0, 8, 0);
+        filterRow.Children.Add(search);
+        lifecycleFilter.ItemsSource = new[] { "隐藏已结束课程", "显示全部课程", "仅看已结束课程" };
+        lifecycleFilter.SelectedIndex = 0;
+        lifecycleFilter.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, "课程结束筛选");
+        lifecycleFilter.ToolTip = "依据官网结课状态或课程结束日期筛选，结束状态待核对的课程继续显示";
+        lifecycleFilter.Margin = new Thickness(0);
+        lifecycleFilter.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(lifecycleFilter, 1); filterRow.Children.Add(lifecycleFilter);
+        courseHeader.Children.Add(filterRow);
         var bulk = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) }; var all = Button("全选当前列表"); var none = Button("全不选当前列表"); bulk.Children.Add(all); bulk.Children.Add(none);
         ProductVisuals.SetButtonIcon(all, "check-all"); ProductVisuals.SetButtonIcon(none, "clear-selection");
         all.SetResourceReference(StyleProperty, "TextButton"); none.SetResourceReference(StyleProperty, "TextButton");
@@ -104,7 +118,7 @@ public sealed class CourseSelectionWindow : Window
         var details = new Expander { Header = "平台同步详情", Content = new ScrollViewer { Content = syncDetails, MaxHeight = 120, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
         footer.Children.Add(details);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
-        var cancel = Button("关闭"); cancel.Click += (_, _) => Close(); actions.Children.Add(cancel); actions.Children.Add(save);
+        var cancel = Button("返回"); cancel.Click += (_, _) => RequestBack(); actions.Children.Add(cancel); actions.Children.Add(save);
         save.SetResourceReference(StyleProperty, "PrimaryButton"); footer.Children.Add(actions); root.Children.Add(footer);
         var template = new DataTemplate(typeof(CourseChoice));
         var check = new FrameworkElementFactory(typeof(CheckBox)); check.SetValue(FrameworkElement.MarginProperty, new Thickness(9, 8, 9, 8));
@@ -144,7 +158,7 @@ public sealed class CourseSelectionWindow : Window
             sessionStatus.Margin = compact ? new Thickness(0, 2, 0, 2) : new Thickness(0, 4, 0, 6);
             automatic.Margin = compact ? new Thickness(0, 2, 0, 4) : new Thickness(0, 6, 0, 8);
             hideHistory.Margin = compact ? new Thickness(0, 4, 0, 2) : new Thickness(0, 8, 0, 6);
-            search.Margin = new Thickness(0, compact ? 6 : 10, 0, 0);
+            filterRow.Margin = new Thickness(0, compact ? 6 : 10, 0, 0);
             catalogStatus.Margin = new Thickness(0, 2, 0, compact ? 2 : 8);
             catalogScroller.MaxHeight = compact ? 32 : 58;
             sessionScroller.MaxHeight = compact ? 36 : 48;
@@ -161,8 +175,8 @@ public sealed class CourseSelectionWindow : Window
         SizeChanged += (_, _) => FitCompactManager();
         Loaded += (_, _) => FitCompactManager();
         collapse.Click += (_, _) => coursesSection.IsExpanded = !coursesSection.IsExpanded;
-        coursesSection.Collapsed += (_, _) => { expandedHeight = Height; MinHeight = 460; Height = 480; collapse.Content = "展开课程区"; };
-        coursesSection.Expanded += (_, _) => { MinHeight = 620; Height = Math.Max(expandedHeight, MinHeight); collapse.Content = "收起课程区"; };
+        coursesSection.Collapsed += (_, _) => collapse.Content = "展开课程区";
+        coursesSection.Expanded += (_, _) => collapse.Content = "收起课程区";
         stop.Click += (_, _) => cancelSync?.Invoke(PlatformId);
         automatic.Click += (_, _) => setAutomatic?.Invoke(PlatformId, automatic.IsChecked == true);
         RegisterName("RecordingPlatformArtwork", platformArtwork); RegisterName("RecordingPlatformHeading", platformHeading);
@@ -177,6 +191,8 @@ public sealed class CourseSelectionWindow : Window
         platforms.ItemsSource = fixedPlatform ? PlatformCatalog.Sites.Where(site => site.Id == platformId).ToArray() : PlatformCatalog.Sites;
         platforms.SelectionChanged += async (_, _) => { if (!loading && !closing) await LoadPlatformAsync(); };
         search.TextChanged += (_, _) => UpdateFilter();
+        lifecycleFilter.SelectionChanged += (_, _) => UpdateFilter();
+        RegisterName("CourseLifecycleFilter", lifecycleFilter); RegisterName("CourseFilterSummary", selectedCount);
         recordAll.Checked += (_, _) => ChangeAllMode(); recordAll.Unchecked += (_, _) => ChangeAllMode();
         hideHistory.Checked += (_, _) => { if (!loading && current is not null) current.HideHistory = true; };
         hideHistory.Unchecked += (_, _) => { if (!loading && current is not null) current.HideHistory = false; };
@@ -187,13 +203,22 @@ public sealed class CourseSelectionWindow : Window
         store.Changed += CatalogChanged;
         Closed += (_, _) => store.Changed -= CatalogChanged;
         loading = true; platforms.SelectedItem = PlatformCatalog.Sites.FirstOrDefault(site => site.Id == platformId) ?? PlatformCatalog.Sites[0]; loading = false;
-        Loaded += async (_, _) => await LoadPlatformAsync();
+        Activated += async (_, _) =>
+        {
+            if (busy) return;
+            drafts.Clear(); current = null; list.ItemsSource = null; search.Clear();
+            await LoadPlatformAsync();
+        };
     }
 
     private static Button Button(string text) => new Wpf.Ui.Controls.Button { Content = text, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 4) };
 
     private async Task LoadPlatformAsync()
     {
+        if (busy || closing) return;
+        SetBusy(true);
+        try
+        {
         platformArtwork.Key = PlatformId;
         platformHeading.Text = fixedPlatform ? PlatformCatalog.Name(PlatformId) : "选择记录课程";
         var platformId = PlatformId;
@@ -209,7 +234,10 @@ public sealed class CourseSelectionWindow : Window
             catch { ShowResult("COURSE001：课程列表未能加载，请检查本地任务库。", true); return; }
         }
         current = draft; Render();
-        if (CourseRecordingRules.SupportsAutomatic(platformId) && draft.Settings.CatalogCheckedAtUtc is null) await RefreshAsync();
+        }
+        finally { if (!closing) SetBusy(false); }
+        if (IsPageActive && current is { Settings.CatalogCheckedAtUtc: null }
+            && CourseRecordingRules.SupportsDesktopAutomatic(PlatformId)) await RefreshAsync();
     }
 
     private void Render()
@@ -221,7 +249,7 @@ public sealed class CourseSelectionWindow : Window
             recordAll.IsChecked = current.RecordAll; hideHistory.IsChecked = current.HideHistory;
             UpdateSessionStatus();
             list.ItemsSource = current.Choices; list.IsEnabled = !busy;
-            var automatic = CourseRecordingRules.SupportsAutomatic(PlatformId);
+            var automatic = CourseRecordingRules.SupportsDesktopAutomatic(PlatformId);
             refresh.Content = automatic ? "刷新课程列表" : "刷新本地课程"; login.Visibility = automatic ? Visibility.Visible : Visibility.Collapsed;
             catalogStatus.Text = !automatic ? PlatformId == "fif"
                     ? "FiF 暂不适配；保留手动录入与历史任务，课程来自本地任务。"
@@ -263,7 +291,7 @@ public sealed class CourseSelectionWindow : Window
     {
         if (current is null || busy) return;
         recordAll.IsChecked = false; current.RecordAll = false;
-        foreach (var choice in current.Choices.Where(MatchesSearch)) choice.Selected = selected;
+        foreach (var choice in current.Choices.Where(MatchesFilter)) choice.Selected = selected;
         UpdateFilter(); ShowResult("课程选择尚未保存，点击“保存选择并采集”生效。", false);
     }
 
@@ -274,11 +302,19 @@ public sealed class CourseSelectionWindow : Window
             || choice.Detail.Contains(value, StringComparison.OrdinalIgnoreCase);
     }
 
+    private bool MatchesFilter(CourseChoice choice) => MatchesSearch(choice)
+        && CourseLifecycleRules.MatchesFilter(choice.Course, (CourseListFilter)Math.Max(0, lifecycleFilter.SelectedIndex), filterNow);
+
     private void UpdateFilter()
     {
         if (current is null) return;
-        CollectionViewSource.GetDefaultView(current.Choices).Filter = item => item is CourseChoice choice && MatchesSearch(choice);
-        selectedCount.Text = $"共 {current.Choices.Count} 门课程 · 已选 {current.Choices.Count(choice => choice.Selected)} 门 · 新增课程需要手动勾选";
+        filterNow = DateTimeOffset.UtcNow;
+        CollectionViewSource.GetDefaultView(current.Choices).Filter = item => item is CourseChoice choice && MatchesFilter(choice);
+        var ended = current.Choices.Count(choice => CourseLifecycleRules.IsEnded(choice.Course, filterNow));
+        var hiddenEnded = lifecycleFilter.SelectedIndex == 0 ? ended : 0;
+        selectedCount.Text = $"显示 {current.Choices.Count(MatchesFilter)} / {current.Choices.Count} 门 · 已选 {current.Choices.Count(choice => choice.Selected)} 门"
+            + (hiddenEnded > 0 ? $" · 已自动隐藏 {hiddenEnded} 门已结束课程" : ended > 0 ? $" · 已结束 {ended} 门" : "")
+            + "\n筛选保留原有选择和历史任务；全选、全不选仅作用当前列表。结束状态待核对的课程继续显示。";
     }
 
     private void SetBusy(bool value)
@@ -291,22 +327,22 @@ public sealed class CourseSelectionWindow : Window
     private async Task RefreshAsync()
     {
         if (busy || closing) return; var platformId = PlatformId;
-        SetBusy(true); ShowResult(CourseRecordingRules.SupportsAutomatic(platformId) ? "正在读取官方课程列表…" : "正在刷新本地课程…", false);
+        SetBusy(true); ShowResult(CourseRecordingRules.SupportsDesktopAutomatic(platformId) ? "正在读取官方课程列表…" : "正在刷新本地课程…", false);
         var before = current?.Settings.LastCatalogRefresh?.CheckedAtUtc;
         try
         {
-            if (CourseRecordingRules.SupportsAutomatic(platformId)) await refreshCatalog(platformId);
+            if (CourseRecordingRules.SupportsDesktopAutomatic(platformId)) await refreshCatalog(platformId);
             var settings = await Task.Run(() => store.LoadCourseRecordingOverview(platformId));
             if (closing) return;
             var prior = current;
             if (prior is not null && prior.Settings.Revision == settings.Revision) prior.Refresh(settings);
             else drafts[platformId] = current = new(settings, CourseSelectionChanged);
             Render();
-            ShowResult(!CourseRecordingRules.SupportsAutomatic(platformId) ? "本地课程已刷新。"
+            ShowResult(!CourseRecordingRules.SupportsDesktopAutomatic(platformId) ? "本地课程已刷新。"
                 : settings.LastCatalogRefresh is { Outcome: "completed" } completed && completed.CheckedAtUtc != before
                     ? "官方课程列表已刷新。勾选后点击“保存选择并采集”。"
-                : CourseRecordingRules.CatalogRefreshText(settings) + "。请核对连接窗口或首页同步详情。",
-                CourseRecordingRules.SupportsAutomatic(platformId)
+                : CourseRecordingRules.CatalogRefreshText(settings) + "。请核对连接页或首页同步详情。",
+                CourseRecordingRules.SupportsDesktopAutomatic(platformId)
                     && (settings.LastCatalogRefresh?.CheckedAtUtc == before || settings.LastCatalogRefresh?.Outcome != "completed"));
         }
         catch (TaskValidationException error) { if (!closing) ShowResult(error.Code + "：" + error.Message, true); }
@@ -321,7 +357,7 @@ public sealed class CourseSelectionWindow : Window
         {
             foreach (var (platformId, draft) in drafts.Where(pair => pair.Value.Dirty).ToArray())
             {
-                if (CourseRecordingRules.SupportsAutomatic(platformId) && draft.Settings.CatalogCheckedAtUtc is null)
+                if (CourseRecordingRules.SupportsDesktopAutomatic(platformId) && draft.Settings.CatalogCheckedAtUtc is null)
                     throw new TaskValidationException("COURSE001", "请先登录并读取官方课程列表，再保存选择。");
                 draft.Settings = await Task.Run(() => store.SaveCourseRecording(platformId, false,
                     draft.Choices.Where(choice => choice.Selected).Select(choice => choice.Key).ToArray(), draft.HideHistory,
@@ -389,6 +425,7 @@ public sealed class CourseSelectionWindow : Window
     {
         private bool selected; private readonly Action changed;
         public string Key { get; }
+        public RecordingCourse Course { get; }
         public string Name { get; }
         public string Detail { get; }
         public bool Selected
@@ -398,23 +435,43 @@ public sealed class CourseSelectionWindow : Window
         }
         public event PropertyChangedEventHandler? PropertyChanged;
         public CourseChoice(RecordingCourse course, bool selected, Action changed)
-        { Key = course.Key; Name = course.Name; Detail = course.Detail + (course.Available ? "" : " · 历史记录保留"); this.selected = selected; this.changed = changed; }
+        {
+            Course = course; Key = course.Key; Name = course.Name;
+            Detail = course.Detail + (course.Available ? "" : " · 历史记录保留") + " · " + CourseLifecycleRules.Explanation(course, DateTimeOffset.UtcNow);
+            this.selected = selected; this.changed = changed;
+        }
     }
 
     public void ShowSyncStatus(string message, bool running, bool warning)
     {
         if (closing) return;
         syncRunning = running;
+        if (!running && store.LoadConnectionReport(PlatformId) is { } report && message == ConnectionFeedback.From(report).Text)
+            message = ConnectionFeedback.ForPlatformManagement(report).Text;
         ShowResult(message, warning); stop.IsEnabled = running || busy; UpdateSessionStatus();
+    }
+
+    public void ShowConnectionPageFailure(string? message)
+    {
+        if (closing) return;
+        connectionPageFailure = message;
+        UpdateSessionStatus();
     }
 
     private void UpdateSessionStatus()
     {
         var id = fixedPlatform ? initialPlatformId : PlatformId;
-        if (!CourseRecordingRules.SupportsAutomatic(id)) { sessionStatus.Text = "此平台保留手动记录。"; return; }
+        if (!CourseRecordingRules.SupportsDesktopAutomatic(id)) { sessionStatus.Text = "此平台保留手动记录。"; return; }
         var info = store.LoadPlatformSessionInfo(id);
-        sessionStatus.Text = info.Description + (info.SavedAtUtc is { } saved ? " · 保存于 " + saved.ToLocalTime().ToString("MM-dd HH:mm") : "");
+        var connection = store.LoadConnectionReport(id);
+        sessionStatus.Text = connection is null ? info.Description
+            : "上次接入检查 · " + ConnectionFeedback.From(connection).Title + "\n" + ConnectionFeedback.ForPlatformManagement(connection).NextStep;
         sessionStatus.Foreground = info.State == "expired" ? Brushes.Firebrick : new SolidColorBrush(Color.FromRgb(25, 118, 210));
+        if (connectionPageFailure is { } failure)
+        {
+            sessionStatus.Text = failure + "\n官网返回未完成，请通过下方登录按钮重新打开官方登录并检查接入。";
+            sessionStatus.Foreground = Brushes.Firebrick;
+        }
         login.Content = info.State == "expired" ? "重新登录并更新" : info.CanReuse ? "打开当前登录" : "官方登录";
         var recording = store.LoadCourseRecording(id);
         var (checkedAt, outcome) = id switch
@@ -426,7 +483,7 @@ public sealed class CourseSelectionWindow : Window
             _ => (store.LoadMetadataSettings(id).LastSyncAtUtc, store.LoadMetadataSettings(id).LastSyncOutcome)
         };
         syncDetails.Text = "课程目录：" + CourseRecordingRules.CatalogRefreshText(recording)
-            + "\n任务同步：" + (outcome switch { "completed" => "完成", "partial" => "部分完成", "login_required" => "登录已过期，请重新登录", _ => "尚未完成" })
+            + "\n任务同步：" + (outcome switch { "completed" => "完成", "partial" => "部分完成", "login_required" => "官网要求重新确认登录", _ => "尚未完成" })
             + (checkedAt is { } time ? " · " + time.ToLocalTime().ToString("MM-dd HH:mm") : "")
             + "\n本地任务：" + store.LoadTasks().Count(task => task.PlatformId == id) + " 条；未选课程历史会保留。";
         if (setAutomatic is not null) automatic.IsChecked = id switch

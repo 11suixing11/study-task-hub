@@ -6,7 +6,7 @@ using Microsoft.Web.WebView2.Core;
 
 namespace AccessProbe;
 
-public partial class MainWindow
+public partial class ChaoxingConnectionPage
 {
     private const int MaximumReadFrames = 12;
     private readonly HashSet<CoreWebView2Frame> workFrames = [];
@@ -152,10 +152,10 @@ public partial class MainWindow
     private void ShowWorkList(IReadOnlyList<WorkListTask> tasks, DateTimeOffset readAt)
     {
         var panel = new DockPanel { Margin = new Thickness(16) };
-        var window = new Window { Owner = this, Title = "当前作业列表 · 页面读取", Width = 1050, Height = 520, MinWidth = 760, MinHeight = 360, Content = panel };
+        var page = new WorkspaceContentPage("当前作业列表 · 页面读取", panel);
         var resultClosed = false;
         var saving = false;
-        window.Closed += (_, _) => resultClosed = true;
+        page.Closed += (_, _) => resultClosed = true;
         var summary = new TextBlock
         {
             Text = $"读取时间：{readAt.ToLocalTime():yyyy-MM-dd HH:mm:ss}。共 {tasks.Count} 条作业，状态按原平台文字展示。{WorkReadCoverageText()}点击“保存到任务清单”可保留到本地；重复导入保留你的手动状态与修改。",
@@ -244,8 +244,8 @@ public partial class MainWindow
         if (tasks.Count > 0) table.SelectedIndex = 0;
         SelectionChanged();
         panel.Children.Add(table);
-        resultsWindow = window;
-        window.Show();
+        resultsPage = page;
+        ShowChildPage(page);
     }
 
     private void OpenObservedWork(WorkListTask? task, bool external)
@@ -296,12 +296,9 @@ public partial class MainWindow
             };
             stack.Children.Add(save); stack.Children.Add(resultText);
         }
-        resultsWindow = new Window
-        {
-            Owner = this, Title = "当前作业 · 详情读取", Width = 760, Height = 460, MinWidth = 520, MinHeight = 330,
-            Content = new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }
-        };
-        resultsWindow.Show();
+        resultsPage = new WorkspaceContentPage("当前作业 · 详情读取",
+            new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        ShowChildPage(resultsPage);
     }
 
     private sealed record WorkListDisplayRow(WorkListTask Task)

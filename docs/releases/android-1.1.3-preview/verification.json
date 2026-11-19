@@ -1,0 +1,194 @@
+{
+  "schema": 1,
+  "version": "1.1.3",
+  "versionCode": 5,
+  "channel": "local_android_preview",
+  "preparedAtUtc": "2026-11-11T15:06:15.951627Z",
+  "applicationId": "cn.yuki.learningaggregator",
+  "buildId": "20261111-140814-b7a1d6bc",
+  "builtAtUtc": "2026-11-11T14:09:08.113298Z",
+  "sourceState": {
+    "baselineCommit": "4a10b16ce0c7de113aa8a93a806ce2190c4795a3",
+    "uncommittedWorkingTree": true
+  },
+  "apk": {
+    "file": "聚合平台-1.1.3-android.apk",
+    "bytes": 67309652,
+    "sha256": "c86dcd50f1c50d66ef31424d550ec06d4bb0c9a37d3f2693aba5dfcea28d4d0e",
+    "minimumAndroid": 9,
+    "minimumApi": 28,
+    "targetApi": 36,
+    "abis": [
+      "arm64-v8a",
+      "armeabi-v7a",
+      "x86_64"
+    ],
+    "signature": "verified",
+    "certificateSha256": "6e113bcf7c8ea5390ea7d725f2f7ecde8cfecce3612c348ed9ee490b478af30b"
+  },
+  "automaticChecks": {
+    "outcome": "passed",
+    "scope": "Synthetic and isolated environment only; counts from overlapping suites are not summed.",
+    "androidInstallation": {
+      "outcome": "passed",
+      "api": 35,
+      "installed": true,
+      "nativeChecks": 47,
+      "businessImprovementChecks": 74,
+      "upgradePersistenceChecks": 4,
+      "restartChecks": 4,
+      "upgradePreservesData": true,
+      "keystore": true,
+      "coldReminderReceiver": true,
+      "bootReceiver": true,
+      "upgradeScope": "Final APK was installed over an existing synthetic fixture. The recorded report does not identify the predecessor version; no named-version upgrade claim.",
+      "bootScope": "Cold boot receiver broadcast tested; this does not establish long-term real-device reboot or Doze behavior."
+    },
+    "androidFlows": {
+      "outcome": "passed",
+      "checks": 81,
+      "categories": [
+        {
+          "mode": "ui",
+          "checks": 23,
+          "outcome": "passed"
+        },
+        {
+          "mode": "in_app_chaoxing_login",
+          "checks": 17,
+          "outcome": "passed"
+        },
+        {
+          "mode": "automatic",
+          "checks": 28,
+          "outcome": "passed"
+        },
+        {
+          "mode": "app_task",
+          "checks": 4,
+          "outcome": "passed"
+        },
+        {
+          "mode": "app_home",
+          "checks": 4,
+          "outcome": "passed"
+        },
+        {
+          "mode": "web",
+          "checks": 3,
+          "outcome": "passed"
+        },
+        {
+          "mode": "unavailable",
+          "checks": 2,
+          "outcome": "passed"
+        }
+      ],
+      "destination": "No-network fixture apps; official apps and account flows still pending."
+    },
+    "diagnostics": {
+      "outcome": "passed",
+      "checks": 63,
+      "scope": "Synthetic read-only schema and redaction checks"
+    },
+    "sharedAndWindowsSource": {
+      "outcome": "passed",
+      "buildId": "20261111-135622-708899eb",
+      "verifiedAtUtc": "2026-11-11T14:02:55.5338955+00:00",
+      "projects": 11,
+      "businessChecks": 3003,
+      "desktopAndSessionChecks": 1157,
+      "scope": "Shared and Windows current source regression; no new Windows installation artifact delivered.",
+      "pythonAtOriginalRun": 40,
+      "latestPython": 63
+    },
+    "license": {
+      "outcome": "passed",
+      "dependencies": 9,
+      "sourceHashes": 16,
+      "files": 24
+    },
+    "buildScript": {
+      "parse": "passed",
+      "versionedInstructionSelection": "passed",
+      "scope": "Packaging selection only; no product code changed after the APK build."
+    }
+  },
+  "acceptance": {
+    "realAccount": "pending",
+    "realDevice": "pending",
+    "manualVisual": "pending",
+    "screenshots": "saved synthetic evidence; see visual-review.json",
+    "officialAppAlbumQrRecognition": "pending",
+    "officialTaskDestination": "pending",
+    "android9Permissions": "pending",
+    "longTermBackground": "pending"
+  },
+  "capabilities": {
+    "officialAppPreferred": [
+      "chaoxing",
+      "ucampus",
+      "zhihuishu",
+      "mooc",
+      "uai"
+    ],
+    "webFallbackOnly": [
+      "yuketang",
+      "changjiang",
+      "xuetang",
+      "pta"
+    ],
+    "uai": {
+      "android": "verified student identity and homepage summary preview; manual tasks",
+      "windows": "manual tasks only",
+      "fullTaskCollection": false
+    }
+  },
+  "remaining": [
+    "UAI complete course/task collection",
+    "peer-review task stages and deadlines",
+    "best-effort background task collection",
+    "Rain Classroom professional mobile site selection",
+    "remaining PTA and desktop session issues",
+    "task metadata backup",
+    "calendar export",
+    "cross-device synchronization"
+  ],
+  "deferred": [
+    "root file extraction"
+  ],
+  "networkAndData": {
+    "officialNetworkAccessedByTests": false,
+    "productionDataAccessedByTests": false,
+    "productionDatabaseUnchanged": true,
+    "deliveryIncludesCredentials": false,
+    "deliveryIncludesProductionDatabase": false
+  },
+  "publication": {
+    "githubRelease": "unchanged v1.1.2",
+    "windowsInstaller": "unchanged 1.1.2",
+    "androidPreview": "local only"
+  },
+  "reports": [
+    {
+      "file": "reports/android-installation.json",
+      "sourceSha256": "cad1d35f7e5ee244316c48ce7146e49e638f2523083b6d1a29a688bead21ead0",
+      "exportSha256": "0c1a411d840c98c7e1d7ad629ad13bf801b5b5e16b3a80dd8c9f1a76798fd569"
+    },
+    {
+      "file": "reports/android-improvements.json",
+      "sourceSha256": "27cfd3b002cef114e270678faca36fd667b8d434c4017cbaf49a8b5532f17134",
+      "exportSha256": "814b204bda50eff6f87344037c9a98ee9cd1d62cba3c1dc4ff284b5b55cc43b3"
+    },
+    {
+      "file": "reports/sync-status-checks.json",
+      "sourceSha256": "580762ad64bf5004b2abc19bccd38ce7fb65a50ff65ae43ca9cd2aa2d56e1eee",
+      "exportSha256": "acc727a482b6dc9ddea8d3d81238b4f5e7baca1cacf411c329468ed41a2b7c6e"
+    },
+    {
+      "file": "reports/shared-source-regression.json",
+      "sourceSha256": "2bbb8c4fab8c803d0bd5e38def6a6a0d117e149b762361a959c5f46ca76b11d2",
+      "exportSha256": "d3142c9b1617142ee72e069d8094cca732dc326f55071ceb874aebca17a2e51a"
+    }
+  ]
+}

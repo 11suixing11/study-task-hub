@@ -11,9 +11,9 @@ namespace XuetangSyncHarness;
 
 internal static partial class Program
 {
-    private static async Task VerifyLoginPageAsync(XuetangConnectionWindow window, WebView2 loginBrowser)
+    private static async Task VerifyLoginPageAsync(XuetangConnectionPage window, WebView2 loginBrowser)
     {
-        var status = (TextBlock)typeof(XuetangConnectionWindow).GetField("status", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        var status = (TextBlock)typeof(XuetangConnectionPage).GetField("status", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
         lastCheck = "login application script HTML fallback";
         await WaitAsync(() => service.LoginDiagnostics.Snapshot().PageFailure?.Result == XuetangLoginResult.ScriptUnavailable);
         Check(status.Text.Contains("官方登录脚本未能加载", StringComparison.Ordinal)
@@ -49,7 +49,7 @@ internal static partial class Program
         await RetryLoginPageAsync(window, () => service.LoginDiagnostics.Snapshot().PageFailure is null
             && service.LoginDiagnostics.Snapshot().Events.LastOrDefault()?.Result == XuetangLoginResult.Ready);
 
-        var timer = (DispatcherTimer)typeof(XuetangConnectionWindow).GetField("loadTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        var timer = (DispatcherTimer)typeof(XuetangConnectionPage).GetField("loadTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
         var interval = timer.Interval; timer.Interval = TimeSpan.FromMilliseconds(750); fixture.EmptyLoginDocument = true;
         await RetryLoginPageAsync(window, () => service.LoginDiagnostics.Snapshot().PageFailure?.Result == XuetangLoginResult.BlankPage);
         Check(status.Text.Contains("官方页面没有显示内容", StringComparison.Ordinal), "empty loaded application shell is not reported ready");
@@ -92,7 +92,7 @@ internal static partial class Program
             "login rendering checks and explicit sync retain task identities and manual fields");
     }
 
-    private static async Task RetryLoginPageAsync(XuetangConnectionWindow window, Func<bool> ready)
+    private static async Task RetryLoginPageAsync(XuetangConnectionPage window, Func<bool> ready)
     {
         var documentsBefore = fixture.LoginDocumentRequests;
         var attemptsBefore = service.LoginDiagnostics.Snapshot().Attempts;

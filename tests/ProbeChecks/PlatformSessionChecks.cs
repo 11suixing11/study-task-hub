@@ -11,7 +11,7 @@ internal static class PlatformSessionChecks
         Directory.CreateDirectory(root);
         var store = new TaskStore(Path.Combine(root, "tasks.db"));
         var now = DateTimeOffset.UtcNow;
-        foreach (var site in PlatformCatalog.Sites.Where(site => CourseRecordingRules.SupportsAutomatic(site.Id)))
+        foreach (var site in PlatformCatalog.Sites.Where(site => CourseRecordingRules.SupportsDesktopAutomatic(site.Id)))
         {
             var path = Path.Combine(root, site.Id + ".bin");
             var adapter = Adapter(site.Id, path, store);
@@ -45,12 +45,12 @@ internal static class PlatformSessionChecks
                 "relogin updates one current platform record");
         }
         var reopened = new TaskStore(store.DatabasePath);
-        Check(PlatformCatalog.Sites.Where(site => CourseRecordingRules.SupportsAutomatic(site.Id))
+        Check(PlatformCatalog.Sites.Where(site => CourseRecordingRules.SupportsDesktopAutomatic(site.Id))
             .All(site => reopened.LoadPlatformSessionInfo(site.Id).State == "ready"), "all enabled platform records survive reopen independently");
         using (var db = new SqliteConnection("Data Source=" + store.DatabasePath))
         {
             db.Open(); using var cmd = db.CreateCommand(); cmd.CommandText = "SELECT count(*) FROM platform_sessions";
-            Check(Convert.ToInt32(cmd.ExecuteScalar()) == PlatformCatalog.Sites.Count(site => CourseRecordingRules.SupportsAutomatic(site.Id)), "one session record per enabled platform");
+            Check(Convert.ToInt32(cmd.ExecuteScalar()) == PlatformCatalog.Sites.Count(site => CourseRecordingRules.SupportsDesktopAutomatic(site.Id)), "one session record per enabled desktop platform");
         }
         var legacyPath = Path.Combine(root, "legacy.bin");
         var legacy = new ChaoxingSessionStore(legacyPath);

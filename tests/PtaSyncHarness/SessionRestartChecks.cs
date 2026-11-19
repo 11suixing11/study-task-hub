@@ -72,18 +72,21 @@ internal static class SessionRestartChecks
                     Check((await browser.CoreWebView2.CookieManager.GetCookiesAsync("")).Single(cookie => cookie.Name == "PTASession").IsSession,
                         "seed and relogin use browser session cookie");
                 }
-                else if (phase is "recover" or "clear" or "reject")
+                else if (phase is "recover" or "clear" or "reject" or "after-reject")
                 {
                     Check(recovery == "restored", "fresh browser restores repository cookie");
                     var auth = (await browser.CoreWebView2.CookieManager.GetCookiesAsync("")).Single(cookie => cookie.Name == "PTASession");
                     Check(auth.Value == "synthetic-pta-session-renewed" && auth.IsSession && auth.IsSecure && auth.IsHttpOnly
                         && auth.SameSite == CoreWebView2CookieSameSiteKind.Strict, "renewed cookie value and flags preserved across exit");
+                    if (phase == "after-reject") Check(store.LoadPlatformSessionInfo("pta").State == "expired" && archive.Load(DateTimeOffset.UtcNow).Count == 0
+                        && archive.LoadForRevalidation(DateTimeOffset.UtcNow).Count > 0,
+                        "preserved rejected PTA credentials restore for revalidation without activating");
                     if (phase == "recover") Check((await browser.CoreWebView2.CookieManager.GetCookiesAsync(""))
                         .Single(cookie => cookie.Name == "JSESSIONID").Value == "synthetic-existing-server-cookie",
                         "current server cookie permits authentication restore and is preserved across restart");
                 }
                 else Check(archive.Load(DateTimeOffset.UtcNow).Count == 0 && (await browser.CoreWebView2.CookieManager.GetCookiesAsync("")).Count == 0,
-                    "expired and cleared login cannot restore stale cookie");
+                    "cleared login cannot restore stale cookie");
                 if (phase == "clear")
                 {
                     await service.ClearSessionAsync();
@@ -94,7 +97,7 @@ internal static class SessionRestartChecks
                 {
                     await service.StartAsync(true);
                     var summary = store.LoadMetadataSettings("pta").LastSummary!;
-                    if (phase is "seed" or "recover" or "relogin")
+                    if (phase is "seed" or "recover" or "relogin" or "after-reject")
                     {
                         Check(!summary.LoginRequired && summary.Tasks == 6 && summary.AccountVerified, "restored PTA login synchronizes teaching sets");
                         Check(store.LoadTasks().Count == 6 && store.LoadTasks().Count(task => task.State == TaskState.Completed) == 1,
@@ -106,11 +109,13 @@ internal static class SessionRestartChecks
                     {
                         Check(summary.LoginRequired && store.LoadMetadataSettings("pta").LastSyncOutcome == "login_required", "rejected PTA cookie prompts official login");
                         Check(archive.Load(DateTimeOffset.UtcNow).Count == 0 && fixture.Paths.Count == 1, "rejected login stops metadata and prevents restore");
+                        if (phase == "reject") Check(archive.LoadForRevalidation(DateTimeOffset.UtcNow).Count > 0, "rejected PTA login retains encrypted credentials for official revalidation");
+                        else Check(archive.LoadForRevalidation(DateTimeOffset.UtcNow).Count == 0, "cleared PTA login leaves no revalidation credentials");
                     }
                 }
                 Check(store.LoadTasks().Count == 6, "task history retained across all session phases");
                 Check(await service.SaveForExitAsync(), "exit saves only current permitted session"); persistence = service.SessionPersistenceOutcome;
-                Check(phase is "seed" or "recover" or "relogin" ? archive.Load(DateTimeOffset.UtcNow).Count > 0 : archive.Load(DateTimeOffset.UtcNow).Count == 0,
+                Check(phase is "seed" or "recover" or "relogin" or "after-reject" ? archive.Load(DateTimeOffset.UtcNow).Count > 0 : archive.Load(DateTimeOffset.UtcNow).Count == 0,
                     "exit cannot resurrect invalidated login");
             }
             catch (Exception error) { failure = error.GetType().Name + ": " + error.Message; }

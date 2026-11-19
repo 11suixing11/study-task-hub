@@ -45,15 +45,16 @@ internal static partial class Program
         Check(store.LoadMetadataSettings("zhihuishu").LastSummary!.LoginRequired && store.LoadPlatformSessionInfo("zhihuishu").State == "ready"
             && !Text("ZhihuishuPlatformSummary").Contains("登录过期", StringComparison.Ordinal), "old login-required task summary does not override current catalog and verified cookie");
         Click("SyncDetailsButton"); await Task.Delay(50);
-        var details = app.Windows.OfType<Window>().Single(window => window.Title == "各平台同步详情");
+        var details = dashboard.ActivePage!;
+        Check(details.Title == "各平台同步详情" && app.Windows.Count == 1, "smart sync details use the existing main window");
         var texts = Visuals<TextBlock>(details).Select(text => text.Text).ToArray();
-        Check(texts.Any(text => text.StartsWith("当前登录：登录已确认", StringComparison.Ordinal))
+        Check(texts.Any(text => text.StartsWith("当前登录：上次登录已确认", StringComparison.Ordinal))
             && texts.Any(text => text.StartsWith("最近课程刷新：", StringComparison.Ordinal))
             && texts.Any(text => text.StartsWith("上次任务同步记录（当前登录已确认）", StringComparison.Ordinal)), "details explicitly distinguish current login catalog refresh and historical login error");
         details.Close();
         fixture.UnknownCatalog = true; await service.RefreshCourseCatalogAsync(); fixture.UnknownCatalog = false;
         Check(service.LoginDiagnostics.Snapshot().AccountConfirmed && !service.LoginDiagnostics.SessionConfirmed
-            && Text("ZhihuishuPlatformSummary") == "已登录 · 课程刷新需核对", "partial catalog leaves account connected with actionable course refresh status");
+            && Text("ZhihuishuPlatformSummary") == "需要重试", "partial catalog leaves account connected with a retry card status");
         recording = store.LoadCourseRecording("zhihuishu");
         store.SaveCourseRecording("zhihuishu", false, [], true, recording.Revision, DateTimeOffset.UtcNow);
         await service.RecordingCoursesChangedAsync(); await WaitAsync(() => Table.Items.Count == U.TaskCount + 1);

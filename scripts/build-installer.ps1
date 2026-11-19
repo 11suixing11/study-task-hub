@@ -1,8 +1,10 @@
-﻿param([string]$ReleaseVersion, [string]$PackageVersion = '1.1.2')
+﻿param([string]$ReleaseVersion, [string]$PackageVersion = '1.1.2', [string]$UsageFile)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
 $taskRoot = Split-Path $PSScriptRoot -Parent
+$taskUsage = if ($UsageFile) { [IO.Path]::GetFullPath($UsageFile) } else { Join-Path $taskRoot 'packaging\windows\使用说明.txt' }
+if (-not (Test-Path -LiteralPath $taskUsage -PathType Leaf)) { throw 'Package usage file is missing.' }
 $taskManifest = Get-Content -LiteralPath (Join-Path $taskRoot 'artifacts\current.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 if (-not $ReleaseVersion) { $ReleaseVersion = $taskManifest.version }
 if ($ReleaseVersion -notmatch '^\d{8}-\d{6}-[a-f0-9]{8}$') { throw 'Release version is invalid.' }
@@ -25,7 +27,7 @@ $ErrorActionPreference = 'Continue'
 $taskExitCode = $LASTEXITCODE; $ErrorActionPreference = 'Stop'
 if ($taskExitCode -ne 0) { throw 'Self-contained Windows publish failed.' }
 [IO.File]::WriteAllText((Join-Path $taskPayload 'installed-app.json'), (@{schema=1;version=$ReleaseVersion;packageVersion=$PackageVersion;application='LearningTaskAggregator'} | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
-Copy-Item -LiteralPath (Join-Path $taskRoot 'packaging\windows\使用说明.txt') -Destination $taskPayload
+Copy-Item -LiteralPath $taskUsage -Destination (Join-Path $taskPayload '使用说明.txt')
 & python (Join-Path $taskRoot 'scripts\collect-windows-licenses.py') --payload $taskPayload
 if ($LASTEXITCODE -ne 0) { throw 'Published dependency license collection failed.' }
 $taskCompiler = Join-Path $taskRoot '.tools\packaging\inno-6.7.4\ISCC.exe'

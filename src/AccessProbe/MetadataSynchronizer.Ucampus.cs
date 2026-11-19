@@ -140,7 +140,7 @@ public sealed partial class MetadataSynchronizer
                 : outcome == "partial_tasks" ? "已保存确认的任务；互评、小组或未知状态和入口需在官网核对。"
                 : MetadataFailureText.Describe(outcome, lastResponse?.Outcome == outcome ? lastResponse.StatusCode : null)
                     + "；不能视为没有任务，已有任务和课程选择保留。";
-            problems.Add(new("UC" + suffix, "", context + "：" + text));
+            problems.Add(new("UC" + suffix, "", context + "：" + text) { Outcome = outcome });
         }
         MetadataSyncSummary Summary() => new(platform.Id, courses.Count, read, selected, tasks.Count, added, updated, loginRequired, catalogCovered, problems.ToArray())
         {

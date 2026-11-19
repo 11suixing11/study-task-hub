@@ -77,7 +77,7 @@ public sealed partial class TaskStore
         command.ExecuteNonQuery();
     }
 
-    private TaskItem ReadItem(SqliteDataReader reader)
+    private TaskItem ReadItem(SqliteDataReader reader, bool readLink = true)
     {
         TaskItem task;
         try
@@ -89,7 +89,7 @@ public sealed partial class TaskStore
                 throw new JsonException();
         }
         catch (JsonException) { throw new TaskValidationException("DB002", "任务数据格式不正确，请先备份数据库。"); }
-        if (reader.IsDBNull(3)) return task;
+        if (!readLink || reader.IsDBNull(3)) return task;
         try
         {
             var link = protector.Unprotect((byte[])reader.GetValue(3));
@@ -149,6 +149,15 @@ public sealed partial class TaskStore
         lock (gate)
         {
             using var connection = Open(); using var transaction = connection.BeginTransaction();
+            // Adding a task is an explicit request to record it. A manual course has its own
+            // identity; never bind it to an official class merely because their names match.
+            var recording = ReadCourseRecording(connection, transaction, task.PlatformId);
+            if (recording.SelectionConfirmed && !CourseRecordingRules.IsSelected(recording, CourseRecordingRules.TaskCourseKey(task)))
+                WriteCourseRecording(connection, transaction, task.PlatformId, recording with
+                {
+                    Revision = checked(recording.Revision + 1),
+                    SelectedCourseKeys = recording.SelectedCourseKeys.Append(CourseRecordingRules.TaskCourseKey(task)).Distinct(StringComparer.Ordinal).ToArray()
+                });
             Write(connection, transaction, task); Reconcile(connection, transaction, task, now); transaction.Commit();
         }
         Changed?.Invoke();
@@ -176,7 +185,11 @@ public sealed partial class TaskStore
 
     public TaskItem SetState(string id, int revision, TaskState state, DateTimeOffset now) =>
         Mutate(id, revision, now, task => TaskRules.Transition(task, state) with
-            { Overrides = TaskRules.IsCollected(task) ? task.Overrides | TaskOverrides.State : task.Overrides });
+            { Overrides = TaskRules.IsCollected(task) ? task.Overrides | TaskOverrides.State : task.Overrides,
+                PlatformAttentionAcknowledgedToken = task.PlatformAttentionToken });
+
+    public TaskItem AcknowledgePlatformAttention(string id, int revision, DateTimeOffset now) =>
+        Mutate(id, revision, now, task => task with { PlatformAttentionAcknowledgedToken = task.PlatformAttentionToken });
 
     public int RefreshAutomaticMetadata(DateTimeOffset now)
     {
@@ -266,6 +279,74 @@ public sealed partial class TaskStore
                     LinkIssue = task.Overrides.HasFlag(TaskOverrides.Link) ? task.LinkIssue : null
                 };
                 task = ChaoxingTaskMetadata.Apply(task, row.DisplayedTimeText, row.TimeObservedAtUtc ?? now);
+                Write(connection, transaction, task); Reconcile(connection, transaction, task, now);
+                if (current is null)
+                {
+                    added++;
+                    if (notifications && TaskRules.IsActive(task)) InsertPlan(connection, transaction, ReminderPlanner.NewTask(task, now));
+                }
+                else updated++;
+            }
+            cancellation.ThrowIfCancellationRequested();
+            transaction.Commit();
+        }
+        Changed?.Invoke();
+        return new(added, updated, unresolved, duplicates);
+    }
+
+    // An observed exam key, scoped by course, class and the platform's own exam id.
+    public static string? ObservedExamKey(ExamTaskLocation? location)
+    {
+        if (location is null || location.ExamId.Length == 0) return null;
+        var scope = string.Join("|", location.CourseId, location.ClassId, location.ExamId);
+        return "chaoxing-exam:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(scope)));
+    }
+
+    public ImportSummary ImportExams(IReadOnlyList<ExamListTask> rows, ChaoxingCourse course, DateTimeOffset now, CancellationToken cancellation = default,
+        long? recordingRevision = null)
+    {
+        if (course.Name.Length > 200) throw new TaskValidationException("TASK001", "课程名最多 200 字。");
+        var added = 0; var updated = 0; var unresolved = 0; var duplicates = 0;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        lock (gate)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            using var connection = Open(); using var transaction = connection.BeginTransaction();
+            var notifications = ReadSettings(connection, transaction).NotificationsEnabled;
+            var recording = ReadCourseRecording(connection, transaction, "chaoxing");
+            if (recordingRevision is { } revision && recording.Revision != revision) throw new CourseRecordingChangedException();
+            var recordingKey = CourseRecordingRules.ChaoxingKey(course.CourseId, course.ClassId, course.Cpi);
+            if (!CourseRecordingRules.IsSelected(recording, recordingKey)) return new(0, 0, 0, 0);
+            foreach (var row in rows)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                var verified = row.Location is not null && ChaoxingExamParser.VerifyLocation(row.Location) ? row.Location : null;
+                var key = ObservedExamKey(verified);
+                if (key is not null && !seen.Add(key)) { duplicates++; continue; }
+                // An exam is only saved under the course that owns this import; a stray row is never reassigned.
+                if (key is null || verified!.CourseId != course.CourseId || verified.ClassId != course.ClassId) { unresolved++; continue; }
+                if (string.IsNullOrWhiteSpace(row.Title) || row.Title.Length > 300)
+                    throw new TaskValidationException("TASK001", "考试名称无效或超过 300 字，未保存本批数据。");
+                var current = Find(connection, transaction, "source_key", key);
+                var task = current ?? new TaskItem
+                {
+                    Source = TaskSource.Chaoxing, SourceKey = key, CreatedAtUtc = now.ToUniversalTime(),
+                    Title = row.Title, CourseName = string.IsNullOrWhiteSpace(course.Name) ? "课程待补充" : course.Name.Trim()
+                };
+                var window = ChaoxingExamParser.WindowText(row.DisplayedTimeText);
+                task = task with
+                {
+                    Title = task.Overrides.HasFlag(TaskOverrides.Title) ? task.Title : row.Title,
+                    CourseName = task.Overrides.HasFlag(TaskOverrides.Course) || string.IsNullOrWhiteSpace(course.Name) ? task.CourseName : course.Name.Trim(),
+                    PlatformTitle = row.Title, PlatformStatusText = row.PlatformStatusText,
+                    RecordingCourseKey = recordingKey,
+                    // The exam list text is the only window evidence this platform provides for exams.
+                    DisplayedTimeText = row.DisplayedTimeText, DetailTimeText = window, CollectedAtUtc = now.ToUniversalTime(),
+                    UpdatedAtUtc = now.ToUniversalTime(), Revision = current is null ? 1 : current.Revision + 1,
+                    Link = task.Overrides.HasFlag(TaskOverrides.Link) ? task.Link : verified.PageUri.OriginalString,
+                    LinkIssue = task.Overrides.HasFlag(TaskOverrides.Link) ? task.LinkIssue : null
+                };
+                task = ChaoxingTaskMetadata.Apply(task, row.DisplayedTimeText, row.TimeObservedAtUtc ?? now, refreshWindow: true);
                 Write(connection, transaction, task); Reconcile(connection, transaction, task, now);
                 if (current is null)
                 {
@@ -381,9 +462,9 @@ public sealed partial class TaskStore
     private static void Reconcile(SqliteConnection connection, SqliteTransaction transaction, TaskItem task, DateTimeOffset now)
     {
         var recording = ReadCourseRecording(connection, transaction, task.PlatformId);
-        var recorded = task.Source == TaskSource.Manual && !recording.SelectionConfirmed
-            || CourseRecordingRules.IsSelected(recording, CourseRecordingRules.TaskCourseKey(task));
+        var recorded = CourseRecordingRules.IsRecorded(recording, task);
         var plans = recorded ? ReminderPlanner.TimedPlans(task, now) : [];
+        if (recorded && TaskRules.HasPlatformAttention(task)) plans = plans.Append(ReminderPlanner.PlatformChanged(task, now)).ToArray();
         using var command = Command(connection, transaction, "SELECT id,kind FROM reminders WHERE task_id=$task AND state!='requested';", ("$task", task.Id));
         var obsolete = new List<string>();
         using (var reader = command.ExecuteReader())
@@ -420,8 +501,7 @@ public sealed partial class TaskStore
             {
                 var task = Find(connection, transaction, "id", plan.TaskId);
                 if (task is null || !ReminderPlanner.IsCurrent(plan, task, now)
-                    || !(task.Source == TaskSource.Manual && !ReadCourseRecording(connection, transaction, task.PlatformId).SelectionConfirmed
-                        || CourseRecordingRules.IsSelected(ReadCourseRecording(connection, transaction, task.PlatformId), CourseRecordingRules.TaskCourseKey(task))))
+                    || !CourseRecordingRules.IsRecorded(ReadCourseRecording(connection, transaction, task.PlatformId), task))
                 { Execute(connection, transaction, "DELETE FROM reminders WHERE id=$id;", ("$id", plan.Id)); continue; }
                 Execute(connection, transaction, "UPDATE reminders SET state='processing',lease_until_utc=$lease,attempts=attempts+1 WHERE id=$id;",
                     ("$lease", now.AddMinutes(2).ToUnixTimeMilliseconds()), ("$id", plan.Id));

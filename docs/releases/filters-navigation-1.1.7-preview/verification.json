@@ -1,0 +1,382 @@
+{
+  "schema": 1,
+  "version": "1.1.7",
+  "preview": true,
+  "date": "2026-11-16",
+  "outcome": "automated_and_isolated_checks_passed",
+  "packages": [
+    {
+      "file": "聚合平台-1.1.7-Setup-win-x64.exe",
+      "bytes": 59146235,
+      "sha256": "8e7294a8f940183e2704b34587cf6a465d2953d7ead2b327e2d280426adcfe06"
+    },
+    {
+      "file": "聚合平台-1.1.7-便携测试版-win-x64.zip",
+      "bytes": 81127929,
+      "sha256": "4f39ac0fa089f37e7d58c5db76d8c2eac39d33a6fb8d73227c78e30115b7f90b"
+    },
+    {
+      "file": "聚合平台-1.1.7-android.apk",
+      "bytes": 67539028,
+      "sha256": "23beee8b79cb8459b0a95b42673722dc39da5e39703d79da06c2f4db8e0254eb"
+    }
+  ],
+  "scope": {
+    "clientsChanged": [
+      "Windows",
+      "Android"
+    ],
+    "crossDeviceSync": false,
+    "accountModel": "one current personal account per platform on each local client",
+    "taskFilters": [
+      "state",
+      "deadline",
+      "platform",
+      "course_identity",
+      "search",
+      "sort"
+    ],
+    "deadlineCalendar": "device local calendar; inclusive final date; either endpoint may be omitted",
+    "courseFilterDefault": "hide verified ended courses in the course selection list only",
+    "courseFilterOptions": [
+      "hide_ended",
+      "all",
+      "ended_only"
+    ],
+    "trustedCourseEndSources": [
+      "xuetang_course_status",
+      "mooc_term_panel_end_time",
+      "zhihuishu_smart_course_end_time"
+    ],
+    "unknownCourseEndVisible": true,
+    "existingSynchronizationSelectionRetained": true,
+    "hiddenCourseSelectionRetainedByVisibleBulkActions": true,
+    "taskHistoryRetained": true,
+    "androidBack": "business parent, task home, then two back presses within 2000 ms",
+    "windowsNormalBusinessWindows": 1,
+    "uaiWindows": "manual only; full automatic collection pending",
+    "uaiAndroid": "verified identity and overview preview; full automatic collection pending"
+  },
+  "windows": {
+    "buildId": "20261115-161520-7f2a90a5",
+    "buildRoot": ".local/builds/20261115-161520-7f2a90a5",
+    "dashboardRun": ".local/task-dashboard-harness/20261115-161605-b4550e4f828f44c8a34e84ef86c1fc28",
+    "projects": 11,
+    "businessChecks": 3176,
+    "businessCategories": [
+      {
+        "checks": 25,
+        "scope": "installed/project data locations, argument validation, process isolation and help checks (synthetic only)."
+      },
+      {
+        "checks": 9,
+        "scope": "read-only legacy snapshot, WAL import, encrypted archive copy and existing-data preservation checks (synthetic only)."
+      },
+      {
+        "checks": 15,
+        "scope": "navigation and metadata policy checks."
+      },
+      {
+        "checks": 113,
+        "scope": "synthetic notice parsing and HTTP checks; no account accessed."
+      },
+      {
+        "checks": 33,
+        "scope": "synthetic work-list HTML and task-link checks; no account accessed."
+      },
+      {
+        "checks": 32,
+        "scope": "synthetic work-detail and year-ambiguity checks; no account accessed."
+      },
+      {
+        "checks": 28,
+        "scope": "synthetic loaded-page snapshot checks; no account accessed."
+      },
+      {
+        "checks": 29,
+        "scope": "HTTPS navigation upgrade and redirect-loop checks; synthetic URLs only."
+      },
+      {
+        "checks": 8,
+        "scope": "secret-free navigation classification checks."
+      },
+      {
+        "checks": 9,
+        "scope": "independent work/exam cases, 32 assertions; synthetic data only, no official network or production data."
+      },
+      {
+        "checks": 89,
+        "scope": "task persistence, import, state, local protection and reminder checks (synthetic data only)."
+      },
+      {
+        "checks": 71,
+        "scope": "platform-state mapping, automatic dates, visible estimates, priorities, manual preservation and migration checks (synthetic data only)."
+      },
+      {
+        "checks": 28,
+        "scope": "task filter combinations, local dates and unknown-time checks (synthetic only)."
+      },
+      {
+        "checks": 78,
+        "scope": "task-specific external navigation, signed redirects, no answer-page reads, latest links and cancellation checks (synthetic data only)."
+      },
+      {
+        "checks": 176,
+        "scope": "automatic course discovery, background import, session expiry, cancellation and read-only HTTP checks (synthetic data only)."
+      },
+      {
+        "checks": 59,
+        "scope": "encrypted session, cookie renewal and scope checks."
+      },
+      {
+        "checks": 282,
+        "scope": "rain/changjiang metadata, isolated storage, paging, transport and direct-link checks."
+      },
+      {
+        "checks": 143,
+        "scope": "MOOC metadata, pagination, task-link, merge and protected-session checks."
+      },
+      {
+        "checks": 167,
+        "scope": "course recording, platform isolation, catalog-only refresh, excluded-request, retained-task and reminder checks (synthetic only)."
+      },
+      {
+        "checks": 56,
+        "scope": "course lifecycle, trustworthy expiry, catalog renewal and retained-selection checks (synthetic only)."
+      },
+      {
+        "checks": 155,
+        "scope": "Xuetang official-contract metadata, paging, delayed deadlines, isolation, cancellation and protected-session checks (synthetic only)."
+      },
+      {
+        "checks": 1292,
+        "scope": "Zhihuishu shared/flip/smart lists and AI catalogs, legacy Unipus homework and exams, login diagnostics, FiF disabled, encryption, account isolation, paging, manual preservation and read-only HTTP checks (synthetic only)."
+      },
+      {
+        "checks": 75,
+        "scope": "all-platform encrypted cookie persistence, replacement, expiry, isolation and legacy migration checks (synthetic only)."
+      },
+      {
+        "checks": 44,
+        "scope": "connection stage, actionable failure, cross-client wording and secret-free report persistence checks (synthetic only)."
+      },
+      {
+        "checks": 160,
+        "scope": "PTA teaching-course, problem-set, session, pagination and navigation checks; synthetic metadata only."
+      }
+    ],
+    "desktopAndRestartChecks": {
+      "dashboardUi": 344,
+      "automaticSync": 36,
+      "taskNavigation": 12,
+      "sessionRaces": 13,
+      "chaoxingProcessRestarts": 77,
+      "rainAndUnifiedDashboard": 98,
+      "moocAndCourseSelection": 108,
+      "moocProcessRestarts": 81,
+      "xuetangAndUnifiedDashboard": 72,
+      "xuetangProcessRestarts": 81,
+      "otherPlatformConnections": 261,
+      "otherPlatformProcessRestarts": 136,
+      "ptaAndTeachingCourses": 46,
+      "ptaProcessRestarts": 73,
+      "total": 1438
+    },
+    "pythonDiagnosticChecks": 63,
+    "newBusinessChecksIncludedInBusinessTotal": {
+      "taskFiltering": 28,
+      "courseLifecycle": 56
+    },
+    "buildWarnings": 0,
+    "buildErrors": 0,
+    "executionMode": "full_regression_completed",
+    "dashboardSubreportsIncludedInDashboardTotal": true,
+    "taskFilterUi": {
+      "outcome": "passed",
+      "checks": 26,
+      "report": "验证报告/Windows首页与筛选/task-filter-checks.json",
+      "sourceReport": ".local/task-dashboard-harness/20261115-161605-b4550e4f828f44c8a34e84ef86c1fc28/task-filter-checks.json"
+    },
+    "courseFilterUi": {
+      "outcome": "passed",
+      "checks": 15,
+      "report": "验证报告/Windows首页与筛选/course-lifecycle-ui-checks.json",
+      "sourceReport": ".local/task-dashboard-harness/20261115-161605-b4550e4f828f44c8a34e84ef86c1fc28/course-lifecycle-ui-checks.json"
+    },
+    "navigationScenarios": 36,
+    "webviewConnectionFlowScenarios": 11,
+    "singleNativeWindowAssertions": "passed",
+    "layout": {
+      "outcome": "passed",
+      "platforms": 8,
+      "scenes": 24,
+      "windows": 1,
+      "screenshots": 32,
+      "visualAcceptance": "pending"
+    },
+    "installer": {
+      "outcome": "passed",
+      "variant": "TestInstallation",
+      "sameDeliveryPayload": true,
+      "deliverySetupExecuted": false,
+      "upgradeFrom": "1.1.2",
+      "upgradePreservesData": true,
+      "uninstallPreservesExternalData": true,
+      "report": "验证报告/Windows包/installation-checks.json"
+    },
+    "portable": {
+      "outcome": "passed",
+      "files": 524,
+      "payloadFiles": 520,
+      "allFilesHashMatched": true,
+      "zipCrcPassed": true,
+      "isolatedEntryConfigured": true,
+      "startupScope": "resource dictionaries and isolated database initialization, no official login",
+      "cmdStringSyntaxChecked": true,
+      "actualDoubleClickLaunchAcceptance": "pending"
+    },
+    "selfContainedFrameworks": [
+      {
+        "name": "Microsoft.NETCore.App",
+        "version": "10.0.13"
+      },
+      {
+        "name": "Microsoft.WindowsDesktop.App",
+        "version": "10.0.13"
+      }
+    ],
+    "dependencyPackages": 10,
+    "licenseSourceFilesHashMatched": 21,
+    "embeddedIconFrames": 10
+  },
+  "android": {
+    "buildId": "20261115-154218-81142d24",
+    "version": "1.1.7",
+    "versionCode": 8,
+    "apkSha256": "23beee8b79cb8459b0a95b42673722dc39da5e39703d79da06c2f4db8e0254eb",
+    "minimumApi": 28,
+    "targetApi": 36,
+    "abis": [
+      "arm64-v8a",
+      "armeabi-v7a",
+      "x86_64"
+    ],
+    "testApi": 35,
+    "avd": "aggregator-install-test",
+    "countsAreSeparateOverlappingReports": true,
+    "installation": {
+      "outcome": "passed",
+      "nativeSyntheticChecks": 47,
+      "improvementChecks": 74,
+      "loginRecoveryChecks": 61,
+      "connectionFeedbackChecks": 39,
+      "upgradeChecks": 4,
+      "restartChecks": 4,
+      "upgradeScope": "previous isolated fixture and Keystore preserved; previous version was not recorded",
+      "upgradePreservesData": true,
+      "report": "验证报告/Android安装与恢复/installation-checks.json"
+    },
+    "pageLoginQrAndRouting": {
+      "outcome": "passed",
+      "checks": 87,
+      "components": [
+        {
+          "mode": "ui",
+          "checks": 23
+        },
+        {
+          "mode": "in_app_login",
+          "checks": 23
+        },
+        {
+          "mode": "automatic",
+          "checks": 28
+        },
+        {
+          "mode": "app_task",
+          "checks": 4
+        },
+        {
+          "mode": "app_home",
+          "checks": 4
+        },
+        {
+          "mode": "web",
+          "checks": 3
+        },
+        {
+          "mode": "unavailable",
+          "checks": 2
+        }
+      ],
+      "report": "验证报告/Android页面与路由/android-improvements.json"
+    },
+    "loginRecoveryWebview": {
+      "outcome": "passed",
+      "webviewChecks": 31,
+      "restartChecks": 3,
+      "report": "验证报告/Android登录恢复/login-recovery-summary.json"
+    },
+    "backNavigation": {
+      "outcome": "passed",
+      "assertions": 109,
+      "reportScenarios": 16,
+      "uniqueAssertionLabels": 87,
+      "scope": "real API35 KEYCODE_BACK and edge gesture, toolbar and legacy callback invocation",
+      "olderAndroidNativeAcceptance": "pending",
+      "report": "验证报告/Android返回/back-navigation.json"
+    },
+    "courseFilterUi": {
+      "outcome": "passed",
+      "checks": 15,
+      "report": "验证报告/Android筛选/ui-checks.json",
+      "sourceReport": "artifacts/previews/filters-navigation-1.1.7-20261115/android/verification/course-filter-final/ui-checks.json"
+    },
+    "taskFilterUi": {
+      "outcome": "passed",
+      "checks": 13,
+      "report": "验证报告/Android筛选/task-filter-checks.json",
+      "sourceReport": "artifacts/previews/filters-navigation-1.1.7-20261115/android/verification/course-filter-final/task-filter-checks.json"
+    },
+    "filterReportsApkBinding": "验证报告/Android筛选/filter-ui-checks.json",
+    "filterCountsSeparateFromPageLoginQrAndRoutingCount": true,
+    "packageIntegrity": {
+      "outcome": "passed",
+      "matchesPreviousSigningCertificate": true,
+      "zipAlignment16kb": "passed",
+      "nativeLibraryFiles": 33,
+      "native64LibraryFiles": 22,
+      "native64LoadSegments": 64,
+      "native64LoadSegments16kbAligned": true,
+      "licensePackages": 9,
+      "licenseSourceFilesHashMatched": 16,
+      "physical16kbPageDeviceAcceptance": "pending",
+      "report": "验证报告/Android包/package-checks.json"
+    }
+  },
+  "preservation": {
+    "productionCurrentBuild": "20261111-060027-e533c14f",
+    "currentHashUnchanged": true,
+    "productionTaskDatabaseHashUnchanged": true,
+    "previousDeliveriesRetained": [
+      "接入体验测试版-1.1.5-20261115",
+      "单窗口测试版-1.1.6-20261115"
+    ],
+    "githubReleaseUpdated": false,
+    "sourcePushed": false
+  },
+  "acceptanceLimits": {
+    "realPhoneOperated": false,
+    "realPhoneBackNavigation": "pending",
+    "realAccountAcceptance": "pending",
+    "officialScanAndAuthorization": "pending",
+    "longLivedOfficialSession": "pending",
+    "realOfficialAppDestination": "pending",
+    "visualAcceptance": "pending",
+    "physical16kbPageDevice": "pending",
+    "actualPortableCmdDoubleClick": "pending"
+  },
+  "officialNetworkAccessed": false,
+  "productionDataOpenedByApplication": false,
+  "verifiedAtUtc": "2026-11-15T16:37:03.186379+00:00"
+}

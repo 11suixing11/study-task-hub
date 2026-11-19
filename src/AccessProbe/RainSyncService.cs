@@ -9,7 +9,7 @@ using Microsoft.Web.WebView2.Wpf;
 
 namespace AccessProbe;
 
-public sealed class RainSyncService : IDisposable
+public sealed partial class RainSyncService : IDisposable
 {
     private readonly TaskStore store;
     private readonly string projectRoot;
@@ -41,7 +41,6 @@ public sealed class RainSyncService : IDisposable
     public bool IsRunning => cancellation is not null;
     public event Action<string, bool, bool>? StatusChanged;
     public event Action<RainSyncSummary>? Completed;
-    public event Action? CourseSelectionRequired;
     public event Action<RainSyncSummary>? CatalogCompleted;
     public string SessionRecoveryOutcome { get; private set; } = "not_started";
     public string SessionPersistenceOutcome { get; private set; } = "not_saved";
@@ -167,16 +166,19 @@ public sealed class RainSyncService : IDisposable
             var scope = new ReadScope(generation);
             using var reader = new RainHttpReader(Platform, settings.Host, (address, token) => ReadCookiesAsync(scope, address, token),
                 handlerFactory?.Invoke(), (address, observed, renewed, token) => SaveResponseCookiesAsync(scope, address, observed, renewed, token));
+            var acceptProgress = true;
             var progress = new Progress<string>(message =>
             {
-                if (!disposed && !runCancellation.IsCancellationRequested) StatusChanged?.Invoke(message, true, false);
+                if (acceptProgress && ReferenceEquals(cancellation, runCancellation) && !disposed && !runCancellation.IsCancellationRequested) StatusChanged?.Invoke(message, true, false);
             });
             var summary = await new RainSynchronizer(store, reader, Platform, settings.Host,
                 token => ValidateSessionAsync(scope, token)).RunAsync(progress, runCancellation.Token, catalogOnly);
+            acceptProgress = false;
             runCancellation.Token.ThrowIfCancellationRequested();
             if (disposed || stopping || clearing) return;
             awaitingLogin = summary.LoginRequired;
-            var persisted = await SaveSessionAsync(scope, summary.LoginRequired, runCancellation.Token);
+            var persisted = await SaveSessionAsync(scope, summary.LoginRequired, runCancellation.Token, summary.AccountVerified);
+            var connectionFeedback = PublishConnection(summary, catalogOnly, persisted);
             if (catalogOnly)
             {
                 var codes = summary.Problems.Select(problem => problem.Code).Concat(persisted ? [] : new[] { "SESSION001" })
@@ -184,11 +186,7 @@ public sealed class RainSyncService : IDisposable
                 var catalogOutcome = CourseRecordingRules.CatalogRefreshOutcome(summary.CourseListCovered, summary.LoginRequired, codes);
                 store.RecordCourseCatalogResult(Platform.Id, catalogOutcome, codes, DateTimeOffset.UtcNow, runCancellation.Token);
                 retryAfter = DateTimeOffset.UtcNow.AddMinutes(summary.LoginRequired ? 30 : 5);
-                StatusChanged?.Invoke(summary.LoginRequired ? "RAIN001：请在对应连接窗口完成官方登录后刷新课程。"
-                    : catalogOutcome == "completed" ? $"{Platform.Name}课程列表已刷新，共 {summary.Courses} 门课程。"
-                    : Platform.Name + "课程列表未完整刷新；原有课程选择保留，请检查官方登录与网络。", false,
-                    catalogOutcome != "completed");
-                if (!summary.LoginRequired && summary.CourseListCovered && (needsSelection || afterLogin && loginOpen)) CourseSelectionRequired?.Invoke();
+                StatusChanged?.Invoke(connectionFeedback.Text, false, connectionFeedback.Warning);
                 if (afterLogin && summary.LoginRequired && loginOpen) ScheduleLoginCheck();
                 CatalogCompleted?.Invoke(summary);
                 return;
@@ -366,7 +364,7 @@ public sealed class RainSyncService : IDisposable
         finally { cookieGate.Release(); }
     }
 
-    private async Task<bool> SaveSessionAsync(ReadScope scope, bool loginRequired, CancellationToken token)
+    private async Task<bool> SaveSessionAsync(ReadScope scope, bool loginRequired, CancellationToken token, bool accountVerified = true)
     {
         await cookieGate.WaitAsync(token);
         try
@@ -375,7 +373,7 @@ public sealed class RainSyncService : IDisposable
             if (loginRequired) { sessionRejected = true; sessionStore.Invalidate(DateTimeOffset.UtcNow); SessionPersistenceOutcome = "expired"; return true; }
             sessionRejected = false;
             var saved = SaveProfile(current);
-            if (saved) store.ConfirmPlatformSession(Platform.Id, DateTimeOffset.UtcNow);
+            if (saved && accountVerified) store.ConfirmPlatformSession(Platform.Id, DateTimeOffset.UtcNow);
             return saved;
         }
         finally { cookieGate.Release(); }

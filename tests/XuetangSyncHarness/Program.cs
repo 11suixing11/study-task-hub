@@ -56,14 +56,15 @@ internal static partial class Program
             service.StartAutomatic(); await Task.Delay(75);
             Check(fixture.Requests == 0 && !service.IsRunning, "unconnected platform sends no requests");
             Click("XuetangConnectionButton");
-            await WaitAsync(() => app.Windows.OfType<CourseSelectionWindow>().Any());
-            var manager = app.Windows.OfType<CourseSelectionWindow>().Single();
+            await WaitAsync(() => dashboard.ActivePage is CourseSelectionPage);
+            var manager = (CourseSelectionPage)dashboard.ActivePage!;
             await WaitAsync(() => manager.FindName("RecordingCourseList") is ListBox { ItemsSource: not null });
             ((Button)manager.FindName("RecordingConnectionButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(connections.SequenceEqual(new[] { "xuetang" }), "platform manager connects only Xuetang");
             var loggedOut = await RunAsync(service.ConnectionOpened);
             Check(loggedOut.LoginRequired && fixture.Requests == 1 && store.LoadTasks().Count == 1, "anonymous official login response preserves existing tasks");
-            Check(store.LoadCourseRecording("xuetang").LastCatalogRefresh?.Outcome == "login_required" && Text("XuetangSyncStatusText").Contains("XT001", StringComparison.Ordinal), "login failure stored and visible");
+            Check(store.LoadCourseRecording("xuetang").LastCatalogRefresh?.Outcome == "login_required" && Text("XuetangSyncStatusText").Contains("官网仍要求登录", StringComparison.Ordinal)
+                && service.Connection?.ProblemCodes.Contains("XT001") == true, "login failure has a persisted result and visible authorization explanation");
             Check(((Expander)dashboard.FindName("PlatformSyncExpander")).IsExpanded && Text("SyncOverviewText").Contains("学堂在线", StringComparison.Ordinal), "new-platform warning enters shared overview");
             Fixtures.SetCookie(browser, fixture.ExpectedToken); fixture.RenewNext = true;
             var catalog = await RunAsync(() => service.LoginNavigationCompleted(XuetangPlatform.Home.AbsoluteUri), value => !value.LoginRequired);
@@ -144,7 +145,7 @@ internal static partial class Program
             && JsonSerializer.Serialize(store.LoadXuetangSettings().LastSummary) == syncResult, "catalog failure keeps course list selection and historical sync result");
         ((ComboBox)dashboard.FindName("PlatformFilter")).SelectedItem = XuetangPlatform.Name;
         Click("ChooseRecordingCoursesButton"); await Task.Delay(75);
-        var window = app.Windows.OfType<CourseSelectionWindow>().Single();
+        var window = (CourseSelectionPage)dashboard.ActivePage!;
         var selector = (ComboBox)window.FindName("RecordingPlatformSelector");
         Check(window.IsVisible && selector.Items.OfType<PlatformSite>().Any(site => site.Id == "xuetang")
             && (selector.SelectedItem as PlatformSite)?.Id == "xuetang", "all-platform course selection includes Xuetang");
@@ -155,7 +156,7 @@ internal static partial class Program
     private static async Task VerifySettingsAsync()
     {
         Click("XuetangConnectionButton"); await Task.Delay(100);
-        var window = app.Windows.OfType<CourseSelectionWindow>().Single();
+        var window = (CourseSelectionPage)dashboard.ActivePage!;
         var automatic = (CheckBox)window.FindName("PlatformAutomaticSync");
         automatic.IsChecked = false; automatic.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));
         var count = fixture.Requests; service.StartAutomatic(); await Task.Delay(75);
@@ -182,7 +183,9 @@ internal static partial class Program
         Check(store.LoadXuetangSettings().LastSyncOutcome == "partial" && store.LoadTasks().Count == before, "unrecognized identity imports nothing");
         await service.StartAsync(true);
         Click("SyncDetailsButton"); await Task.Delay(50);
-        var details = app.Windows.OfType<Window>().Single(value => value != dashboard && value.Title.Contains("同步详情", StringComparison.Ordinal));
+        var details = dashboard.ActivePage ?? throw new InvalidOperationException("Xuetang sync details page was not opened");
+        Check(details.Title.Contains("同步详情", StringComparison.Ordinal) && app.Windows.Count == 1,
+            "Xuetang sync details use the existing main window");
         Check(FindText(details).Any(text => text.Text == "学堂在线同步详情")
             && FindText(details).Any(text => text.Text.Contains("旧版课程、多课项目", StringComparison.Ordinal)), "details show scoped coverage and unsupported platforms");
         details.Close();
@@ -217,9 +220,9 @@ internal static partial class Program
 
     private static async Task VerifyOfficialConnectionAsync()
     {
-        var window = new XuetangConnectionWindow(service, dashboard.ShowDashboard);
-        var loginBrowser = ((DockPanel)window.Content).Children.OfType<WebView2>().Single(); fixture.BlockBrowser(loginBrowser);
-        window.Show(); await WaitAsync(() => loginBrowser.CoreWebView2?.Source == XuetangPlatform.Login.AbsoluteUri);
+        var window = new XuetangConnectionPage(service, dashboard.ShowDashboard);
+        var loginBrowser = ((Panel)window.Content).Children.OfType<WebView2>().Single(); fixture.BlockBrowser(loginBrowser);
+        dashboard.ShowWorkspacePage("fixture-connection:" + Guid.NewGuid().ToString("N"), window); await WaitAsync(() => loginBrowser.CoreWebView2?.Source == XuetangPlatform.Login.AbsoluteUri);
         Check(loginBrowser.CoreWebView2.Environment.UserDataFolder == browser.CoreWebView2.Environment.UserDataFolder, "dedicated official login window shares Xuetang-only environment");
         Check(FindText(window).Any(text => text.Text.Contains("旧版课程、多课项目", StringComparison.Ordinal)), "login screen discloses collection scope");
         await VerifyLoginPageAsync(window, loginBrowser);

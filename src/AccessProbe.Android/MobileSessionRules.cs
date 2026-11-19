@@ -6,7 +6,7 @@ namespace AccessProbe.Mobile;
 
 public sealed record MobileSession(string Id, string PlatformId, DateTimeOffset SavedAtUtc,
     MetadataSessionCookie[] Cookies, string? AccountId = null, string? Token = null,
-    string? TokenBinding = null, string[]? InferredScopeKeys = null)
+    string? TokenBinding = null, string[]? InferredScopeKeys = null, long? SchoolId = null)
 {
     public override string ToString() => nameof(MobileSession);
 }
@@ -16,20 +16,26 @@ public static class MobileSessionRules
     public static bool IsValid(MobileSession value, string platform, DateTimeOffset now) =>
         value.PlatformId == platform && CourseRecordingRules.SupportsAutomatic(platform)
         && value.Id is { Length: 32 } && value.Id.All(char.IsAsciiHexDigit)
-        && value.SavedAtUtc <= now.AddMinutes(5) && value.Cookies is { Length: > 0 and <= 512 }
+        && value.SavedAtUtc <= now.AddMinutes(5) && value.Cookies is { Length: <= 512 } && (value.Cookies.Length > 0 || platform == "uai")
         && value.Cookies.All(cookie => CookieValid(platform, cookie))
         && value.Cookies.Select(cookie => cookie.Key).Distinct(StringComparer.Ordinal).Count() == value.Cookies.Length
         && (value.AccountId is null || MetadataTaskNavigation.IsId(value.AccountId))
-        && (value.Token is null && value.TokenBinding is null || platform == "zhihuishu"
+        && (value.Token is null && value.TokenBinding is null && platform != "uai" || platform == "zhihuishu"
             && value.Token is { Length: > 0 and <= 16384 } && !value.Token.Any(char.IsControl)
             && value.TokenBinding == CookieFingerprint(platform, value.Cookies)
-            && Account(platform, value.Cookies) is not null)
+            && Account(platform, value.Cookies) is not null
+            || platform == "uai" && UaiPortal.TokenIdentity(value.Token) is { } identity && identity.OpenId == value.AccountId
+                && value.TokenBinding == CookieFingerprint(platform, value.Cookies)
+                && (value.SchoolId is null or > 0)
+                && value.Cookies.Where(cookie => cookie.Name == "jwt").All(cookie => UaiPortal.TokenIdentity(Uri.UnescapeDataString(cookie.Value))?.OpenId == value.AccountId))
+        && (platform == "uai" || value.SchoolId is null)
         && (value.InferredScopeKeys is null || value.InferredScopeKeys.Length <= 512
             && value.InferredScopeKeys.All(key => value.Cookies.Any(cookie => cookie.Key == key && !cookie.Domain.StartsWith('.'))));
 
     public static bool CookieValid(string platform, MetadataSessionCookie? cookie)
     {
         if (cookie is null) return false;
+        if (platform == "uai") return UaiPortal.CookieValid(cookie);
         if (platform is "ucampus" or "zhihuishu" or "pta") return MetadataSessionStore.IsValid(MetadataPlatform.Get(platform), cookie);
         if (platform == "xuetang") return XuetangSessionStore.IsValid(new(cookie.Name, cookie.Value, cookie.Domain, cookie.Path, cookie.Secure, cookie.HttpOnly, cookie.ExpiresUtc, cookie.SameSite));
         if (platform == "mooc") return MoocSessionStore.IsValid(new(cookie.Name, cookie.Value, cookie.Domain, cookie.Path, cookie.Secure, cookie.HttpOnly, cookie.ExpiresUtc, cookie.SameSite));
@@ -53,7 +59,7 @@ public static class MobileSessionRules
 
     public static string Fingerprint(MobileSession session)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(new[] { CookieFingerprint(session.PlatformId, session.Cookies), session.AccountId, session.Token, session.TokenBinding });
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(new[] { CookieFingerprint(session.PlatformId, session.Cookies), session.AccountId, session.Token, session.TokenBinding, session.SchoolId?.ToString(System.Globalization.CultureInfo.InvariantCulture) });
         try { return Convert.ToHexString(SHA256.HashData(bytes)); }
         finally { CryptographicOperations.ZeroMemory(bytes); }
     }
@@ -78,8 +84,9 @@ public static class MobileSessionRules
             if (actual is not null && actual.Value != before?.Value) continue;
             // WebView exposes pairs without scope. A known Set-Cookie replaces only matching inferred aliases.
             foreach (var alias in cookies.Values.Where(cookie => inferred.Contains(cookie.Key) && cookie.Key != change.Key
-                && cookie.Name == change.Name && cookie.Path == change.Path
-                && observed.Any(sent => sent.Name == cookie.Name && sent.Path == cookie.Path && sent.Value == cookie.Value)
+                && cookie.Name == change.Name
+                && observed.Any(sent => sent.Name == cookie.Name && sent.Value == cookie.Value
+                    && change.AppliesTo(new Uri("https://" + sent.Domain.TrimStart('.') + sent.Path)))
                 && change.AppliesTo(new Uri("https://" + cookie.Domain + cookie.Path))).ToArray())
             { cookies.Remove(alias.Key); inferred.Remove(alias.Key); }
             inferred.Remove(change.Key);
@@ -89,9 +96,9 @@ public static class MobileSessionRules
         var nextAccount = Account(current.PlatformId, cookies.Values);
         if (previousAccount is not null && nextAccount is not null && previousAccount != nextAccount)
             throw new OperationCanceledException("The response belongs to a different official account.");
-        var preserveToken = current.Token is not null && previousAccount is not null && nextAccount == previousAccount
+        var preserveToken = current.Token is not null && (current.PlatformId == "uai" || previousAccount is not null && nextAccount == previousAccount)
             && current.TokenBinding == CookieFingerprint(current.PlatformId, current.Cookies);
-        if (cookies.Count == 0) throw new OperationCanceledException("The official login was cleared.");
+        if (cookies.Count == 0 && current.PlatformId != "uai") throw new OperationCanceledException("The official login was cleared.");
         return current with { Cookies = cookies.Values.ToArray(), SavedAtUtc = now,
             Token = preserveToken ? current.Token : null,
             TokenBinding = preserveToken ? CookieFingerprint(current.PlatformId, cookies.Values) : null,

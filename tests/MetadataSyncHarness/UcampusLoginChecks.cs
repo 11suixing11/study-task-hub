@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using AccessProbe;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -17,28 +18,46 @@ internal static partial class Program
         const string rejected = "https://evil.example/synthetic-closed-popup?token=synthetic-private";
         foreach (var onStudentPage in new[] { true, false })
         {
-            lastCheck = "Ucampus connection closes before paused session validation completes";
-            var connection = new MetadataConnectionWindow(service, () => { });
-            var browser = (WebView2)typeof(MetadataConnectionWindow).GetField("browser", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection)!;
+            var page = onStudentPage ? "student" : "login";
+            lastCheck = "Ucampus closed-window " + page + " browser initialization";
+            var connection = new MetadataConnectionPage(service, () => { });
+            var browser = (WebView2)typeof(MetadataConnectionPage).GetField("browser", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection)!;
             fixture.BlockBrowser(browser); var closed = false;
+            var initialPage = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            void InitialNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs args)
+            {
+                if (browser.CoreWebView2.Source == MetadataPlatform.Ucampus.Login.AbsoluteUri)
+                    initialPage.TrySetResult(args.IsSuccess && args.HttpStatusCode < 400);
+            }
+            void BrowserInitialized(object? sender, CoreWebView2InitializationCompletedEventArgs args)
+            {
+                if (args.IsSuccess) browser.CoreWebView2.NavigationCompleted += InitialNavigationCompleted;
+                else initialPage.TrySetException(args.InitializationException);
+            }
+            browser.CoreWebView2InitializationCompleted += BrowserInitialized;
+            // This check explicitly starts the paused catalog below. Keep the 50 ms test timer
+            // from independently validating the session between navigation and the popup.
+            var loginTimer = (DispatcherTimer)typeof(MetadataSyncService).GetField("loginTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(service)!;
+            var originalInterval = loginTimer.Interval;
+            loginTimer.Stop(); loginTimer.Interval = TimeSpan.FromMinutes(30);
             try
             {
-                connection.Show(); await WaitAsync(() => browser.CoreWebView2 is not null);
+                dashboard.ShowWorkspacePage("fixture-connection:" + Guid.NewGuid().ToString("N"), connection);
+                lastCheck = "Ucampus closed-window " + page + " initial login navigation completion";
+                Check(await initialPage.Task.WaitAsync(TimeSpan.FromSeconds(10)), "closed-window fixture finishes its initial login navigation");
+                lastCheck = "Ucampus closed-window " + page + " initial check cancellation";
                 service.Cancel(); await WaitAsync(() => !service.IsRunning);
                 fixture.PauseUcampusCatalog();
                 var core = browser.CoreWebView2; var target = onStudentPage ? student : MetadataPlatform.Ucampus.Login.AbsoluteUri;
-                var ready = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                void DocumentReady(object? sender, CoreWebView2DOMContentLoadedEventArgs args)
-                { if (core.Source == target) ready.TrySetResult(true); }
-                core.DOMContentLoaded += DocumentReady;
-                try { core.Navigate(target); await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)); }
-                finally { core.DOMContentLoaded -= DocumentReady; }
+                lastCheck = "Ucampus closed-window " + page + " target document readiness";
+                await NavigateUcampusDocumentAsync(core, target);
                 var popup = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 void PopupRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs args)
                 { if (args.Uri == rejected) popup.TrySetResult(args.Handled); }
                 core.NewWindowRequested += PopupRequested;
                 try
                 {
+                    lastCheck = "Ucampus closed-window " + page + " popup event";
                     await core.ExecuteScriptAsync("window.open(" + JsonSerializer.Serialize(rejected) + ", '_blank')");
                     Check(await popup.Task.WaitAsync(TimeSpan.FromSeconds(10)), "unconfirmed popup is blocked before closing the connection");
                 }
@@ -47,6 +66,7 @@ internal static partial class Program
                 var taskSummary = JsonSerializer.Serialize(store.LoadMetadataSettings("ucampus").LastSummary);
                 var taskSnapshot = JsonSerializer.Serialize(store.LoadTasks());
                 var requestCount = fixture.Paths.Count;
+                lastCheck = "Ucampus closed-window " + page + " paused catalog request entry";
                 var sync = service.StartAsync(true, catalogOnly: true);
                 await fixture.Entered!.Task.WaitAsync(TimeSpan.FromSeconds(10));
                 Check(service.IsRunning && service.LoginDiagnostics.Snapshot().PageFailure is { Stage: MetadataLoginStage.Popup },
@@ -75,27 +95,25 @@ internal static partial class Program
             }
             finally
             {
+                browser.CoreWebView2InitializationCompleted -= BrowserInitialized;
+                if (!closed && browser.CoreWebView2 is not null) browser.CoreWebView2.NavigationCompleted -= InitialNavigationCompleted;
                 fixture.Release?.TrySetResult(true); fixture.ResetPause();
                 if (!closed) connection.Close();
+                loginTimer.Stop(); loginTimer.Interval = originalInterval;
             }
         }
     }
 
-    private static async Task VerifyUcampusStudentPopupAsync(MetadataConnectionWindow connection, WebView2 browser,
+    private static async Task VerifyUcampusStudentPopupAsync(MetadataConnectionPage connection, WebView2 browser,
         MetadataSyncService service, Fixtures fixture)
     {
         lastCheck = "Ucampus student-page popup warning and confirmed metadata recovery";
         var core = browser.CoreWebView2;
-        var status = (TextBlock)typeof(MetadataConnectionWindow).GetField("status", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection)!;
+        var status = (TextBlock)typeof(MetadataConnectionPage).GetField("status", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection)!;
         const string student = "https://u.unipus.cn/user/student/index";
         const string rejected = "https://evil.example/synthetic-student-popup?token=synthetic-private";
         service.LoginDiagnostics.Record(MetadataLoginStage.Preparation, MetadataLoginResult.Started);
-        var ready = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        void DocumentReady(object? sender, CoreWebView2DOMContentLoadedEventArgs args)
-        { if (core.Source == student) ready.TrySetResult(true); }
-        core.DOMContentLoaded += DocumentReady;
-        try { core.Navigate(student); await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)); }
-        finally { core.DOMContentLoaded -= DocumentReady; }
+        await NavigateUcampusDocumentAsync(core, student);
 
         // Reproduce the popup arriving on the student page before the asynchronous session check finishes.
         var popup = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -131,7 +149,7 @@ internal static partial class Program
                 && taskSnapshot == JsonSerializer.Serialize(store.LoadTasks())
                 && fixture.Paths.Skip(requestCount).All(path => !path.StartsWith("/user/student/homework/", StringComparison.Ordinal)),
                 "login catalog refresh preserves task history and does not request task lists");
-            Check(status.Text.Contains("课程列表已刷新", StringComparison.Ordinal)
+            Check(status.Text.Contains("已接入", StringComparison.Ordinal)
                 && !status.Text.Contains("跳转尚未适配", StringComparison.Ordinal) && status.Foreground == Brushes.DimGray,
                 "successful Ucampus catalog refresh replaces the stale red login warning");
 
@@ -171,5 +189,28 @@ internal static partial class Program
             Check(browsers["ucampus"].CoreWebView2.Source == "about:blank", "popup checks never navigate the background Ucampus browser");
         }
         finally { core.NewWindowRequested -= PopupRequested; }
+    }
+
+    private static async Task NavigateUcampusDocumentAsync(CoreWebView2 core, string target)
+    {
+        ulong? navigationId = null;
+        var document = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Starting(object? sender, CoreWebView2NavigationStartingEventArgs args)
+        { if (args.Uri == target) navigationId = args.NavigationId; }
+        void DocumentReady(object? sender, CoreWebView2DOMContentLoadedEventArgs args)
+        { if (args.NavigationId == navigationId) document.TrySetResult(true); }
+        void NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs args)
+        { if (args.NavigationId == navigationId) completed.TrySetResult(args.IsSuccess && args.HttpStatusCode < 400); }
+        core.NavigationStarting += Starting; core.DOMContentLoaded += DocumentReady; core.NavigationCompleted += NavigationCompleted;
+        try
+        {
+            core.Navigate(target);
+            await Task.WhenAll(document.Task, completed.Task).WaitAsync(TimeSpan.FromSeconds(10));
+            if (!completed.Task.Result || core.Source != target || await core.ExecuteScriptAsync("document.readyState") != "\"complete\"")
+                throw new InvalidOperationException("Ucampus target document did not finish navigation: " + lastCheck);
+        }
+        finally
+        { core.NavigationStarting -= Starting; core.DOMContentLoaded -= DocumentReady; core.NavigationCompleted -= NavigationCompleted; }
     }
 }

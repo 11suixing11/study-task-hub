@@ -38,18 +38,18 @@ internal static partial class Program
 
         lastCheck = "open login window waits for actual account evidence";
         await service.ClearSessionAsync();
-        var connection = new MetadataConnectionWindow(service, () => { });
-        var loginBrowser = (WebView2)typeof(MetadataConnectionWindow).GetField("browser", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection)!;
+        var connection = new MetadataConnectionPage(service, () => { });
+        var loginBrowser = (WebView2)typeof(MetadataConnectionPage).GetField("browser", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection)!;
         fixture.BlockBrowser(loginBrowser);
         try
         {
             var beforeRequests = fixture.Requests;
-            connection.Show(); await WaitAsync(() => loginBrowser.CoreWebView2 is not null);
+            dashboard.ShowWorkspacePage("fixture-connection:" + Guid.NewGuid().ToString("N"), connection); await WaitAsync(() => loginBrowser.CoreWebView2 is not null);
             await WaitAsync(() => service.LoginDiagnostics.Snapshot().Events.Any(item => item.Result == MetadataLoginResult.AwaitingLogin));
             Check(fixture.Requests == beforeRequests && store.LoadPlatformSessionInfo("zhihuishu").State != "ready",
                 "unfinished official login neither probes account API nor marks invalid cookies reusable");
-            var status = (TextBlock)typeof(MetadataConnectionWindow).GetField("status", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection)!;
-            Check(status.Text.Contains("等待智慧树官方登录", StringComparison.Ordinal) && !status.Text.Contains("ZHS001", StringComparison.Ordinal),
+            var status = (TextBlock)typeof(MetadataConnectionPage).GetField("status", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection)!;
+            Check(status.Text.Contains("等待智慧树官网确认登录", StringComparison.Ordinal) && !status.Text.Contains("ZHS001", StringComparison.Ordinal),
                 "waiting at login page avoids repeated expiry prompt");
             fixture.SetCookies(browser); await Task.Delay(80);
             await WaitAsync(() => service.LoginDiagnostics.Snapshot().AccountConfirmed);
@@ -58,7 +58,7 @@ internal static partial class Program
         finally
         {
             connection.Close(); service.Cancel(); await WaitAsync(() => !service.IsRunning);
-            foreach (var selection in app.Windows.OfType<CourseSelectionWindow>().ToArray()) selection.Close();
+            dashboard.ShowDashboard();
         }
     }
     private static async Task VerifyUcampusSsoExpiryAsync()
@@ -86,6 +86,6 @@ internal static partial class Program
         finally { service.ConnectionClosed(); }
         Check(store.LoadPlatformSessionInfo("ucampus").State == "ready" && service.LoginDiagnostics.Snapshot().AccountConfirmed,
             "official relogin replaces rejected Ucampus session and refreshes course catalog");
-        foreach (var popup in app.Windows.OfType<CourseSelectionWindow>().ToArray()) popup.Close();
+        dashboard.ShowDashboard();
     }
 }

@@ -83,7 +83,10 @@ public sealed record MetadataSyncSettings
     public string LastSyncOutcome { get; init; } = "not_started";
     public MetadataSyncSummary? LastSummary { get; init; }
 }
-public sealed record MetadataSyncProblem(string Code, string Course, string Message);
+public sealed record MetadataSyncProblem(string Code, string Course, string Message)
+{
+    public string Outcome { get; init; } = "";
+}
 public sealed record MetadataSyncSummary(string PlatformId, int Courses, int CoursesRead, int SelectedCourses,
     int Tasks, int Added, int Updated, bool LoginRequired, bool CourseListCovered, IReadOnlyList<MetadataSyncProblem> Problems)
 {
@@ -153,6 +156,7 @@ public sealed record MetadataCourse([property: JsonIgnore] string Id, string Nam
 {
     [JsonIgnore] public string ApiCourseId { get; init; } = Id;
     [JsonIgnore] public string RecruitId { get; init; } = "";
+    public DateTimeOffset? EndUtc { get; init; }
     [JsonIgnore] public UcampusCourseContext? Ucampus { get; init; }
     [JsonIgnore] public ZhihuishuSmartCourseContext? Smart { get; init; }
     public override string ToString() => nameof(MetadataCourse);

@@ -5,30 +5,28 @@ namespace AccessProbe;
 
 public partial class TaskDashboardWindow
 {
-    private readonly Dictionary<string, CourseSelectionWindow> platformWindows = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CourseSelectionPage> platformPages = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string Message, bool Running, bool Warning)> platformStatuses = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, DateTimeOffset> selectionPrompts = new(StringComparer.Ordinal);
 
     private void OpenPlatformManager(object sender, RoutedEventArgs args)
     {
         if ((sender as FrameworkElement)?.Tag is string id) ShowPlatformManager(id);
     }
 
-    private void ShowPlatformManager(string id)
+    private void ShowPlatformManager(string id, bool replace = false)
     {
-        if (permitClose || !CourseRecordingRules.SupportsAutomatic(id)) return;
-        if (platformWindows.TryGetValue(id, out var existing))
+        if (permitClose || workspaceExiting || !PlatformCatalog.Sites.Any(site => site.Id == id)) return;
+        if (platformPages.TryGetValue(id, out var existing))
         {
-            existing.WindowState = WindowState.Normal;
             if (existing.FindName("PlatformCoursesExpander") is Expander courses) courses.IsExpanded = true;
-            existing.Show(); existing.Activate(); return;
+            ShowWorkspacePage("platform:" + id, existing, retained: true, replace: replace); return;
         }
-        var window = new CourseSelectionWindow(store, id, RefreshRecordingCourseCatalogAsync, ApplyRecordingCourseSelectionAsync,
-            ConnectPlatform, true, SetPlatformAutomatic, CancelPlatformSync) { Owner = this };
-        platformWindows[id] = window;
-        window.Closed += (_, _) => platformWindows.Remove(id);
-        if (platformStatuses.TryGetValue(id, out var status)) window.ShowSyncStatus(status.Message, status.Running, status.Warning);
-        window.Show();
+        var page = new CourseSelectionPage(store, id, RefreshRecordingCourseCatalogAsync, ApplyRecordingCourseSelectionAsync,
+            ConnectPlatform, true, SetPlatformAutomatic, CancelPlatformSync);
+        platformPages[id] = page;
+        page.Closed += (_, _) => platformPages.Remove(id);
+        if (platformStatuses.TryGetValue(id, out var status)) page.ShowSyncStatus(status.Message, status.Running, status.Warning);
+        ShowWorkspacePage("platform:" + id, page, retained: true, replace: replace);
     }
 
     private void ConnectPlatform(string id)
@@ -39,42 +37,26 @@ public partial class TaskDashboardWindow
     private void UpdatePlatformStatus(string id, string message, bool running, bool warning)
     {
         platformStatuses[id] = (message, running, warning);
-        if (platformWindows.TryGetValue(id, out var window)) window.ShowSyncStatus(message, running, warning);
+        if (platformPages.TryGetValue(id, out var page)) page.ShowSyncStatus(message, running, warning);
         UpdatePlatformCard(id);
+        UpdateOnboardingSummary();
+        if (tasks.Count == 0 && IsLoaded && !permitClose) ApplyFilters();
     }
 
     private void UpdatePlatformCard(string id)
     {
         var prefix = id switch { "chaoxing" => "Chaoxing", "yuketang" => "Rain", "changjiang" => "Changjiang",
-            "mooc" => "Mooc", "xuetang" => "Xuetang", "ucampus" => "Ucampus", "pta" => "Pta", _ => "Zhihuishu" };
+            "mooc" => "Mooc", "xuetang" => "Xuetang", "ucampus" => "Ucampus", "pta" => "Pta", "zhihuishu" => "Zhihuishu", _ => "" };
+        if (prefix.Length == 0) return;
         if (FindName(prefix + "PlatformSummary") is not TextBlock label) return;
-        var session = store.LoadPlatformSessionInfo(id);
-        var recording = store.LoadCourseRecording(id);
-        label.Text = platformStatuses.TryGetValue(id, out var status) && status.Running ? "正在读取…"
-            : session.State == "expired" ? "登录过期 · 点击更新"
-            : session.State == "ready" && recording.LastCatalogRefresh is { Outcome: "partial" or "error" } ? "已登录 · 课程刷新需核对"
-            : !recording.SelectionConfirmed && session.State == "ready" ? recording.CatalogCheckedAtUtc is null ? "已登录 · 请刷新课程" : "已登录 · 请选择课程"
-            : !recording.SelectionConfirmed && session.CanReuse ? "登录已保存 · 刷新并选课"
-            : !recording.SelectionConfirmed ? "请登录并选择课程"
-            : $"已选 {recording.Courses.Count(course => CourseRecordingRules.IsSelected(recording, course.Key))} 门 · {session.Description.Split('·')[0].Trim()}";
+        var status = platformStatuses.GetValueOrDefault(id);
+        var access = PlatformAccessPresentation.For(id, store.LoadPlatformSessionInfo(id), store.LoadCourseRecording(id),
+            store.LoadConnectionReport(id), status.Running, status.Warning);
+        platformAccess[id] = access;
+        label.Text = access.StatusTitle;
+        label.ToolTip = access.Description;
         if (FindName(prefix + "PlatformIndicator") is System.Windows.Shapes.Ellipse indicator)
-        {
-            var color = platformStatuses.TryGetValue(id, out var currentStatus) && currentStatus.Running ? "PrimaryBrush"
-                : session.State == "expired" ? "DangerBrush"
-                : currentStatus.Warning || recording.LastCatalogRefresh is { Outcome: "partial" or "error" } ? "WarningBrush"
-                : session.State == "ready" ? "SuccessBrush"
-                : session.CanReuse ? "PrimaryBrush" : "MutedBrush";
-            indicator.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, color);
-        }
-    }
-
-    private void PromptCourseSelection(string id)
-    {
-        if (permitClose || !IsLoaded) return;
-        var checkedAt = store.LoadCourseRecording(id).CatalogCheckedAtUtc;
-        if (checkedAt is null || selectionPrompts.TryGetValue(id, out var previous) && previous == checkedAt) return;
-        selectionPrompts[id] = checkedAt.Value;
-        Dispatcher.BeginInvoke(new Action(() => { if (!permitClose) ShowPlatformManager(id); }));
+            indicator.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, AccessStatusBrush(access.State));
     }
 
     private void CancelPlatformSync(string id)

@@ -8,7 +8,7 @@ public sealed class MobileVault(TaskStore store, ILocalLinkProtector protector)
 {
     private static readonly object Gate = new();
     public MobileSession? Load(string platform) => LoadCore(platform, false);
-    public MobileSession? LoadForRevalidation(string platform) => LoadCore(platform, platform is "ucampus" or "zhihuishu");
+    public MobileSession? LoadForRevalidation(string platform) => LoadCore(platform, platform is "ucampus" or "zhihuishu" or "uai");
     private MobileSession? LoadCore(string platform, bool includeExpired)
     {
         lock (Gate)
@@ -72,8 +72,21 @@ public sealed class MobileVault(TaskStore store, ILocalLinkProtector protector)
         lock (Gate)
         {
             Validate(expected, cancellation);
-            if (loginRequired) store.ExpirePlatformSession(expected.PlatformId, DateTimeOffset.UtcNow, preserveForRevalidation: expected.PlatformId is "ucampus" or "zhihuishu");
+            if (loginRequired) store.ExpirePlatformSession(expected.PlatformId, DateTimeOffset.UtcNow, preserveForRevalidation: expected.PlatformId is "ucampus" or "zhihuishu" or "uai");
             else if (accountVerified) store.ConfirmPlatformSession(expected.PlatformId, DateTimeOffset.UtcNow);
+        }
+    }
+
+    public MobileSession BindUaiSchool(MobileSession expected, long school, CancellationToken cancellation)
+    {
+        lock (Gate)
+        {
+            var current = Validate(expected, cancellation);
+            if (current.PlatformId != UaiPortal.Id || school <= 0 || current.SchoolId is { } previous && previous != school)
+                throw new OperationCanceledException("The official school changed during synchronization.", cancellation);
+            var updated = current with { SchoolId = school };
+            if (current.SchoolId is null) Save(updated);
+            return updated;
         }
     }
 }

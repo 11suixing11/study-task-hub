@@ -1,18 +1,20 @@
 using AccessProbe;
 using Android.Webkit;
+using System.Text.Json;
 
 namespace AccessProbe.Mobile;
 
 public static class MobilePlatforms
 {
-    public static readonly string[] All = ["chaoxing", "yuketang", "changjiang", "mooc", "xuetang", "ucampus", "zhihuishu", "pta"];
+    public static readonly string[] All = ["chaoxing", "yuketang", "changjiang", "mooc", "xuetang", "ucampus", "zhihuishu", "pta", "uai"];
     public static Uri Login(string platform) => platform switch
     {
         "chaoxing" => new("https://passport2.chaoxing.com/login?refer=" + Uri.EscapeDataString("https://i.chaoxing.com/")),
         "yuketang" => RainPlatform.Rain.LoginUri("www.yuketang.cn"),
         "changjiang" => RainPlatform.Changjiang.LoginUri("changjiang.yuketang.cn"),
         "mooc" => MoocPlatform.Login,
-        "xuetang" => XuetangPlatform.Home,
+        "xuetang" => XuetangPlatform.Login,
+        "uai" => UaiPortal.Home,
         _ => MetadataPlatform.Get(platform).Login
     };
     public static bool Allowed(string platform, string address) => platform switch
@@ -21,6 +23,7 @@ public static class MobilePlatforms
         "yuketang" or "changjiang" => RainAddressPolicy.IsNavigation(RainPlatform.Find(platform), address),
         "mooc" => MoocPlatform.IsLoginNavigation(address),
         "xuetang" => XuetangPlatform.IsLoginNavigation(address),
+        "uai" => UaiPortal.IsLoginNavigation(address),
         _ => MetadataPlatform.Get(platform).IsLoginNavigation(address)
     };
     public static bool FrameAllowed(string platform, string address) => platform switch
@@ -29,42 +32,59 @@ public static class MobilePlatforms
         "ucampus" or "zhihuishu" or "pta" => MetadataPlatform.Get(platform).IsLoginFrameNavigation(address),
         _ => Allowed(platform, address)
     };
-    public static IReadOnlyList<string> CookieOrigins(string platform) => platform switch
+    public static IReadOnlyList<string> CookieOrigins(string platform) => MobileCookieSnapshot.Addresses(platform);
+    public static MetadataSessionCookie[] ReadBrowserCookies(string platform) => MobileCookieSnapshot.Capture(platform, ReadPairs(platform));
+    private static MobileCookieRead[] ReadPairs(string platform) => CookieOrigins(platform)
+        .Select(origin => new MobileCookieRead(origin, Android.Webkit.CookieManager.Instance!.GetCookie(origin) ?? "")).ToArray();
+    public static async Task<MetadataSessionCookie[]> ReadBrowserCookiesAsync(string platform, WebView target)
     {
-        "chaoxing" => ["https://chaoxing.com/", "https://i.chaoxing.com/", "https://i.mooc.chaoxing.com/", "https://passport2.chaoxing.com/", "https://mooc1.chaoxing.com/", "https://mooc2.chaoxing.com/", "https://mooc2-ans.chaoxing.com/", "https://mooc2-ans.chaoxing.com/mooc2-ans/", "https://i.xuexitong.com/", "https://mooc1-api.chaoxing.com/"],
-        "yuketang" => ["https://www.yuketang.cn/", "https://yuketang.cn/", "https://pro.yuketang.cn/"],
-        "changjiang" => ["https://changjiang.yuketang.cn/", "https://yuketang.cn/"],
-        "mooc" => ["https://www.icourse163.org/", "https://icourse163.org/"],
-        "xuetang" => ["https://www.xuetangx.com/", "https://xuetangx.com/"],
-        "ucampus" => ["https://u.unipus.cn/", "https://sso.unipus.cn/sso/", "https://unipus.cn/"],
-        "pta" => ["https://pintia.cn/", "https://passport.pintia.cn/"],
-        _ => ["https://zhihuishu.com/", "https://login.zhihuishu.com/", "https://onlinestuh5.zhihuishu.com/", "https://onlineweb.zhihuishu.com/", "https://mycourse.zhihuishu.com/", "https://studentexam-api.zhihuishu.com/", "https://taurusexam-api.zhihuishu.com/", "https://aiplus.zhihuishu.com/", "https://onlineservice-api.zhihuishu.com/", "https://studyservice-api.zhihuishu.com/", "https://hike.zhihuishu.com/", "https://hikeservice.zhihuishu.com/"]
-    };
-    public static MetadataSessionCookie[] ReadBrowserCookies(string platform)
-    {
-        var values = new Dictionary<string, MetadataSessionCookie>(StringComparer.Ordinal);
-        var manager = Android.Webkit.CookieManager.Instance!;
-        foreach (var origin in CookieOrigins(platform))
+        var before = ReadBrowserCookies(platform);
+        var reads = ReadPairs(platform); var observed = new List<MobileCookieRead>();
+        // Local, resource-free documents inspect DOM visibility without loading or modifying official pages.
+        // The browser supplies HttpOnly enforcement; the bridge never guesses visibility from a cookie name.
+        using var probe = new WebView(target.Context!);
+        probe.Settings.JavaScriptEnabled = true; probe.Settings.AllowFileAccess = false; probe.Settings.AllowContentAccess = false;
+        probe.Settings.MixedContentMode = MixedContentHandling.NeverAllow;
+        Android.Webkit.CookieManager.Instance!.SetAcceptThirdPartyCookies(probe, true);
+        try
         {
-            var address = new Uri(origin);
-            foreach (var pair in (manager.GetCookie(origin) ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+            foreach (var read in reads)
             {
-                var separator = pair.IndexOf('='); if (separator < 1) continue;
-                var name = pair[..separator].Trim(); var value = pair[(separator + 1)..].Trim();
-                var path = address.AbsolutePath is "/sso/" or "/mooc2-ans/" ? address.AbsolutePath.TrimEnd('/') : "/";
-                // WebView exposes request-cookie pairs, not Domain/Expires attributes. Keep host-only cookies;
-                // server validation still decides expiry, and HTTP Set-Cookie retains exact subsequent scope.
-                var cookie = new MetadataSessionCookie(name, value, address.IdnHost, path, true, true, null);
-                if (MobileSessionRules.CookieValid(platform, cookie)) values.TryAdd(cookie.Key, cookie);
+                if (read.Header.Length == 0) { observed.Add(read); continue; }
+                var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                probe.SetWebViewClient(new CookieVisibilityClient(loaded));
+                probe.LoadDataWithBaseURL(read.Address, "<!doctype html><title>Cookie visibility</title>", "text/html", "UTF-8", null);
+                await loaded.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                var visible = JsonSerializer.Deserialize<string>(await MainActivity.Evaluate(probe, "document.cookie"));
+                observed.Add(read with { VisibleHeader = visible });
             }
+            if (MobileSessionRules.CookieFingerprint(platform, before) != MobileSessionRules.CookieFingerprint(platform, ReadBrowserCookies(platform)))
+                throw new OperationCanceledException("The official browser session changed during capture.");
+            return MobileCookieSnapshot.Capture(platform, observed);
         }
-        return values.Values.Take(512).ToArray();
+        finally { probe.StopLoading(); probe.Destroy(); }
     }
     public static async Task RestoreBrowserAsync(MobileSession session)
     {
+        await WriteCookiesAsync(MobileCookieSnapshot.MissingForRestore(session, ReadBrowserCookies(session.PlatformId)));
+    }
+    public static async Task ApplyResponseCookiesAsync(string platform, Uri address, IReadOnlyList<MetadataSessionCookie> observed,
+        IReadOnlyList<MetadataSessionCookie> changes, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        var manager = Android.Webkit.CookieManager.Instance!;
+        if (!MobileCookieSnapshot.CanApplyResponse(platform, manager.GetCookie(address.AbsoluteUri) ?? "", observed)) return;
+        if (changes.Any(cookie => !MobileSessionRules.CookieValid(platform, cookie)
+            || !cookie.AppliesTo(new Uri("https://" + address.IdnHost + cookie.Path))))
+            throw new InvalidDataException("Invalid browser response cookie scope.");
+        await WriteCookiesAsync(changes);
+        cancellation.ThrowIfCancellationRequested();
+    }
+    private static async Task WriteCookiesAsync(IEnumerable<MetadataSessionCookie> cookies)
+    {
         var manager = Android.Webkit.CookieManager.Instance!;
         var writes = new List<Task>();
-        foreach (var cookie in session.Cookies.Where(cookie => !cookie.IsExpired(DateTimeOffset.UtcNow)))
+        foreach (var cookie in cookies)
         {
             var origin = "https://" + cookie.Domain.TrimStart('.') + cookie.Path;
             var header = cookie.Name + "=" + cookie.Value + "; Path=" + cookie.Path + (cookie.Domain.StartsWith('.') ? "; Domain=" + cookie.Domain : "")
@@ -81,16 +101,32 @@ public static class MobilePlatforms
     {
         var manager = Android.Webkit.CookieManager.Instance!;
         var cookies = ReadBrowserCookies(platform).Concat(saved?.Cookies ?? []).DistinctBy(cookie => cookie.Key).ToArray();
-        var writes = new List<Task>();
+        var writes = new List<Task>(); var removedScopes = new HashSet<string>(StringComparer.Ordinal);
         foreach (var cookie in cookies)
         {
-            var domains = cookie.Name.StartsWith("__Host-", StringComparison.Ordinal) ? new[] { cookie.Domain.TrimStart('.') }
-                : new[] { cookie.Domain, "." + cookie.Domain.TrimStart('.') }.Distinct(StringComparer.Ordinal).ToArray();
-            foreach (var domain in domains)
+            var domains = new HashSet<string>(StringComparer.Ordinal) { cookie.Domain.TrimStart('.') };
+            if (!cookie.Name.StartsWith("__Host-", StringComparison.Ordinal))
             {
-                var header = cookie.Name + "=; Path=" + cookie.Path + (domain.StartsWith('.') ? "; Domain=" + domain : "") + "; Max-Age=0; Secure; HttpOnly";
+                var domain = cookie.Domain.TrimStart('.');
+                while (domain.Contains('.'))
+                {
+                    if (MobileSessionRules.CookieValid(platform, cookie with { Domain = "." + domain })) domains.Add("." + domain);
+                    domain = domain[(domain.IndexOf('.') + 1)..];
+                }
+            }
+            var paths = new HashSet<string>(StringComparer.Ordinal) { cookie.Path };
+            // Inferred /api/ may represent an actual /api cookie. Explicit reset clears each possible observed ancestor.
+            for (var index = 0; index < cookie.Path.Length; index++)
+                if (cookie.Path[index] == '/')
+                { paths.Add(cookie.Path[..(index + 1)]); if (index > 0) paths.Add(cookie.Path[..index]); }
+            foreach (var domain in domains)
+            foreach (var path in paths)
+            {
+                if (cookie.Name.StartsWith("__Host-", StringComparison.Ordinal) && path != "/") continue;
+                if (!removedScopes.Add(cookie.Name + "\n" + domain + "\n" + path)) continue;
+                var header = cookie.Name + "=; Path=" + path + (domain.StartsWith('.') ? "; Domain=" + domain : "") + "; Max-Age=0; Secure; HttpOnly";
                 var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                manager.SetCookie("https://" + domain.TrimStart('.') + cookie.Path, header, new CookieWriteResult(completed));
+                manager.SetCookie("https://" + domain.TrimStart('.') + path, header, new CookieWriteResult(completed));
                 writes.Add(completed.Task);
             }
         }
@@ -103,5 +139,13 @@ public static class MobilePlatforms
             if (value?.ToString() == "true") completed.TrySetResult(true);
             else completed.TrySetException(new InvalidDataException("The browser did not accept the Cookie update."));
         }
+    }
+    private sealed class CookieVisibilityClient(TaskCompletionSource completed) : WebViewClient
+    {
+        public override void OnPageFinished(WebView? view, string? url) => completed.TrySetResult();
+        public override bool ShouldOverrideUrlLoading(WebView? view, IWebResourceRequest? request) => true;
+        public override WebResourceResponse? ShouldInterceptRequest(WebView? view, IWebResourceRequest? request)
+            => new("text/plain", "UTF-8", new MemoryStream([]));
+        public override void OnReceivedSslError(WebView? view, SslErrorHandler? handler, Android.Net.Http.SslError? error) => handler?.Cancel();
     }
 }

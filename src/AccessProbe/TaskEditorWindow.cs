@@ -5,7 +5,7 @@ using System.Windows.Media;
 
 namespace AccessProbe;
 
-public sealed class TaskEditorWindow : Window
+public sealed class TaskEditorPage : WorkspacePage
 {
     private readonly TaskItem? original;
     private readonly TextBox titleBox = new();
@@ -23,20 +23,19 @@ public sealed class TaskEditorWindow : Window
     private readonly TextBox notesBox = new() { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 80 };
     private readonly TextBlock errorText = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };
     public TaskDraft? Result { get; private set; }
+    public event Action<TaskDraft>? Saved;
 
-    public TaskEditorWindow(TaskItem? task = null)
+    public TaskEditorPage(TaskItem? task = null)
     {
         original = task;
         Title = task is null ? "新增任务" : "编辑任务";
-        Icon = ProductIcons.AppImage;
-        Width = 690; Height = 820; MinHeight = 600; MinWidth = 580;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/AccessProbe;component/FluentTheme.xaml", UriKind.Relative) });
         SetResourceReference(BackgroundProperty, "CanvasBrush");
         NameScope.SetNameScope(this, new NameScope());
         var root = new DockPanel { Margin = new Thickness(24) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
-        var cancel = new Wpf.Ui.Controls.Button { Content = "取消", IsCancel = true, Padding = new Thickness(20, 8, 20, 8), Margin = new Thickness(0, 0, 10, 0) };
+        var cancel = new Wpf.Ui.Controls.Button { Content = "取消", Padding = new Thickness(20, 8, 20, 8), Margin = new Thickness(0, 0, 10, 0) };
+        cancel.Click += (_, _) => RequestBack();
         var save = new Wpf.Ui.Controls.Button { Content = "保存任务", Appearance = Wpf.Ui.Controls.ControlAppearance.Primary, IsDefault = true, Padding = new Thickness(20, 8, 20, 8) };
         ProductVisuals.SetButtonIcon(save, "save");
         save.Click += Save;
@@ -129,6 +128,7 @@ public sealed class TaskEditorWindow : Window
         RegisterName("TaskEditorError", errorText); RegisterName("TaskEditorSections", stack);
         SizeChanged += (_, _) => root.Margin = new Thickness(ActualHeight < 700 ? 16 : 24);
         Content = root;
+        Closed += (_, _) => Saved = null;
         deadlineBox.SelectionChanged += (_, _) => endBox.IsEnabled = deadlineBox.SelectedIndex == 1;
         endBox.IsEnabled = deadlineBox.SelectedIndex == 1;
         Loaded += (_, _) => titleBox.Focus();
@@ -154,7 +154,7 @@ public sealed class TaskEditorWindow : Window
                 link, progress, scoreBox.Text, notesBox.Text, priorityBox.SelectedIndex == 0 ? null : priorityBox.SelectedIndex)
                 { ConfirmDeadline = confirmDeadlineBox.IsChecked == true && kind == DeadlineKind.Known };
             TaskRules.Validate(draft);
-            Result = draft; DialogResult = true;
+            Result = draft; Saved?.Invoke(draft);
         }
         catch (TaskValidationException error) { errorText.Text = error.Code + "：" + error.Message; }
     }

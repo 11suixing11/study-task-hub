@@ -86,6 +86,7 @@ public sealed record XuetangCourse(string Name,
     [property: JsonIgnore] string CourseSign, int Status, bool Stowed,
     [property: JsonIgnore] string SkuId = "")
 {
+    internal bool LifecycleStateVerified { get; init; } = true;
     public override string ToString() => nameof(XuetangCourse);
 }
 
@@ -109,10 +110,14 @@ public sealed record XuetangSyncSettings
     public XuetangSyncSummary? LastSummary { get; init; }
 }
 
-public sealed record XuetangSyncProblem(string Code, string Course, string Message);
+public sealed record XuetangSyncProblem(string Code, string Course, string Message)
+{
+    public string Outcome { get; init; } = "";
+}
 public sealed record XuetangSyncSummary(int Courses, int CoursesRead, int Tasks, int Added, int Updated,
     bool LoginRequired, bool CourseListCovered, IReadOnlyList<XuetangSyncProblem> Problems)
 {
+    public bool AccountVerified { get; init; }
     public int SelectedCourses { get; init; }
     public int TasksWithDeadline { get; init; }
     public int TasksWithLink { get; init; }

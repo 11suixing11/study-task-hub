@@ -31,7 +31,7 @@ public static partial class MetadataPlatformParser
                 + (ValidText(className, 200) ? " · " + className : "")
                 + (family == "pro" ? " · 作业、考试列表" : " · 此版本任务暂未覆盖");
             var course = new MetadataCourse(id, name, "smart", detail)
-                { ApiCourseId = courseId, Smart = new(classId, family) };
+                { ApiCourseId = courseId, Smart = new(classId, family), EndUtc = end };
             if (conflicts.Contains(id)) { invalid++; continue; }
             if (courses.TryGetValue(id, out var previous))
             { duplicates++; if (previous != course) { courses.Remove(id); conflicts.Add(id); invalid++; } }

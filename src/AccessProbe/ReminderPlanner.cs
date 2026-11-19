@@ -3,7 +3,7 @@ using System.Text;
 
 namespace AccessProbe;
 
-public enum ReminderKind { NewTask, DueSoon, Overdue }
+public enum ReminderKind { NewTask, DueSoon, Overdue, PlatformChanged }
 public sealed record ReminderPlan(string Id, string TaskId, ReminderKind Kind, DateTimeOffset DueAtUtc, DateTimeOffset? DeadlineUtc);
 public sealed record DueReminder(ReminderPlan Plan, TaskItem Task, int Attempts);
 public sealed record ReminderHistory(ReminderPlan Plan, string State, DateTimeOffset? RequestedAtUtc, string? ErrorCode, int Attempts);
@@ -24,8 +24,14 @@ public static class ReminderPlanner
 
     public static ReminderPlan NewTask(TaskItem task, DateTimeOffset now) => Make(task.Id, ReminderKind.NewTask, now, null);
 
+    public static ReminderPlan PlatformChanged(TaskItem task, DateTimeOffset now) => new(
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(task.Id + "|PlatformChanged|" + task.PlatformAttentionToken))),
+        task.Id, ReminderKind.PlatformChanged, now.ToUniversalTime(), null);
+
     public static bool IsCurrent(ReminderPlan plan, TaskItem task, DateTimeOffset now) =>
-        TaskRules.IsActive(task) && (plan.Kind == ReminderKind.NewTask
+        TaskRules.IsActive(task) && (plan.Kind == ReminderKind.PlatformChanged
+            ? TaskRules.HasPlatformAttention(task) && plan.Id == PlatformChanged(task, now).Id
+            : plan.Kind == ReminderKind.NewTask
             || TaskRules.HasTrustedDeadline(task) && plan.DeadlineUtc?.ToUnixTimeMilliseconds() == task.DeadlineUtc?.ToUnixTimeMilliseconds()
                && (plan.Kind != ReminderKind.DueSoon || now <= task.DeadlineUtc));
 
@@ -37,6 +43,6 @@ public static class ReminderPlanner
 
     public static string KindName(ReminderKind kind) => kind switch
     {
-        ReminderKind.NewTask => "新任务", ReminderKind.DueSoon => "截止前 24 小时", ReminderKind.Overdue => "逾期 2 小时", _ => "提醒"
+        ReminderKind.NewTask => "新任务", ReminderKind.DueSoon => "截止前 24 小时", ReminderKind.Overdue => "逾期 2 小时", ReminderKind.PlatformChanged => "官网任务要求有变化", _ => "提醒"
     };
 }

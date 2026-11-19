@@ -54,10 +54,14 @@ public sealed record CollectedTask(
     public override string ToString() => nameof(CollectedTask);
 }
 
-public sealed record RainSyncProblem(string Code, string Course, string Message);
+public sealed record RainSyncProblem(string Code, string Course, string Message)
+{
+    public string Outcome { get; init; } = "";
+}
 public sealed record RainSyncSummary(string PlatformId, int Courses, int CoursesRead, int Tasks,
     int Added, int Updated, bool LoginRequired, bool CourseListCovered, IReadOnlyList<RainSyncProblem> Problems)
 {
+    public bool AccountVerified { get; init; }
     public int TasksWithDeadline { get; init; }
     public int TasksWithLink { get; init; }
     public int StatusNeedsReview { get; init; }

@@ -21,7 +21,8 @@ public partial class TaskDashboardWindow
             UpdateSyncControls();
         };
         service.Completed += _ => RefreshTasks();
-        service.CourseSelectionRequired += () => PromptCourseSelection("xuetang");
+        service.CourseSelectionRequested += () => ShowPlatformManager("xuetang");
+        service.ConnectionChanged += ObserveConnectionReport;
     }
 
     private void AddXuetangSyncDetails(StackPanel stack)

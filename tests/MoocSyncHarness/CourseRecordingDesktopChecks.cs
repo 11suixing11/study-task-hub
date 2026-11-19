@@ -19,8 +19,9 @@ internal static partial class Program
             "platform manager is fixed to MOOC with no account selector");
         Check(RecordingChoices(window).Length == 2 && RecordingChoices(window).All(choice => choice.Selected)
             && !store.LoadCourseRecording("mooc").RecordAllCourses, "confirmed current terms are checked explicitly");
-        Check(Recording<TextBlock>(window, "PlatformSessionStatus").Text.Contains("下次自动复用", StringComparison.Ordinal), "saved login reuse shown in manager");
-        Check(window.ResizeMode == ResizeMode.CanResize && Recording<Button>(window, "PlatformSyncButton").IsVisible
+        Check(Recording<TextBlock>(window, "PlatformSessionStatus").Text.Contains("已接入", StringComparison.Ordinal)
+            && store.LoadPlatformSessionInfo("mooc").State == "ready", "verified connection and persisted login are shown in manager");
+        Check(dashboard.ResizeMode == ResizeMode.CanResize && app.Windows.Count == 1 && Recording<Button>(window, "PlatformSyncButton").IsVisible
             && Recording<CheckBox>(window, "PlatformAutomaticSync").IsVisible && Recording<Expander>(window, "PlatformDetailsExpander").IsVisible,
             "login selection sync automatic stop and details share one resizable manager");
         var firstKey = CourseRecordingRules.MoocKey(fixture.Account, "1001", "2001");
@@ -51,26 +52,26 @@ internal static partial class Program
         search.Text = "2001"; RecordingClick(window, "RecordingSelectAllButton"); search.Text = "";
         Check(RecordingChoices(window).Single(choice => choice.Key == firstKey).Selected
             && !RecordingChoices(window).Single(choice => choice.Key == otherKey).Selected, "bulk selection excludes the other course term");
-        CaptureWindow(window, "course-selection-desktop.png");
-        var expanded = window.Height; RecordingClick(window, "PlatformCollapseButton"); await Task.Delay(80); window.UpdateLayout();
-        Check(!Recording<Expander>(window, "PlatformCoursesExpander").IsExpanded && window.Height < expanded
+        CaptureWindow(dashboard, "course-selection-desktop.png");
+        var expanded = dashboard.Height; RecordingClick(window, "PlatformCollapseButton"); await Task.Delay(80); window.UpdateLayout();
+        Check(!Recording<Expander>(window, "PlatformCoursesExpander").IsExpanded && dashboard.Height == expanded
             && Recording<Button>(window, "RecordingConnectionButton").IsVisible && Recording<Button>(window, "PlatformSyncButton").IsVisible,
-            "collapse shrinks popup while retaining login and sync operations");
-        CaptureWindow(window, "platform-manager-collapsed.png");
-        RecordingClick(window, "PlatformCollapseButton"); window.Width = window.MinWidth; window.Height = window.MinHeight;
+            "collapse retains login and sync operations inside the main window");
+        CaptureWindow(dashboard, "platform-manager-collapsed.png");
+        RecordingClick(window, "PlatformCollapseButton"); dashboard.Width = dashboard.MinWidth; dashboard.Height = dashboard.MinHeight;
         await Task.Delay(100); window.UpdateLayout();
-        foreach (var name in new[] { "RecordingCourseSearch", "RecordingCourseList", "RecordingSaveButton", "RecordingCancelButton", "RecordingHideHistory" })
+        foreach (var name in new[] { "RecordingCourseSearch", "CourseLifecycleFilter", "RecordingCourseList", "RecordingSaveButton", "RecordingCancelButton", "RecordingHideHistory" })
         {
             var element = Recording<FrameworkElement>(window, name); var content = (FrameworkElement)window.Content;
             var bounds = element.TransformToAncestor(content).TransformBounds(new Rect(element.RenderSize));
             Check(bounds.Left >= -1 && bounds.Top >= -1 && bounds.Right <= content.ActualWidth + 1 && bounds.Bottom <= content.ActualHeight + 1,
                 "minimum manager layout keeps " + name + " inside window");
         }
-        CaptureWindow(window, "course-selection-desktop-minimum.png");
+        CaptureWindow(dashboard, "course-selection-desktop-minimum.png");
         var courseListHeight = Recording<ListBox>(window, "RecordingCourseList").ActualHeight;
         tableHeights["minimumCourseList"] = courseListHeight;
         Check(courseListHeight >= 70, "minimum manager retains usable course rows (height=" + courseListHeight + ")");
-        window.Close();
+        dashboard.NavigateBack();
         Check(store.LoadCourseRecording("mooc").SelectedCourseKeys.Count == 2, "closing discards unsaved course changes");
 
         window = await OpenRecordingAsync(); await SetRecordingChoiceAsync(window, otherKey, false);
@@ -79,15 +80,17 @@ internal static partial class Program
         var settings = store.LoadCourseRecording("mooc"); var summary = store.LoadMoocSettings().LastSummary!;
         Check(settings.SelectionConfirmed && !settings.RecordAllCourses && settings.SelectedCourseKeys.SequenceEqual(new[] { firstKey }),
             "save persists exact course choice");
-        Check(window.IsVisible, "save keeps manager open (visibility=" + window.Visibility + ", state=" + window.WindowState + ", owner=" + dashboard.WindowState + ")");
+        Check(dashboard.ActivePage is null && app.Windows.Count == 1, "successful selection and sync return to the task workspace");
         Check(summary.Courses == 2 && summary.SelectedCourses == 1 && summary.CoursesRead == 1 && summary.Tasks == 4 && summary.Requests == 4,
             "targeted crawl skips all excluded course requests");
         Check(store.LoadTasks().Count == 11 && new TaskStore(store.DatabasePath).LoadRecordedTasks().Count == 7,
             "restart restores selection while preserving excluded history");
+        window = await OpenRecordingAsync();
         RecordingClick(window, "RecordingSelectNoneButton"); await RunAsync(() => RecordingClick(window, "RecordingSaveButton"));
         Click("ShowAllTasksButton"); await WaitAsync(() => Table.Items.Count == 3);
         Check(store.LoadMoocSettings().LastSummary is { SelectedCourses: 0, Tasks: 0, Requests: 2 } && store.LoadTasks().Count == 11,
             "explicit select-none makes only catalog requests and retains tasks from all platforms");
+        window = await OpenRecordingAsync();
         RecordingClick(window, "RecordingSelectAllButton"); await RunAsync(() => RecordingClick(window, "RecordingSaveButton"));
         Click("ShowAllTasksButton"); await WaitAsync(() => Table.Items.Count == 11);
         Check(!store.LoadCourseRecording("mooc").RecordAllCourses && store.LoadCourseRecording("mooc").SelectedCourseKeys.Count == 2
@@ -95,6 +98,7 @@ internal static partial class Program
         Check(completedIds.Count == 2 && store.LoadTasks().Where(task => completedIds.Contains(task.Id)).All(task => task.State == TaskState.Completed),
             "hide and restore retain completed states");
 
+        window = await OpenRecordingAsync();
         summaryBefore = JsonSerializer.Serialize(store.LoadMoocSettings()); fixture.PauseTerm(); requests = fixture.Requests;
         RecordingClick(window, "PlatformSyncButton"); await fixture.Entered!.Task.WaitAsync(TimeSpan.FromSeconds(10));
         RecordingClick(window, "PlatformStopButton"); fixture.Release!.TrySetResult(true);
@@ -110,21 +114,21 @@ internal static partial class Program
             "catalog refresh cancels prior task run and preserves last task result");
     }
 
-    private static T Recording<T>(CourseSelectionWindow window, string name) where T : FrameworkElement => (T)window.FindName(name);
-    private static CourseSelectionWindow.CourseChoice[] RecordingChoices(CourseSelectionWindow window)
-        => ((IEnumerable<CourseSelectionWindow.CourseChoice>)Recording<ListBox>(window, "RecordingCourseList").ItemsSource).ToArray();
-    private static void RecordingClick(CourseSelectionWindow window, string name)
+    private static T Recording<T>(CourseSelectionPage window, string name) where T : FrameworkElement => (T)window.FindName(name);
+    private static CourseSelectionPage.CourseChoice[] RecordingChoices(CourseSelectionPage window)
+        => ((IEnumerable<CourseSelectionPage.CourseChoice>)Recording<ListBox>(window, "RecordingCourseList").ItemsSource).ToArray();
+    private static void RecordingClick(CourseSelectionPage window, string name)
         => Recording<Button>(window, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-    private static async Task<CourseSelectionWindow> OpenRecordingAsync()
+    private static async Task<CourseSelectionPage> OpenRecordingAsync()
     {
         ((ComboBox)dashboard.FindName("PlatformFilter")).SelectedItem = MoocPlatform.Name;
         Click("ChooseRecordingCoursesButton");
-        await WaitAsync(() => dashboard.OwnedWindows.OfType<CourseSelectionWindow>().Any());
-        var window = dashboard.OwnedWindows.OfType<CourseSelectionWindow>().Single();
+        await WaitAsync(() => dashboard.ActivePage is CourseSelectionPage);
+        var window = (CourseSelectionPage)dashboard.ActivePage!;
         await WaitAsync(() => Recording<ListBox>(window, "RecordingCourseList").ItemsSource is not null && Recording<Button>(window, "RecordingSaveButton").IsEnabled);
         return window;
     }
-    private static async Task SetRecordingChoiceAsync(CourseSelectionWindow window, string key, bool selected)
+    private static async Task SetRecordingChoiceAsync(CourseSelectionPage window, string key, bool selected)
     {
         var list = Recording<ListBox>(window, "RecordingCourseList"); var choice = RecordingChoices(window).Single(choice => choice.Key == key);
         list.ScrollIntoView(choice); list.UpdateLayout();

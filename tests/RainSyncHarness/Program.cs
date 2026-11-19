@@ -72,13 +72,14 @@ internal static class Program
             await Task.Delay(100);
             Check(sessions.Values.All(session => session.Requests == 0), "unconnected platforms send no requests");
             Check(services.Values.All(service => !service.IsRunning), "unconnected services remain idle");
-            ((Button)dashboard.FindName("RainConnectionButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            ((Button)dashboard.FindName("ChangjiangConnectionButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await WaitAsync(() => app.Windows.OfType<CourseSelectionWindow>().Count() == 2);
-            foreach (var manager in app.Windows.OfType<CourseSelectionWindow>().ToArray())
+            foreach (var buttonName in new[] { "RainConnectionButton", "ChangjiangConnectionButton" })
             {
+                ((Button)dashboard.FindName(buttonName)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await WaitAsync(() => dashboard.ActivePage is CourseSelectionPage);
+                var manager = (CourseSelectionPage)dashboard.ActivePage!;
                 await WaitAsync(() => manager.FindName("RecordingCourseList") is ListBox { ItemsSource: not null });
                 ((Button)manager.FindName("RecordingConnectionButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(app.Windows.Count == 1, "platform management uses the existing main window");
             }
             Check(connectionClicks.SequenceEqual(new[] { "yuketang", "changjiang" }), "platform connection buttons target correct service");
 
@@ -88,7 +89,8 @@ internal static class Program
                 var loginRequired = await RunAsync(service, service.ConnectionOpened);
                 Check(loginRequired.LoginRequired && store.LoadTasks().Count == (platform.Id == "yuketang" ? 0 : 2), "expired session keeps other platform tasks");
                 Check(store.LoadCourseRecording(platform.Id).LastCatalogRefresh?.Outcome == "login_required", "independent login-required catalog outcome is persisted");
-                Check(((TextBlock)dashboard.FindName(platform.Id == "yuketang" ? "RainSyncStatusText" : "ChangjiangSyncStatusText")).Text.Contains("RAIN001", StringComparison.Ordinal), "login-required banner is visible");
+                Check(((TextBlock)dashboard.FindName(platform.Id == "yuketang" ? "RainSyncStatusText" : "ChangjiangSyncStatusText")).Text.Contains("官网仍要求登录", StringComparison.Ordinal)
+                    && service.Connection?.ProblemCodes.Contains("RAIN001") == true, "login-required banner explains authorization and keeps a safe diagnostic code");
                 Check(((Expander)dashboard.FindName("PlatformSyncExpander")).IsExpanded
                     && ((TextBlock)dashboard.FindName("SyncOverviewText")).Text.Contains(platform.Name, StringComparison.Ordinal),
                     "a login problem expands the selected platform warning without hiding task rows");
@@ -107,7 +109,7 @@ internal static class Program
                 Check(Browser(platform.Id).CoreWebView2 is not null && Browser(platform.Id).Visibility == Visibility.Hidden, "hidden isolated session host is ready");
                 service.ConnectionClosed();
             }
-            foreach (var manager in app.Windows.OfType<CourseSelectionWindow>().ToArray()) manager.Close();
+            dashboard.ShowDashboard();
             Check(store.LoadTasks().Count == 4 && store.LoadTasks().Select(task => task.SourceKey).Distinct().Count() == 4, "same task IDs remain isolated by platform");
             Check(store.LoadSettings().LastSyncOutcome == "chaoxing-untouched", "rain does not overwrite chaoxing sync result");
             var rainBrowser = Browser("yuketang"); var cjBrowser = Browser("changjiang");
@@ -224,9 +226,9 @@ internal static class Program
 
     private static async Task VerifyConnectionWindowAsync(RainSyncService service)
     {
-        var window = new RainConnectionWindow(service, dashboard.ShowDashboard);
-        var browser = (WebView2)((DockPanel)window.Content).Children.OfType<WebView2>().Single();
-        BlockNetwork(browser); window.Show();
+        var window = new RainConnectionPage(service, dashboard.ShowDashboard);
+        var browser = ((Panel)window.Content).Children.OfType<WebView2>().Single();
+        BlockNetwork(browser); dashboard.ShowWorkspacePage("fixture-connection:" + Guid.NewGuid().ToString("N"), window);
         await WaitAsync(() => browser.CoreWebView2 is not null);
         await WaitAsync(() => browser.CoreWebView2.Source == "https://www.yuketang.cn/web");
         Check(browser.CoreWebView2.Environment.UserDataFolder == Browser("yuketang").CoreWebView2.Environment.UserDataFolder, "official login window shares selected profile");
@@ -296,10 +298,11 @@ internal static class Program
         var summaryButton = FindLogical<Button>((DependencyObject)dashboard.Content, button => button.Content?.ToString() == "同步详情")!;
         summaryButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, summaryButton));
         await Task.Delay(100);
-        var detailsWindow = app.Windows.Cast<Window>().Single(window => window != dashboard);
-        var detailText = CollectText((DependencyObject)detailsWindow.Content);
+        var detailsPage = dashboard.ActivePage;
+        Check(detailsPage is not null && app.Windows.Count == 1, "sync details use the existing main window");
+        var detailText = CollectText(detailsPage!);
         Check(detailText.Contains("雨课堂同步详情", StringComparison.Ordinal) && detailText.Contains("长江雨课堂同步详情", StringComparison.Ordinal), "sync details display both independent platforms");
-        detailsWindow.Close();
+        detailsPage!.Close();
     }
 
     private static async Task VerifyFiltersAsync()

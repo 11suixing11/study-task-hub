@@ -1,0 +1,186 @@
+{
+  "schema": 1,
+  "outcome": "passed",
+  "api": 35,
+  "avd": "aggregator-install-test",
+  "checks": 81,
+  "reports": [
+    {
+      "schema": 1,
+      "outcome": "passed",
+      "mode": "ui",
+      "checks": 23,
+      "results": [
+        "only configured isolated scenarios are accepted",
+        "task detail shows estimated deadline and three official routing actions",
+        "local completion is labelled as a personal mark",
+        "estimated date has no deadline notification before confirmation",
+        "deadline editor opens with current kind",
+        "saving unchanged estimate confirms deadline while preserving original evidence",
+        "confirmed deadline schedules local reminders",
+        "confirmed date returns to task detail without estimated label",
+        "cancelling deadline editor leaves stored task unchanged",
+        "invalid date stays in editor without writing task",
+        "revision conflict preserves latest task instead of saving stale deadline",
+        "no-deadline choice clears time and is displayed",
+        "no-deadline choice cancels unsent deadline notifications",
+        "manual task is visible after official course selection",
+        "manual and official courses are both selectable without a missing-catalog warning",
+        "official reopening is visible with an acknowledgement action",
+        "acknowledgement keeps personal completion and clears attention UI",
+        "notification intents identify separate tasks",
+        "notification task ID opens the matching detail",
+        "stale notification does not open a deleted or unknown task",
+        "malformed notification task ID is ignored",
+        "UAI page clearly presents preview and manual course scope",
+        "UAI manual scope saves without requiring official login"
+      ],
+      "error": null,
+      "officialNetworkAccessed": false,
+      "productionDataAccessed": false,
+      "realAccountAcceptance": "pending"
+    },
+    {
+      "schema": 1,
+      "outcome": "passed",
+      "checks": 17,
+      "results": [
+        "course host and scoped HttpOnly cookie captured",
+        "foreign cookie excluded from platform session",
+        "cookie aliases remain unique",
+        "official verifier stays limited to login frames",
+        "scan confirmation HTTP redirect reaches the equivalent HTTPS page",
+        "no cleartext request reaches the reader",
+        "repeated official downgrade is stopped without looping",
+        "manual retry resets the redirect limit",
+        "official popup callback also upgrades to HTTPS",
+        "unrelated navigation remains blocked",
+        "external protocol keeps the official WebView and exposes in-app recovery",
+        "successful course validation returns from login to platform page",
+        "validated official session is encrypted and confirmed",
+        "course catalog is shown before task collection",
+        "captured course cookie reaches the existing course reader",
+        "login alone does not import unselected tasks",
+        "saved login status is visible"
+      ],
+      "error": null,
+      "officialNetworkAccessed": false,
+      "productionDataAccessed": false,
+      "credentialValuesLogged": false,
+      "realAccountAcceptance": "pending"
+    },
+    {
+      "schema": 1,
+      "outcome": "passed",
+      "mode": "automatic",
+      "checks": 28,
+      "results": [
+        "chaoxing official DOM QR is readable",
+        "ucampus official DOM QR is readable",
+        "zhihuishu official DOM QR is readable",
+        "yuketang official DOM QR is readable",
+        "changjiang official DOM QR is readable",
+        "xuetang official DOM QR is readable",
+        "visible data image captured",
+        "unchanged QR passes final verification",
+        "refreshed image cannot reuse the previous capture",
+        "superseded capture identifier rejected",
+        "hidden QR rejected",
+        "cross-origin QR rejected",
+        "missing QR returns no image",
+        "official canvas QR captured",
+        "redrawn canvas invalidates old capture",
+        "same-origin displayed image captured",
+        "capture does not issue a second QR request",
+        "same-URL image with different pixels invalidates capture",
+        "QR saved through scoped MediaStore",
+        "saved QR has legible size and white margin",
+        "exiting login removes only the created QR image",
+        "successful image cleanup removes its record",
+        "already removed media record is cleared after restart cleanup",
+        "missing app leaves QR available and shows fallback",
+        "denied legacy storage permission never saves an image",
+        "stale permission callback cannot save on a new page",
+        "page change cancels an in-progress save",
+        "closing login cancels an in-progress save without gallery residue"
+      ],
+      "officialNetworkAccessed": false,
+      "productionDataAccessed": false,
+      "realAccountAcceptance": "pending",
+      "savedImage": null
+    },
+    {
+      "schema": 1,
+      "outcome": "passed",
+      "mode": "app_task",
+      "checks": 4,
+      "results": [
+        "only configured isolated scenarios are accepted",
+        "native destination is the isolated task fixture",
+        "native fallback matches expected app_task",
+        "return from native destination keeps aggregator activity available"
+      ],
+      "error": null,
+      "officialNetworkAccessed": false,
+      "productionDataAccessed": false,
+      "realAccountAcceptance": "pending"
+    },
+    {
+      "schema": 1,
+      "outcome": "passed",
+      "mode": "app_home",
+      "checks": 4,
+      "results": [
+        "only configured isolated scenarios are accepted",
+        "native destination is the isolated task fixture",
+        "native fallback matches expected app_home",
+        "return from native destination keeps aggregator activity available"
+      ],
+      "error": null,
+      "officialNetworkAccessed": false,
+      "productionDataAccessed": false,
+      "realAccountAcceptance": "pending"
+    },
+    {
+      "schema": 1,
+      "outcome": "passed",
+      "mode": "web",
+      "checks": 3,
+      "results": [
+        "only configured isolated scenarios are accepted",
+        "native fallback matches expected web",
+        "return from native destination keeps aggregator activity available"
+      ],
+      "error": null,
+      "officialNetworkAccessed": false,
+      "productionDataAccessed": false,
+      "realAccountAcceptance": "pending"
+    },
+    {
+      "schema": 1,
+      "outcome": "passed",
+      "mode": "unavailable",
+      "checks": 2,
+      "results": [
+        "only configured isolated scenarios are accepted",
+        "native fallback matches expected unavailable"
+      ],
+      "error": null,
+      "officialNetworkAccessed": false,
+      "productionDataAccessed": false,
+      "realAccountAcceptance": "pending"
+    }
+  ],
+  "officialNetworkAccessed": false,
+  "productionDataAccessed": false,
+  "realAccountAcceptance": "pending",
+  "visualAcceptance": "pending",
+  "finishedAtUtc": "2026-11-11T14:13:22.2380748+00:00",
+  "export": {
+    "type": "sanitized_copy",
+    "sourceSha256": "27cfd3b002cef114e270678faca36fd667b8d434c4017cbaf49a8b5532f17134",
+    "removedFields": [
+      "evidence: local absolute directory"
+    ]
+  }
+}

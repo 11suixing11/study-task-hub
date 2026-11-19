@@ -175,6 +175,127 @@ def verify():
           and unit_status["requiredLearningUnitsIncomplete"] == 2)
     check("unit_and_assignment_coverage_independent", unit_status["fullTaskListsCovered"] is True and unit_status["learningUnitListsCovered"] is False)
     check("unit_accounting_readonly_and_redacted", database.read_bytes() == unit_before and "synthetic-private-unit" not in json.dumps(unit_status))
+
+    attention = task("mooc", 3, "synthetic-private-course", SELECTED, 1, 1) | {
+        "Overrides": 128, "PlatformObservedState": 3,
+        "PlatformAttentionToken": "synthetic-private-attention",
+        "PlatformAttentionAcknowledgedToken": ""}
+    attention_rows = {
+        "attention-completed": attention,
+        "attention-ignored": attention | {"State": 2, "RecordingCourseKey": EXCLUDED, "PlatformObservedState": 0},
+        "attention-confirmed": attention | {"PlatformAttentionAcknowledgedToken": attention["PlatformAttentionToken"]},
+        "attention-manual": attention | {"Source": 0},
+        "attention-no-override": attention | {"Overrides": 0},
+        "attention-unknown": attention | {"PlatformObservedState": 4},
+        "attention-empty-token": attention | {"PlatformAttentionToken": ""},
+        "attention-null-token": attention | {"PlatformAttentionToken": None},
+    }
+    with sqlite3.connect(database) as connection:
+        connection.executemany("INSERT INTO tasks VALUES(?,?,?)", [
+            (identifier, json.dumps(row), None) for identifier, row in attention_rows.items()])
+    attention_status = apply(SelectionConfirmed=True, RecordAllCourses=False, HideUnselectedTasks=True,
+                             SelectedCourseKeys=[SELECTED, MANUAL_KEY])
+    check("official_attention_preserves_completed_and_ignored_counts", attention_status["storedStates"]["completed"] == 9
+          and attention_status["storedStates"]["ignored"] == 1)
+    check("unacknowledged_official_attention_counted_without_manual_or_unknown_false_positives",
+          attention_status["storedPlatformAttention"] == 2)
+    check("official_attention_respects_hidden_and_selected_courses", attention_status["visiblePlatformAttention"] == 1
+          and attention_status["selectedPlatformAttention"] == 1)
+    check("completed_but_reopened_task_participates_in_active_priority",
+          attention_status["activePriorities"] == {"P1": 2, "P0": 1, "P4": 1}
+          and attention_status["selectedActivePriorities"] == {"P1": 2, "P0": 1})
+    check("official_attention_event_identifiers_are_redacted", "synthetic-private-attention" not in json.dumps(attention_status))
+    attention_visible = apply(HideUnselectedTasks=False)
+    check("showing_retained_attention_does_not_restore_reminder_selection",
+          attention_visible["visiblePlatformAttention"] == 2 and attention_visible["selectedPlatformAttention"] == 1)
+    attention_rows["attention-completed"]["PlatformAttentionAcknowledgedToken"] = attention["PlatformAttentionToken"]
+    with sqlite3.connect(database) as connection:
+        connection.execute("UPDATE tasks SET payload=? WHERE id='attention-completed'", (json.dumps(attention),))
+    acknowledged_before = database.read_bytes()
+    acknowledged = status_reader.read_status(database)
+    check("acknowledgement_clears_active_attention_without_reclassifying_completion",
+          acknowledged["storedPlatformAttention"] == 1 and acknowledged["selectedPlatformAttention"] == 0
+          and acknowledged["selectedActivePriorities"] == {"P1": 1, "P0": 1}
+          and acknowledged["storedStates"]["completed"] == attention_status["storedStates"]["completed"])
+    check("attention_diagnostic_is_read_only", database.read_bytes() == acknowledged_before)
+
+    uai_manual = task("uai", 0, "synthetic-private-uai-course", "", 0, 10)
+    uai_key = status_reader.task_course_key(uai_manual)
+    with sqlite3.connect(database) as connection:
+        connection.execute("INSERT INTO tasks VALUES(?,?,?)", ("uai-manual", json.dumps(uai_manual), None))
+        connection.execute("INSERT INTO settings VALUES(?,?)", ("course-recording:uai", json.dumps({
+            "SelectionConfirmed": True, "SelectedCourseKeys": [uai_key], "Courses": [],
+            "LastCatalogRefresh": {"Outcome": "partial", "ProblemCodes": ["UAI003", "synthetic-private-code"]}})))
+        connection.execute("INSERT INTO settings VALUES(?,?)", ("platform:uai", json.dumps({
+            "Connected": True, "AutomaticSyncEnabled": True, "LastSummary": {
+                "AccountVerified": True, "Tasks": 0, "FullTaskListsCovered": True,
+                "Problems": [{"Code": "UAI004"}, {"Code": "synthetic-private-code"}]}})))
+        connection.execute("INSERT INTO platform_sessions VALUES(?,?,?,?,?)", ("uai", b"synthetic-uai-session-secret",
+                           int(now.timestamp() * 1000), None, "saved"))
+    no_preview = status_reader.read_status(database)
+    check("uai_manual_course_and_session_are_independent_from_legacy_ucampus",
+          no_preview["courseRecording"]["uai"]["selectedOverviewCourses"] == 1
+          and no_preview["platforms"]["uai"]["storedTasks"] == 1
+          and no_preview["platforms"]["ucampus"]["storedTasks"] == 1
+          and no_preview["sessions"]["uai"]["state"] == "saved")
+    check("unread_uai_preview_does_not_claim_zero_official_tasks", no_preview["platforms"]["uai"]["tasksRead"] is None
+          and no_preview["platforms"]["uai"]["preview"]["outcome"] == "not_started"
+          and no_preview["platforms"]["uai"]["preview"]["overviewTasks"] is None)
+    check("uai_cannot_claim_automatic_or_full_task_collection_from_stored_flags",
+          not no_preview["platforms"]["uai"]["automaticEnabled"]
+          and not no_preview["platforms"]["uai"]["courseListCovered"]
+          and not no_preview["platforms"]["uai"]["fullTaskListsCovered"]
+          and no_preview["platforms"]["uai"]["automaticTasksImported"] == 0)
+    check("uai_diagnostic_codes_survive_safe_code_filtering", no_preview["platforms"]["uai"]["problemCodes"] == ["UAI004"]
+          and no_preview["courseRecording"]["uai"]["lastRefreshProblemCodes"] == ["UAI003"])
+    uai_preview = {"CheckedAtUtc": now.isoformat(), "Outcome": "partial", "AccountVerified": True,
+                   "ShelfResources": 2, "OverviewTasks": 8, "DisplayedTasks": 3, "UaiModuleAllowed": True,
+                   "Codes": ["UAI004", "UAI005"], "FullTaskListsCovered": True,
+                   "ssoId": "synthetic-private-openid", "school": "synthetic-private-school",
+                   "jwt": "synthetic-jwt-secret", "rt": "synthetic-refresh-secret",
+                   "rawResponse": "synthetic-private-body"}
+
+    def apply_preview(preview):
+        with sqlite3.connect(database) as connection:
+            connection.execute("INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                               ("platform:uai-preview", json.dumps(preview)))
+        snapshot = database.read_bytes()
+        result = status_reader.read_status(database)
+        if database.read_bytes() != snapshot:
+            raise AssertionError("UAI diagnostic modified the database")
+        return result
+
+    uai_status = apply_preview(uai_preview)
+    uai = uai_status["platforms"]["uai"]
+    check("uai_preview_counts_are_distinct_from_imported_manual_tasks", uai["preview"]["shelfResources"] == 2
+          and uai["preview"]["overviewTasks"] == 8 and uai["preview"]["displayedTasks"] == 3
+          and uai["storedTasks"] == 1 and uai["tasksRead"] is None)
+    check("uai_preview_remains_partial_even_when_stored_coverage_flag_is_true",
+          uai["preview"]["outcome"] == "partial" and not uai["preview"]["fullTaskListsCovered"])
+    check("uai_preview_exports_only_counts_and_safe_evidence", all(value not in json.dumps(uai_status) for value in
+          ("synthetic-private", "synthetic-jwt-secret", "synthetic-refresh-secret", "synthetic-uai-session-secret", uai_key)))
+    unknown_preview = apply_preview(uai_preview | {"ShelfResources": None, "OverviewTasks": None,
+                                                  "DisplayedTasks": None, "UaiModuleAllowed": None})
+    check("unconfirmed_uai_counts_remain_null", unknown_preview["platforms"]["uai"]["preview"]["overviewTasks"] is None
+          and unknown_preview["platforms"]["uai"]["preview"]["shelfResources"] is None)
+    zero_preview = apply_preview(uai_preview | {"ShelfResources": 0, "OverviewTasks": 0,
+                                               "DisplayedTasks": 0, "UaiModuleAllowed": False})
+    check("explicit_empty_uai_preview_preserves_zero_but_not_full_coverage",
+          zero_preview["platforms"]["uai"]["preview"]["overviewTasks"] == 0
+          and zero_preview["platforms"]["uai"]["preview"]["uaiModuleAllowed"] is False
+          and not zero_preview["platforms"]["uai"]["fullTaskListsCovered"])
+    for label, changes in {
+        "private_code": {"Codes": ["UAI004synthetic-private"]},
+        "private_time": {"CheckedAtUtc": now.isoformat() + "synthetic-private"},
+        "inconsistent_total": {"OverviewTasks": 2, "DisplayedTasks": 3},
+        "invalid_outcome": {"Outcome": ["partial"]},
+        "boolean_count": {"ShelfResources": True},
+        "login_conflict": {"Outcome": "login_required", "AccountVerified": True},
+    }.items():
+        invalid = apply_preview(uai_preview | changes)["platforms"]["uai"]["preview"]
+        check("invalid_uai_preview_is_unrecognized_" + label, invalid["outcome"] == "unrecognized"
+              and invalid["overviewTasks"] is None and not invalid["accountVerified"]
+              and "synthetic-private" not in json.dumps(invalid))
     return {"schema": 1, "outcome": "passed", "checks": len(checks), "results": checks,
             "data": "synthetic_only", "network": "none", "productionDatabase": "not_accessed"}
 

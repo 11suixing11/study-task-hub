@@ -34,15 +34,33 @@ foreach (var item in diagnosticCases)
         throw new Exception("Navigation diagnostic classification failed.");
 Console.WriteLine($"PASS: {diagnosticCases.Length} secret-free navigation classification checks.");
 
+await ChaoxingIndependentSyncChecks.RunAsync();
 TaskStoreChecks.Run();
 TaskMetadataChecks.Run();
+var taskFilterChecks = 0;
+TaskFilteringChecks.Run((condition, label) =>
+{
+    if (!condition) throw new InvalidOperationException("Task filtering: " + label);
+    taskFilterChecks++;
+});
+Console.WriteLine($"PASS: {taskFilterChecks} task filter combinations, local dates and unknown-time checks (synthetic only).");
+var courseOptionChecks = 0;
+TaskCourseOptionsChecks.Run((condition, label) =>
+{
+    if (!condition) throw new InvalidOperationException("Task course options: " + label);
+    courseOptionChecks++;
+});
+Console.WriteLine($"PASS: {courseOptionChecks} course identity and scalable filter option checks (synthetic only).");
 await TaskNavigationChecks.RunAsync();
 await ChaoxingSyncChecks.RunAsync();
 await ChaoxingSessionChecks.RunAsync();
 await RainClassroomChecks.RunAsync();
 await MoocChecks.RunAsync();
 await CourseRecordingChecks.RunAsync();
+CourseLifecycleChecks.Run();
 await XuetangChecks.RunAsync();
 await MetadataPlatformChecks.RunAsync();
 PlatformSessionChecks.Run();
+ConnectionFeedbackChecks.Run();
+PlatformAccessPresentationChecks.Run();
 await PtaChecks.RunAsync();

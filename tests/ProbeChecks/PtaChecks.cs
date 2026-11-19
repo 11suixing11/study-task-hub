@@ -11,7 +11,7 @@ internal static class PtaChecks
     { if (!condition) throw new InvalidOperationException("PTA: " + label); checks++; }
     public static async Task RunAsync()
     {
-        Catalogs(); StatesAndDates(); await HttpAsync(); await SyncAsync();
+        Catalogs(); StatesAndDates(); PtaLoginRecoveryChecks.Run(Check); await HttpAsync(); await SyncAsync();
         Console.WriteLine($"PASS: {checks} PTA teaching-course, problem-set, session, pagination and navigation checks; synthetic metadata only.");
     }
     private static void Catalogs()

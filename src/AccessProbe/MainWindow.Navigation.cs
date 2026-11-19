@@ -4,7 +4,7 @@ using Microsoft.Web.WebView2.Core;
 
 namespace AccessProbe;
 
-public partial class MainWindow
+public partial class ChaoxingConnectionPage
 {
     private readonly HttpsUpgradeChain mainHttpsUpgrade = new();
     private readonly Dictionary<CoreWebView2Frame, FrameNavigationState> frameNavigationStates = [];
@@ -56,6 +56,7 @@ public partial class MainWindow
             ? "官方页面反复跳回 HTTP，已停止本次跳转。请返回课程页重试；HTTPS 页面尚未验证。"
             : $"客户端阻止了页面跳转：{blockedCategory}。请保留下方拦截类别以便定位。";
         DiagnosticText.Text = $"最近拦截：主页面 / {blockedCategory}（不记录跳转地址）";
+        if (!clearing) connectionPanel?.ShowPageFailure("unsupported_redirect", StatusText.Text);
     }
 
     private void FrameNavigationStarting(CoreWebView2Frame frame, CoreWebView2NavigationStartingEventArgs navigation)

@@ -30,7 +30,8 @@ public sealed partial class MetadataHttpReader
             if (withoutToken.Outcome is not ("login_required" or "course_credentials_unavailable")) return withoutToken;
             profile = withoutToken;
         }
-        if (!before.Any(cookie => cookie.Name == "CASTGC" && MetadataSessionStore.IsValid(platform, cookie)
+        var casCookies = await readCookies(ZhihuishuCasCheck, cancellation);
+        if (!casCookies.Any(cookie => cookie.Name == "CASTGC" && MetadataSessionStore.IsValid(platform, cookie)
             && cookie.AppliesTo(ZhihuishuCasCheck) && !cookie.IsExpired(DateTimeOffset.UtcNow) && cookie.Value.Length > 0)) return profile;
         // This read is the exact account-session check used by the official pre-login script.
         var cas = await SendAsync(ZhihuishuCasCheck, HttpMethod.Get, null, false, "zhihuishu-cas-check", cancellation);

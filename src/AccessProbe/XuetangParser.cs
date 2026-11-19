@@ -68,22 +68,33 @@ public static class XuetangParser
             total = (int)value;
         }
         var courses = new Dictionary<string, XuetangCourse>(StringComparer.Ordinal); var duplicates = 0; var unsupported = 0; var invalid = false;
+        var ambiguousStates = new HashSet<string>(StringComparer.Ordinal);
         foreach (var row in list.EnumerateArray())
         {
             if (row.ValueKind != JsonValueKind.Object) { invalid = true; continue; }
             var ownStatus = Number(Field(row, "status"));
-            if (ownStatus is < 1 or > 3 || ownStatus is { } s && s != decimal.Truncate(s)
-                || !stowed && ownStatus is { } known && known != status) { invalid = true; continue; }
+            if (ownStatus is < 1 or > 3 || ownStatus is { } s && s != decimal.Truncate(s)) { invalid = true; continue; }
             // The site's multi-course product opens /program/.../progress rather than a single classroom.
             if (Number(Field(row, "property")) == 1) { unsupported++; continue; }
             var classroom = Id(row, "classroom_id"); var product = Text(row, "sign"); var course = Text(row, "course_sign");
             var name = Text(row, "name").Trim();
             if (classroom is null || !XuetangPlatform.IsSign(product) || !XuetangPlatform.IsSign(course) || name.Length is 0 or > 200
                 || stowed && ownStatus is null) { invalid = true; continue; }
-            var value = new XuetangCourse(name, classroom, product, course, (int)(ownStatus ?? status), stowed, Id(row, "sku_id") ?? "");
             var key = classroom + "\n" + product + "\n" + course;
+            if (!stowed && ownStatus is { } known && known != status)
+            {
+                invalid = true; ambiguousStates.Add(key);
+                if (courses.TryGetValue(key, out var retained)) courses[key] = retained with { LifecycleStateVerified = false };
+                continue;
+            }
+            var value = new XuetangCourse(name, classroom, product, course, (int)(ownStatus ?? status), stowed, Id(row, "sku_id") ?? "")
+                { LifecycleStateVerified = !ambiguousStates.Contains(key) };
             if (courses.TryGetValue(key, out var previous))
-            { duplicates++; if (previous != value) invalid = true; }
+            {
+                duplicates++; if (previous != value) invalid = true;
+                if (previous.Status != value.Status || !value.LifecycleStateVerified)
+                    courses[key] = previous with { LifecycleStateVerified = false };
+            }
             else courses.Add(key, value);
         }
         return new(invalid ? "partial_catalog" : "ok", courses.Values.ToArray(), list.GetArrayLength(), duplicates, unsupported, total);

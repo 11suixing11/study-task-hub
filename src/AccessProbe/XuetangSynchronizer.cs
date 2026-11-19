@@ -1,7 +1,7 @@
 namespace AccessProbe;
 
 public sealed class XuetangSynchronizer(TaskStore store, IXuetangMetadataReader reader,
-    Func<CancellationToken, Task>? validateSession = null)
+    Func<CancellationToken, Task>? validateSession = null, Func<string, CancellationToken, Task>? verifyAccount = null)
 {
     public const int MaximumPages = 100;
     public const int MaximumRequests = 1200;
@@ -23,6 +23,7 @@ public sealed class XuetangSynchronizer(TaskStore store, IXuetangMetadataReader 
         if (profile.Outcome != "ok") { Problem("", profile.Outcome, "账号检查"); return Summary(); }
         account = XuetangParser.AccountId(profile.Json);
         if (account is null) { Problem("", "unrecognized_user", "账号归属检查"); return Summary(); }
+        if (verifyAccount is not null) await verifyAccount(account, cancellation);
         progress?.Report("学堂在线：正在读取正在上课、即将开课、已结课和已收起课程…");
         for (var status = 1; status <= 3 && !stopped && !loginRequired; status++)
         {
@@ -156,7 +157,9 @@ public sealed class XuetangSynchronizer(TaskStore store, IXuetangMetadataReader 
                     duplicates++;
                     if (previous.Name != course.Name || previous.Status != course.Status || previous.SkuId != course.SkuId)
                     { courses.Remove(key); conflicts.Add(key); covered = false; Problem("", "conflicting_course", "课程归属变化"); }
-                    else if (course.Stowed) courses[key] = course;
+                    else if (course.Stowed) courses[key] = course with
+                        { LifecycleStateVerified = previous.LifecycleStateVerified && course.LifecycleStateVerified };
+                    else if (!course.LifecycleStateVerified) courses[key] = previous with { LifecycleStateVerified = false };
                 }
                 else courses.Add(key, course);
             }
@@ -172,12 +175,15 @@ public sealed class XuetangSynchronizer(TaskStore store, IXuetangMetadataReader 
                 : outcome == "reset_times_unverified" ? "延期记录归属或结构未确认，截止时间显示待核对；任务入口保留。"
                 : outcome == "unsupported_courses" ? "新版多课项目尚未覆盖，请在官网核对这些项目。"
                 : outcome is "rate_limited" or "request_limit" or "page_limit" or "repeated_page" ? "本轮覆盖未确认，稍后重试；已有任务保留。"
+                : outcome is "network_error" or "timeout" or "http_error" or "unsupported_redirect" or "course_access_denied" or "forbidden"
+                    ? MetadataFailureText.Describe(outcome) + "；已有任务保留。"
                 : "元数据读取或结构未完整确认，已有任务保留。";
-            problems.Add(new(code, course, context + "：" + detail));
+            problems.Add(new(code, course, context + "：" + detail) { Outcome = outcome });
         }
         XuetangSyncSummary Summary() => new(courses.Count, coursesRead, allTasks.Count, added, updated, loginRequired,
             covered && account is not null && !stopped && !loginRequired, problems.ToArray())
         {
+            AccountVerified = account is not null && !loginRequired,
             SelectedCourses = selectedCourses, Requests = requests, CatalogPages = pages, DuplicateRows = duplicates,
             UnsupportedCourses = unsupported, TasksWithDeadline = allTasks.Count(task => task.DeadlineUtc is not null),
             TasksWithLink = allTasks.Count(task => task.Link is not null), StatusNeedsReview = allTasks.Count(task => task.State is null)

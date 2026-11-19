@@ -21,9 +21,9 @@ STATUS_LABELS = {
     "已完成（平台学习进度）", "进行中（平台学习进度）",
 }
 PLATFORMS = {"yuketang": "www.yuketang.cn", "changjiang": "changjiang.yuketang.cn", "mooc": "www.icourse163.org", "xuetang": "www.xuetangx.com",
-             "ucampus": "u.unipus.cn", "zhihuishu": "onlineweb.zhihuishu.com", "fif": "www.fifedu.com", "pta": "pintia.cn"}
+             "ucampus": "u.unipus.cn", "uai": "uai.unipus.cn", "zhihuishu": "onlineweb.zhihuishu.com", "fif": "www.fifedu.com", "pta": "pintia.cn"}
 HOSTS = set(PLATFORMS.values()) | {"pro.yuketang.cn"}
-RECORDING_PLATFORMS = ("chaoxing", "yuketang", "changjiang", "mooc", "ucampus", "fif", "xuetang", "zhihuishu", "pta")
+RECORDING_PLATFORMS = ("chaoxing", "yuketang", "changjiang", "mooc", "ucampus", "uai", "fif", "xuetang", "zhihuishu", "pta")
 DOTNET_WHITESPACE = "\t\n\v\f\r \u0085\u00a0\u1680" + "".join(chr(value) for value in range(0x2000, 0x200b)) + "\u2028\u2029\u202f\u205f\u3000"
 
 
@@ -91,6 +91,19 @@ def status_label(task):
     return "other"
 
 
+def has_platform_attention(task):
+    # Match TaskRules.HasPlatformAttention without exporting event or account identifiers.
+    token = task.get("PlatformAttentionToken", "")
+    return (task.get("Source", 0) != 0 and task.get("Overrides", 0) & 128 != 0
+            and task.get("State") in (1, 2) and task.get("PlatformObservedState") in (0, 3)
+            and isinstance(token, str) and len(token) > 0
+            and token != task.get("PlatformAttentionAcknowledgedToken", ""))
+
+
+def is_active(task):
+    return task.get("State") in (0, 3, 4) or has_platform_attention(task)
+
+
 def priority(task, now):
     overrides = task.get("Overrides", 0)
     manual = task.get("Source") == 0
@@ -136,8 +149,11 @@ def stored_counts(rows, now, settings=None):
         "hiddenTasks": len(tasks) - len(visible),
         "selectedTasks": len(selected),
         "unselectedTasks": len(tasks) - len(selected),
-        "activePriorities": dict(Counter(priority(task, now) for task in visible if task.get("State") in (0, 3, 4))),
-        "selectedActivePriorities": dict(Counter(priority(task, now) for task in selected if task.get("State") in (0, 3, 4))),
+        "storedPlatformAttention": sum(has_platform_attention(task) for task in tasks),
+        "visiblePlatformAttention": sum(has_platform_attention(task) for task in visible),
+        "selectedPlatformAttention": sum(has_platform_attention(task) for task in selected),
+        "activePriorities": dict(Counter(priority(task, now) for task in visible if is_active(task))),
+        "selectedActivePriorities": dict(Counter(priority(task, now) for task in selected if is_active(task))),
     }
 
 
@@ -158,7 +174,7 @@ def sync_counts(settings, summary):
         "problemCount": len(problems),
         "problemCodes": [
             code for problem in problems for code in [problem.get("Code")]
-            if isinstance(code, str) and re.fullmatch(r"(?:SYNC|RAIN|MOOC|XT|UC|ZHS|FIF|PTA|DB)[0-9]{3}", code)
+            if isinstance(code, str) and re.fullmatch(r"(?:SYNC|RAIN|MOOC|XT|UC|UAI|ZHS|FIF|PTA|DB)[0-9]{3}", code)
         ],
     }
 
@@ -195,9 +211,48 @@ def recording_counts(settings, tasks=()):
         "lastRefreshOutcome": refresh_outcome if refresh_outcome in {"completed", "partial", "login_required", "error", "not_started"} else "unrecognized",
         "lastRefreshProblemCodes": [
             code for code in refresh_codes
-            if isinstance(code, str) and re.fullmatch(r"(?:SYNC|RAIN|MOOC|XT|UC|ZHS|FIF|PTA|SESSION|DB|COURSE)[0-9]{3}", code)
+            if isinstance(code, str) and re.fullmatch(r"(?:SYNC|RAIN|MOOC|XT|UC|UAI|ZHS|FIF|PTA|SESSION|DB|COURSE)[0-9]{3}", code)
         ],
     }
+
+
+def uai_preview_counts(preview):
+    result = {"outcome": "not_started", "checkedAtUtc": None, "accountVerified": False,
+              "shelfResources": None, "overviewTasks": None, "displayedTasks": None,
+              "uaiModuleAllowed": None, "problemCodes": [], "fullTaskListsCovered": False}
+    if preview is None:
+        return result
+    result["outcome"] = "unrecognized"
+    if not isinstance(preview, dict):
+        return result
+    outcome = preview.get("Outcome")
+    verified = preview.get("AccountVerified")
+    codes = preview.get("Codes")
+    if (not isinstance(outcome, str) or outcome not in {"partial", "login_required"} or type(verified) is not bool
+            or outcome == "login_required" and verified
+            or not isinstance(codes, list) or len(codes) > 16
+            or not all(isinstance(code, str) and re.fullmatch(
+                r"(?:SYNC|RAIN|MOOC|XT|UC|UAI|ZHS|FIF|PTA|SESSION|DB|COURSE)[0-9]{3}", code) for code in codes)):
+        return result
+    try:
+        checked = datetime.fromisoformat(preview["CheckedAtUtc"])
+        if checked.tzinfo is None:
+            return result
+    except (KeyError, TypeError, ValueError):
+        return result
+    for name, maximum in (("ShelfResources", 10000), ("OverviewTasks", 2147483647), ("DisplayedTasks", 10000)):
+        value = preview.get(name)
+        if value is not None and (type(value) is not int or not 0 <= value <= maximum):
+            return result
+    displayed, total = preview.get("DisplayedTasks"), preview.get("OverviewTasks")
+    if displayed is not None and (total is None or displayed > total):
+        return result
+    result.update(outcome=outcome, checkedAtUtc=checked.astimezone(timezone.utc).isoformat(),
+                  accountVerified=verified, shelfResources=preview.get("ShelfResources"),
+                  overviewTasks=total, displayedTasks=displayed,
+                  uaiModuleAllowed=preview.get("UaiModuleAllowed") if type(preview.get("UaiModuleAllowed")) is bool else None,
+                  problemCodes=list(codes))
+    return result
 
 
 def read_status(database):
@@ -242,7 +297,7 @@ def read_status(database):
     status = sync_counts(app, summary) | stored_counts(rows, now, settings)
     for field in ("DetailsSaved", "DetailsDeferred", "DetailsUnavailable", "DetailsRequireAction", "DetailsRequirePreview"):
         status[field[0].lower() + field[1:]] = summary.get(field, 0)
-    status["schema"] = 9
+    status["schema"] = 10
     status["sessions"] = sessions
     status["generatedAtUtc"] = now.isoformat()
     status["integrity"] = "ok" if integrity == "ok" else "failed"
@@ -286,6 +341,14 @@ def read_status(database):
             result["automaticEnabled"] = result["platformAutomaticEnabled"] = False
             result["adaptationEnabled"] = False
             result["coverageScope"] = "adaptation-disabled"
+        if platform_id == "uai":
+            result["automaticEnabled"] = result["platformAutomaticEnabled"] = False
+            result["coverageScope"] = "official-login-and-homepage-preview"
+            result["taskCollectionSupported"] = result["courseListCovered"] = result["fullTaskListsCovered"] = False
+            # Zero automatic imports does not prove the official account has zero assignments.
+            result["tasksRead"] = None
+            result["automaticTasksImported"] = 0
+            result["preview"] = uai_preview_counts(settings.get("platform:uai-preview"))
         status["platforms"][platform_id] = result
     return status
 

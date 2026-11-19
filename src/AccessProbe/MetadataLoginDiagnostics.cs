@@ -26,11 +26,17 @@ public sealed class MetadataLoginDiagnostics(MetadataPlatform platform, string p
     private readonly List<MetadataRequestDiagnostic> requests = [];
     private string? sessionChangeReason;
     private MetadataLoginEvent? pageFailure;
+    private long eventRevision, pageFailureRevision, ptaNavigationStartedRevision, ptaHomeReadyRevision, ptaAccountReadyRevision, accountValidationRevision;
+    private ulong? ptaNavigationId;
     private int attempts, blocked, failedResources, cookies;
     private bool account, session, token, sessionConfirmed, studentDocumentReady, accountConfirmed;
     public string PersistenceOutcome { get; private set; } = "not_saved";
     public string Path { get; } = path;
     public bool SessionConfirmed { get { lock (gate) return sessionConfirmed; } }
+    public long AccountValidationRevision { get { lock (gate) return accountConfirmed ? accountValidationRevision : 0; } }
+    private bool HasPtaHomeAccountEvidence => platform.Id == "pta" && ptaHomeReadyRevision > 0
+        && accountConfirmed && ptaAccountReadyRevision > ptaNavigationStartedRevision;
+    public bool PtaHomeConfirmed { get { lock (gate) return HasPtaHomeAccountEvidence && pageFailure is null; } }
     public MetadataLoginReport Snapshot()
     {
         lock (gate) return new(1, platform.Id, attempts, blocked, failedResources, cookies, account, session, token, events.ToArray())
@@ -57,19 +63,45 @@ public sealed class MetadataLoginDiagnostics(MetadataPlatform platform, string p
             Record(MetadataLoginStage.SessionValidation, MetadataLoginResult.SessionChanged);
         }
     }
-    public void Record(MetadataLoginStage stage, MetadataLoginResult result, string? address = null, int? status = null, ulong? navigationId = null)
+    public void Record(MetadataLoginStage stage, MetadataLoginResult result, string? address = null, int? status = null, ulong? navigationId = null,
+        bool documentCompleted = false)
     {
         lock (gate)
         {
+            var revision = ++eventRevision;
             if (stage == MetadataLoginStage.Preparation && result == MetadataLoginResult.Started)
-            { attempts++; pageFailure = null; sessionChangeReason = null; sessionConfirmed = studentDocumentReady = accountConfirmed = false; }
+            {
+                attempts++; pageFailure = null; pageFailureRevision = 0; sessionChangeReason = null;
+                sessionConfirmed = studentDocumentReady = accountConfirmed = false; accountValidationRevision = 0;
+                ptaNavigationId = null; ptaNavigationStartedRevision = ptaHomeReadyRevision = ptaAccountReadyRevision = 0;
+            }
             if (stage == MetadataLoginStage.MainNavigation)
+            {
                 studentDocumentReady = result == MetadataLoginResult.Ready && platform.Id == "ucampus"
                     && platform.IsMetadataDocument(address ?? "");
+                if (platform.Id == "pta" && result == MetadataLoginResult.Started)
+                {
+                    ptaNavigationId = navigationId; ptaNavigationStartedRevision = revision;
+                    ptaHomeReadyRevision = ptaAccountReadyRevision = 0;
+                }
+                // DOMContentLoaded also reports Ready. Only the latest, fully successful document proves a return.
+                if (platform.Id == "pta" && result == MetadataLoginResult.Ready && documentCompleted
+                    && navigationId is not null && navigationId == ptaNavigationId && platform.IsMetadataDocument(address ?? ""))
+                    ptaHomeReadyRevision = revision;
+            }
             if (stage == MetadataLoginStage.SessionCheck)
             {
                 sessionConfirmed = result == MetadataLoginResult.MetadataReady;
                 accountConfirmed = result is MetadataLoginResult.MetadataReady or MetadataLoginResult.AccountReady;
+                accountValidationRevision = accountConfirmed ? revision : 0;
+                if (platform.Id == "pta") ptaAccountReadyRevision = accountConfirmed ? revision : 0;
+            }
+            if (platform.Id == "pta" && (stage == MetadataLoginStage.SessionValidation
+                && result is MetadataLoginResult.SessionChanged or MetadataLoginResult.AccountMismatch
+                || stage == MetadataLoginStage.SessionCheck && !accountConfirmed))
+            {
+                sessionConfirmed = accountConfirmed = false; accountValidationRevision = 0;
+                ptaNavigationId = null; ptaNavigationStartedRevision = ptaHomeReadyRevision = ptaAccountReadyRevision = 0;
             }
             if (result is MetadataLoginResult.Blocked or MetadataLoginResult.PopupSuppressed) blocked++;
             if (stage == MetadataLoginStage.Resource && result is MetadataLoginResult.ScriptUnavailable or MetadataLoginResult.NetworkFailed) failedResources++;
@@ -83,11 +115,17 @@ public sealed class MetadataLoginDiagnostics(MetadataPlatform platform, string p
                 // A later popup cannot replace a failure in the login document, frame, or script.
                 if (pageFailure is null || result != MetadataLoginResult.LoadingTimeout && (stage != MetadataLoginStage.Popup || pageFailure.Stage == MetadataLoginStage.Popup)
                     || result == MetadataLoginResult.LoadingTimeout && pageFailure is { Stage: MetadataLoginStage.MainNavigation, Result: MetadataLoginResult.LoadingTimeout })
-                    pageFailure = events[^1];
+                { pageFailure = events[^1]; pageFailureRevision = revision; }
             }
             // Keep recovery in the diagnostic owner so closing the connection window cannot leave a stale popup failure.
             if (studentDocumentReady && sessionConfirmed
                 && pageFailure is { Stage: MetadataLoginStage.Popup, Result: MetadataLoginResult.Blocked }) pageFailure = null;
+            if (HasPtaHomeAccountEvidence && ptaAccountReadyRevision > pageFailureRevision
+                && pageFailure is { Result: MetadataLoginResult.Blocked, Stage: MetadataLoginStage.MainNavigation
+                    or MetadataLoginStage.FrameNavigation or MetadataLoginStage.Popup } recovered
+                && (recovered.Stage == MetadataLoginStage.Popup
+                    || ptaNavigationStartedRevision > pageFailureRevision && ptaHomeReadyRevision > pageFailureRevision))
+            { pageFailure = null; pageFailureRevision = 0; }
             if (events.Count > 24) events.RemoveAt(0); Save();
         }
     }

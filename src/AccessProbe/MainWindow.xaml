@@ -1,19 +1,27 @@
-<Window x:Class="AccessProbe.MainWindow"
+<local:WorkspacePage x:Class="AccessProbe.ChaoxingConnectionPage"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:AccessProbe"
         xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
-        Title="连接学习通" Width="1180" Height="820"
-        MinWidth="960" MinHeight="640" Background="{DynamicResource CanvasBrush}">
-    <Window.Resources>
+        Background="{DynamicResource CanvasBrush}">
+    <local:WorkspacePage.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="FluentTheme.xaml" /></ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
-    </Window.Resources>
-    <DockPanel Margin="16">
-        <StackPanel DockPanel.Dock="Top">
+    </local:WorkspacePage.Resources>
+    <Grid Margin="18">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="320" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0"
+                      AutomationProperties.Name="接入引导与检查详情">
+        <StackPanel>
+        <StackPanel>
             <TextBlock Text="连接学习通" FontSize="24" FontWeight="SemiBold" />
             <TextBlock Margin="0,8,0,10" TextWrapping="Wrap"
-                       Text="完成官方登录后自动保存 Cookie 并返回课程列表。回到平台管理窗口，选择课程并保存后即可采集这些课程的任务。" />
+                       Text="请在右侧官网完成登录，扫码后确认官方授权。左侧会显示接入结果；选择课程后，作业和考试将同步到首页。" />
             <WrapPanel Margin="0,0,0,8">
                 <Button Content="打开任务清单" Padding="14,7" Margin="0,0,8,0" Click="OpenTaskDashboard" />
                 <Button x:Name="LoginButton" Content="打开官方登录" Padding="14,7" Margin="0,0,8,0" Click="OpenLogin" IsEnabled="False" />
@@ -21,9 +29,10 @@
                 <Button x:Name="ClearButton" Content="清除登录数据" Padding="14,7" Margin="0,0,8,0" Click="ClearSession" IsEnabled="False" />
             </WrapPanel>
             <TextBlock x:Name="StatusText" Text="正在初始化独立登录环境……" TextWrapping="Wrap" Margin="0,0,0,6" />
-            <TextBlock x:Name="LoginSyncStatusText" Text="登录后先返回课程列表；选择并保存课程后，定向采集任务。下次自动复用已保存的 Cookie。" TextWrapping="Wrap" Foreground="#245AC3" Margin="0,0,0,6" />
+            <TextBlock x:Name="LoginSyncStatusText" Visibility="Collapsed" TextWrapping="Wrap" Foreground="#245AC3" Margin="0,0,0,6" />
+            <ContentControl x:Name="ConnectionPanelHost" />
         </StackPanel>
-        <Border DockPanel.Dock="Bottom" Background="White" Padding="12" Margin="0,10,0,0">
+        <Border Background="White" Padding="12" Margin="0,10,0,0">
             <Expander Header="高级诊断与手动读取" IsExpanded="False">
             <StackPanel>
                 <WrapPanel Margin="0,8,0,8">
@@ -46,6 +55,8 @@
             </StackPanel>
             </Expander>
         </Border>
-        <wv:WebView2 x:Name="Browser" />
-    </DockPanel>
-</Window>
+        </StackPanel>
+        </ScrollViewer>
+        <wv:WebView2 x:Name="Browser" Grid.Column="2" />
+    </Grid>
+</local:WorkspacePage>

@@ -4,7 +4,10 @@ using System.Text.Json;
 
 namespace AccessProbe;
 
-public sealed record RecordingCourse(string Key, string Name, string Detail, bool Available = true);
+public sealed record RecordingCourse(string Key, string Name, string Detail, bool Available = true)
+{
+    public CourseLifecycle Lifecycle { get; init; } = new();
+}
 
 // Matchers exist only during discovery. Account and remote identifiers are never persisted in the catalog.
 public sealed record DiscoveredRecordingCourse(RecordingCourse Course, Func<TaskItem, bool> MatchesLegacyTask);
@@ -28,10 +31,11 @@ public sealed class CourseRecordingChangedException() : OperationCanceledExcepti
 
 public static class CourseRecordingRules
 {
-    public static bool SupportsAutomatic(string platformId) => platformId is "chaoxing" or "yuketang" or "changjiang" or "mooc" or "xuetang" or "ucampus" or "zhihuishu" or "pta";
+    public static bool SupportsAutomatic(string platformId) => platformId is "chaoxing" or "yuketang" or "changjiang" or "mooc" or "xuetang" or "ucampus" or "zhihuishu" or "pta" or "uai";
+    public static bool SupportsDesktopAutomatic(string platformId) => SupportsAutomatic(platformId) && platformId != "uai";
 
     public static bool IsCatalogProblemCode(string? code) => code is not null
-        && new[] { "SYNC", "RAIN", "MOOC", "XT", "UC", "FIF", "ZHS", "PTA", "SESSION", "DB", "COURSE" }.Any(prefix =>
+        && new[] { "SYNC", "RAIN", "MOOC", "XT", "UC", "UAI", "FIF", "ZHS", "PTA", "SESSION", "DB", "COURSE" }.Any(prefix =>
             code.StartsWith(prefix, StringComparison.Ordinal) && code.Length == prefix.Length + 3
             && code[prefix.Length..].All(char.IsAsciiDigit));
 
@@ -74,7 +78,7 @@ public static class CourseRecordingRules
     public static DiscoveredRecordingCourse Metadata(string platformId, string accountId, MetadataCourse course)
     {
         var key = MetadataKey(platformId, accountId, course.Id, course.Kind);
-        return new(new(key, course.Name, course.Detail), task => false);
+        return new(new(key, course.Name, course.Detail) { Lifecycle = CourseLifecycleRules.FromOfficialEnd(course.EndUtc) }, task => false);
     }
 
     public static string TaskCourseKey(TaskItem task) => IsKey(task.PlatformId, task.RecordingCourseKey) ? task.RecordingCourseKey
@@ -85,6 +89,9 @@ public static class CourseRecordingRules
 
     public static bool IsVisible(CourseRecordingSettings settings, TaskItem task) => !settings.SelectionConfirmed || !settings.HideUnselectedTasks
         || IsSelected(settings, TaskCourseKey(task));
+
+    public static bool IsRecorded(CourseRecordingSettings settings, TaskItem task) =>
+        task.Source == TaskSource.Manual && !settings.SelectionConfirmed || IsSelected(settings, TaskCourseKey(task));
 
     public static DiscoveredRecordingCourse Chaoxing(ChaoxingCourse course) => new(
         new(ChaoxingKey(course.CourseId, course.ClassId, course.Cpi), course.Name, "班级 " + course.ClassId),
@@ -101,7 +108,8 @@ public static class CourseRecordingRules
     public static DiscoveredRecordingCourse Mooc(string accountId, MoocCourse course)
     {
         var key = MoocKey(accountId, course.Id, course.TermId);
-        return new(new(key, course.Name, "开课期 " + course.TermId + (course.IsSpoc ? " · SPOC" : "")),
+        return new(new(key, course.Name, "开课期 " + course.TermId + (course.IsSpoc ? " · SPOC" : ""))
+            { Lifecycle = CourseLifecycleRules.FromOfficialEnd(course.EndUtc) },
             task => MoocTaskNavigation.RecordingCourseKey(task, accountId) == key);
     }
 
@@ -109,7 +117,9 @@ public static class CourseRecordingRules
     {
         var key = XuetangKey(accountId, course.ClassroomId, course.ProductSign, course.CourseSign);
         var status = course.Status switch { 1 => "正在上课", 2 => "即将开课", 3 => "已结课", _ => "状态待核对" };
-        return new(new(key, course.Name, status + (course.Stowed ? " · 官网已收起" : "")),
+        return new(new(key, course.Name, status + (course.Stowed ? " · 官网已收起" : ""))
+            { Lifecycle = CourseLifecycleRules.FromOfficialState(!course.LifecycleStateVerified ? CourseLifecycleState.Unknown : course.Status switch
+                { 1 => CourseLifecycleState.Ongoing, 2 => CourseLifecycleState.Upcoming, 3 => CourseLifecycleState.Ended, _ => CourseLifecycleState.Unknown }) },
             task => XuetangTaskNavigation.RecordingCourseKey(task, accountId) == key);
     }
 }

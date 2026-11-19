@@ -8,7 +8,7 @@ using Microsoft.Web.WebView2.Wpf;
 
 namespace AccessProbe;
 
-public sealed class XuetangSyncService : IDisposable
+public sealed partial class XuetangSyncService : IDisposable
 {
     private readonly TaskStore store;
     private readonly string projectRoot;
@@ -38,7 +38,6 @@ public sealed class XuetangSyncService : IDisposable
     public XuetangLoginDiagnostics LoginDiagnostics { get; }
     public event Action<string, bool, bool>? StatusChanged;
     public event Action<XuetangSyncSummary>? Completed;
-    public event Action? CourseSelectionRequired;
     public event Action<XuetangSyncSummary>? CatalogCompleted;
 
     public XuetangSyncService(TaskStore store, string root, WebView2 sessionBrowser,
@@ -118,25 +117,25 @@ public sealed class XuetangSyncService : IDisposable
             await ValidateSessionAsync(scope, runCancellation.Token);
             stage = "course_task_metadata";
             using var reader = CreateReader(scope);
+            var acceptProgress = true;
             var progress = new Progress<string>(message =>
-            { if (!disposed && !runCancellation.IsCancellationRequested) StatusChanged?.Invoke(message, true, false); });
+            { if (acceptProgress && ReferenceEquals(cancellation, runCancellation) && !disposed && !runCancellation.IsCancellationRequested) StatusChanged?.Invoke(message, true, false); });
             var summary = await new XuetangSynchronizer(store, reader, token => ValidateSessionAsync(scope, token))
                 .RunAsync(progress, runCancellation.Token, catalogOnly);
+            acceptProgress = false;
             stage = "session_persistence";
-            if (!await FinishSessionAsync(scope, summary.LoginRequired, runCancellation.Token))
+            var sessionSaved = await FinishSessionAsync(scope, summary.LoginRequired, runCancellation.Token, summary.AccountVerified);
+            if (!sessionSaved)
                 summary = summary with { Problems = summary.Problems.Concat([new XuetangSyncProblem("XT004", "", "登录状态未能保存，重启后可能需要重新登录。")]).ToArray() };
             CheckScope(scope, runCancellation.Token);
+            var connectionFeedback = PublishConnection(summary, catalogOnly, sessionSaved);
             if (catalogOnly)
             {
                 var codes = summary.Problems.Select(problem => problem.Code).Distinct(StringComparer.Ordinal).Take(16).ToArray();
                 var catalogOutcome = CourseRecordingRules.CatalogRefreshOutcome(summary.CourseListCovered, summary.LoginRequired, codes);
                 store.RecordCourseCatalogResult("xuetang", catalogOutcome, codes, DateTimeOffset.UtcNow, runCancellation.Token);
                 retryAfter = DateTimeOffset.UtcNow.AddMinutes(summary.LoginRequired ? 30 : 5);
-                StatusChanged?.Invoke(summary.LoginRequired ? "XT001：请在连接学堂在线窗口完成官方登录后刷新课程。"
-                    : catalogOutcome == "completed" ? $"学堂在线 课程列表已刷新，共 {summary.Courses} 门课程。"
-                    : "学堂在线 课程列表未完整刷新；原有课程选择保留，请查看官方登录与网络。", false,
-                    catalogOutcome != "completed");
-                if (!summary.LoginRequired && summary.CourseListCovered && (needsSelection || afterLogin && loginOpen)) CourseSelectionRequired?.Invoke();
+                StatusChanged?.Invoke(connectionFeedback.Text, false, connectionFeedback.Warning);
                 CatalogCompleted?.Invoke(summary);
                 if (afterLogin && summary.LoginRequired && loginOpen) ScheduleLoginCheck();
                 return;
@@ -349,7 +348,7 @@ public sealed class XuetangSyncService : IDisposable
         if (Enum.TryParse<CoreWebView2CookieSameSiteKind>(cookie.SameSite, out var sameSite)) value.SameSite = sameSite;
         manager.AddOrUpdateCookie(value);
     }
-    private async Task<bool> FinishSessionAsync(ReadScope scope, bool loginRequired, CancellationToken token)
+    private async Task<bool> FinishSessionAsync(ReadScope scope, bool loginRequired, CancellationToken token, bool accountVerified = true)
     {
         await cookieGate.WaitAsync(token);
         try
@@ -357,7 +356,7 @@ public sealed class XuetangSyncService : IDisposable
             CheckScope(scope, token); var current = await ReadProfileAsync(); CheckScope(scope, token); CheckFingerprint(scope, current);
             if (loginRequired) { sessionRejected = true; sessionStore.Invalidate(DateTimeOffset.UtcNow); SessionPersistenceOutcome = "expired"; return true; }
             sessionRejected = false; var saved = SaveProfile(current);
-            if (saved) store.ConfirmPlatformSession("xuetang", DateTimeOffset.UtcNow);
+            if (saved && accountVerified) store.ConfirmPlatformSession("xuetang", DateTimeOffset.UtcNow);
             return saved;
         }
         finally { cookieGate.Release(); }

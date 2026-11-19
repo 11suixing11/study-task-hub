@@ -1,0 +1,200 @@
+{
+  "schema": 1,
+  "version": "1.1.5",
+  "preview": true,
+  "date": "2026-11-15",
+  "outcome": "automated_and_isolated_checks_passed",
+  "upstream": {
+    "revision": "46a0282030b5a5bc719b27e9d4727307ae172490",
+    "pr": "https://github.com/11suixing11/study-task-hub/pull/1",
+    "linuxReviewedRevision": "3e9489e",
+    "linuxReviewedTreeMatchesMergedTree": true,
+    "finalRemoteRecheck": "connection_reset; using previously fetched revision"
+  },
+  "scope": {
+    "clients": [
+      "Windows",
+      "Android"
+    ],
+    "accountModel": "one current personal account per platform on each local client",
+    "crossDeviceSync": false,
+    "connectionStages": [
+      "official_login",
+      "complete_course_catalog",
+      "course_selection",
+      "task_sync"
+    ],
+    "scanOrCookieAloneConfirmsConnection": false,
+    "successfulCheckKeepsOfficialPage": true,
+    "chaoxingIndependentLists": {
+      "scenarios": 9,
+      "assertions": 32,
+      "outcome": "passed"
+    },
+    "uai": {
+      "windows": "manual_only",
+      "android": "identity_and_summary_preview; full task sync pending"
+    }
+  },
+  "packages": [
+    {
+      "file": "聚合平台-1.1.5-Setup-win-x64.exe",
+      "bytes": 59127580,
+      "sha256": "24be721123130207291b258d3a4784fe8e95a633d69c1821d605c39d8e9b12b6"
+    },
+    {
+      "file": "聚合平台-1.1.5-便携测试版-win-x64.zip",
+      "bytes": 81107873,
+      "sha256": "fda6c9df481fff8382b80e450d771c66ebb2b1165e23237017a75e28d6572197"
+    },
+    {
+      "file": "聚合平台-1.1.5-android.apk",
+      "bytes": 67465300,
+      "sha256": "58a85f54ff49bc475fcf1d66629bc6b643524f970a0fd493033f518877438485"
+    }
+  ],
+  "windows": {
+    "buildId": "20261115-122121-27d41844",
+    "projects": 11,
+    "businessChecks": 3092,
+    "connectionFeedbackBusinessChecks": 44,
+    "desktopAndRestartChecks": {
+      "dashboardUi": 186,
+      "automaticSync": 34,
+      "taskNavigation": 12,
+      "sessionRaces": 13,
+      "chaoxingProcessRestarts": 77,
+      "rainAndUnifiedDashboard": 95,
+      "moocAndCourseSelection": 107,
+      "moocProcessRestarts": 81,
+      "xuetangAndUnifiedDashboard": 71,
+      "xuetangProcessRestarts": 81,
+      "otherPlatformConnections": 256,
+      "otherPlatformProcessRestarts": 136,
+      "ptaAndTeachingCourses": 46,
+      "ptaProcessRestarts": 73,
+      "total": 1268
+    },
+    "pythonDiagnosticChecks": 63,
+    "executionMode": "full_regression_with_targeted_PTA_rerun",
+    "targetedPtaRerun": {
+      "family": "pta-sync-harness",
+      "run": "20261115-122934-efbf5353",
+      "checks": 46,
+      "reason": "The login instruction changed from below to right with the verified sidebar layout; no production code changed after other families passed.",
+      "restartChecks": 73
+    },
+    "fullRegressionRerunReason": "Updated obsolete DockPanel layout assertions before the full rerun; final PTA direction wording checked separately.",
+    "layout": {
+      "platforms": 8,
+      "scenes": 24,
+      "screenshots": 32,
+      "metrics": "passed",
+      "visualAcceptance": "pending"
+    },
+    "installer": {
+      "outcome": "passed",
+      "scope": "same script and delivery payload, TestInstallation AppId, synthetic data",
+      "upgradeFrom": "1.1.2",
+      "upgradePreservesData": true,
+      "uninstallPreservesExternalData": true,
+      "deliverySetupExecuted": false
+    },
+    "portable": {
+      "files": 524,
+      "payloadFiles": 520,
+      "crcAndHashes": "passed",
+      "isolatedEntryConfigured": true,
+      "normalEntrySharesInstalledData": true,
+      "startup": "resource dictionaries and independent database initialization; no official login"
+    },
+    "runtime": "10.0.13 self-contained win-x64",
+    "licensePackages": 10,
+    "licenseSourceFilesHashMatched": 21,
+    "thirdPartyFiles": 29,
+    "embeddedIconFrames": 10,
+    "visualAcceptance": "pending",
+    "realAccountAcceptance": "pending"
+  },
+  "android": {
+    "buildId": "20261115-121710-b27bedb5",
+    "versionCode": 7,
+    "minimumAndroid": 9,
+    "targetApi": 36,
+    "abis": [
+      "arm64-v8a",
+      "armeabi-v7a",
+      "x86_64"
+    ],
+    "certificateSha256": "6e113bcf7c8ea5390ea7d725f2f7ecde8cfecce3612c348ed9ee490b478af30b",
+    "signingCertificatePreserved": true,
+    "finalApkHashMatchesRuntimeReports": true,
+    "installation": {
+      "run": "20261115-122208",
+      "nativeSyntheticChecks": 47,
+      "improvementChecks": 74,
+      "loginRecoveryChecks": 61,
+      "connectionFeedbackChecks": 39,
+      "upgradeChecks": 4,
+      "restartChecks": 4,
+      "keystore": true,
+      "dashboardStartup": true,
+      "systemInsets": true,
+      "coldReminderReceiver": true,
+      "bootReceiver": true
+    },
+    "webviewRecovery": {
+      "run": "login-recovery-20261115-122401",
+      "webviewChecks": 31,
+      "restartChecks": 3
+    },
+    "uiLoginQrTaskRouting": {
+      "run": "improvements-20261115-122700",
+      "checks": 87
+    },
+    "packageIntegrity": {
+      "zipCrc": "passed",
+      "zipAlignment16kb": "passed",
+      "nativeLibraries": 33,
+      "aligned64bitLibraries": 22,
+      "licensePackages": 9,
+      "licenseSourceHashes": "passed",
+      "physical16kbPageDeviceAcceptance": "pending"
+    },
+    "testEnvironment": "dedicated Android 15 emulator, synthetic fixtures",
+    "physicalUserDeviceOperated": false,
+    "visualAcceptance": "pending",
+    "realAccountAcceptance": "pending"
+  },
+  "evidencePathsRelativeToDeliveryDirectory": true,
+  "evidence": {
+    "windowsRegression": "验证报告/Windows/回归/verification.json",
+    "windowsInstallation": "验证报告/Windows/打包/installation-checks.json",
+    "windowsPackage": "验证报告/Windows/打包/windows-package-checks.json",
+    "windowsLayout": "验证报告/Windows/布局/layout-acceptance.json",
+    "androidInstallation": "验证报告/Android/20261115-122208/installation-checks.json",
+    "androidWebviewRecovery": "验证报告/Android/login-recovery-20261115-122401/login-recovery-summary.json",
+    "androidImprovements": "验证报告/Android/improvements-20261115-122700/android-improvements.json",
+    "androidPackageIntegrity": "验证报告/Android/package-integrity/package-checks.json"
+  },
+  "countingPolicy": "Reports overlap; counts are reported separately.",
+  "production": {
+    "currentVersion": "20261111-060027-e533c14f",
+    "currentManifestUnchanged": true,
+    "taskDatabaseUnchanged": true,
+    "privateDataIncluded": false,
+    "sourcePushed": false,
+    "prCommentPosted": false,
+    "releasePublished": false
+  },
+  "pendingAcceptance": [
+    "real QR scan and official authorization return",
+    "CAPTCHA and additional verification return",
+    "long-lived official sessions",
+    "complete real course and task catalogs",
+    "final official task pages",
+    "reliable visual review",
+    "physical Android device with 16 KB memory pages",
+    "UAI complete automatic task collection"
+  ]
+}

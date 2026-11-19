@@ -8,7 +8,7 @@ namespace PtaSyncHarness;
 
 internal static class BrowserFixtures
 {
-    public static void BlockNetwork(WebView2 browser, bool includeCaptcha = false)
+    public static void BlockNetwork(WebView2 browser, bool includeCaptcha = false, Func<Uri, string?>? document = null, Func<Uri, int>? status = null)
     {
         browser.CoreWebView2InitializationCompleted += (_, args) =>
         {
@@ -29,7 +29,10 @@ internal static class BrowserFixtures
                         html = "<!doctype html><html lang='zh-CN'><meta charset='utf-8'><body>合成验证码框架"
                             + "<script>parent.postMessage('synthetic-pta-captcha-ready', 'https://pintia.cn');</script></body></html>";
                 }
-                request.Response = core.Environment.CreateWebResourceResponse(new MemoryStream(Encoding.UTF8.GetBytes(html)), 200, "OK",
+                var code = 200;
+                if (Uri.TryCreate(request.Request.Uri, UriKind.Absolute, out var route))
+                { html = document?.Invoke(route) ?? html; code = status?.Invoke(route) ?? 200; }
+                request.Response = core.Environment.CreateWebResourceResponse(new MemoryStream(Encoding.UTF8.GetBytes(html)), code, code == 200 ? "OK" : "Synthetic failure",
                     "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n");
             };
         };

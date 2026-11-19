@@ -62,7 +62,7 @@ internal static class Program
                 "HTTP renewal updates reusable WebView session");
             Check(fixture.Paths.All(path => !path.EndsWith("/exams", StringComparison.Ordinal) && !path.Contains("/user-groups/20001", StringComparison.Ordinal)),
                 "no task details before course choice");
-            foreach (var popup in app.Windows.OfType<CourseSelectionWindow>().ToArray()) popup.Close();
+            dashboard.ShowDashboard();
             var key = CourseRecordingRules.MetadataKey("pta", F.Account, F.Course.Id, "class");
             store.SaveCourseRecording("pta", false, [key], true, recording.Revision, DateTimeOffset.UtcNow); fixture.Paths.Clear();
             await service.RecordingCoursesChangedAsync(); await WaitAsync(() => ((DataGrid)dashboard.FindName("TaskTable")).Items.Count == 6);
@@ -114,14 +114,24 @@ internal static class Program
                 "latest server session still saved with its flags in encrypted repository");
             var catalogBefore = store.LoadCourseRecording("pta"); fixture.RejectLogin = true;
             await service.StartAsync(true);
-            Check(store.LoadPlatformSessionInfo("pta").State == "expired" && store.LoadMetadataSettings("pta").LastSummary!.LoginRequired, "expired official profile invalidates saved cookie");
+            Check(store.LoadPlatformSessionInfo("pta").State == "expired" && store.LoadMetadataSettings("pta").LastSummary!.LoginRequired, "expired official profile expires the PTA session state");
             Check(store.LoadTasks().Count == 6 && store.LoadCourseRecording("pta").SelectedCourseKeys.SequenceEqual(catalogBefore.SelectedCourseKeys), "expiry preserves selection and history");
-            Check(((TextBlock)dashboard.FindName("PtaPlatformSummary")).Text.Contains("登录过期", StringComparison.Ordinal), "PTA expiry prompts relogin on platform card");
+            Check(((TextBlock)dashboard.FindName("PtaPlatformSummary")).Text.Contains("需要重新登录", StringComparison.Ordinal), "PTA rejection asks for re-login on the platform card");
+            var retained = new MetadataSessionStore(MetadataPlatform.Pta, Path.Combine(runRoot, "retained-session.bin"), store);
+            Check(retained.LoadForRevalidation(DateTimeOffset.UtcNow).Any(cookie => cookie.Value == "synthetic-pta-session-renewed") && retained.Load(DateTimeOffset.UtcNow).Count == 0,
+                "official PTA expiry retains encrypted credentials only for unverified revalidation");
+            service.ConnectionClosed(); await Task.Delay(120);
+            Check(store.LoadPlatformSessionInfo("pta").State == "expired" && retained.Load(DateTimeOffset.UtcNow).Count == 0,
+                "closing the connection without a new login cannot resurrect the rejected PTA session");
+            BrowserFixtures.SetCookie(browser, "synthetic-pta-early-close"); await Task.Delay(80);
+            service.ConnectionClosed();
+            await WaitAsync(() => retained.Load(DateTimeOffset.UtcNow).Any(cookie => cookie.Value == "synthetic-pta-early-close"));
+            Check(store.LoadPlatformSessionInfo("pta").State == "saved", "closing the connection keeps a freshly completed PTA login as unverified credentials");
             fixture.RejectLogin = false; fixture.Session = "synthetic-pta-relogin"; BrowserFixtures.SetCookie(browser, fixture.Session); await Task.Delay(80);
             service.ConnectionOpened(); await service.StartAsync(true, afterLogin: true); service.ConnectionClosed();
             Check(store.LoadPlatformSessionInfo("pta").State == "ready" && new MetadataSessionStore(MetadataPlatform.Pta, Path.Combine(runRoot, "pta.bin"), store)
                 .Load(DateTimeOffset.UtcNow).Any(cookie => cookie.Value == fixture.Session), "relogin replaces expired current cookie");
-            foreach (var popup in app.Windows.OfType<CourseSelectionWindow>().ToArray()) popup.Close();
+            dashboard.ShowDashboard();
             var oldCount = store.LoadTasks().Count; var changed = false;
             fixture.BeforeReply = async (request, _) =>
             {
@@ -179,6 +189,8 @@ internal static class Program
             var restoreSelection = store.LoadCourseRecording("pta");
             store.SaveCourseRecording("pta", false, [key], true, restoreSelection.Revision, DateTimeOffset.UtcNow);
             await service.RecordingCoursesChangedAsync();
+            await PtaConnectionRecoveryChecks.VerifyAsync(dashboard, store, runRoot, Check);
+            dashboard.AttachMetadataSync(service);
             Check(await service.SaveForExitAsync(), "exit saves current protected session");
             await LayoutAsync();
             Check(await SessionRestartChecks.VerifyAsync(runRoot) > 0, "fresh-process cookie recovery and expiry verified");
@@ -195,23 +207,25 @@ internal static class Program
     }
     private static async Task VerifyPopupAsync()
     {
-        typeof(TaskDashboardWindow).GetMethod("ShowPlatformManager", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(dashboard, ["pta"]);
-        await Task.Delay(100); var popup = app.Windows.OfType<CourseSelectionWindow>().Single();
+        typeof(TaskDashboardWindow).GetMethod("ShowPlatformManager", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(dashboard, ["pta", false]);
+        await Task.Delay(100); var popup = (CourseSelectionPage)dashboard.ActivePage!;
         Check(popup.Title == "PTA · 平台管理" && ((ComboBox)popup.FindName("RecordingPlatformSelector")).Visibility == Visibility.Collapsed, "single platform management popup");
         Check(((Expander)popup.FindName("PlatformCoursesExpander")).IsExpanded, "course area starts expanded");
+        var originalSize = dashboard.RenderSize;
         ((Button)popup.FindName("PlatformCollapseButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Task.Delay(50);
-        Check(!((Expander)popup.FindName("PlatformCoursesExpander")).IsExpanded && popup.Height < 650, "course area collapses to compact popup"); Capture(popup, "pta-popup-collapsed.png");
+        Check(!((Expander)popup.FindName("PlatformCoursesExpander")).IsExpanded && dashboard.RenderSize == originalSize
+            && app.Windows.Count == 1, "course area collapses inside the unchanged main window"); Capture(dashboard, "pta-page-collapsed.png");
         ((Button)popup.FindName("PlatformCollapseButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Task.Delay(50);
-        Check(((Expander)popup.FindName("PlatformCoursesExpander")).IsExpanded, "course area expands again"); Capture(popup, "pta-popup-expanded.png");
+        Check(((Expander)popup.FindName("PlatformCoursesExpander")).IsExpanded, "course area expands again"); Capture(dashboard, "pta-page-expanded.png");
         Check(!Visuals<TextBlock>(popup).Any(text => text.Text.Contains("???", StringComparison.Ordinal) || text.Text.Contains('\uFFFD')), "PTA popup Chinese contains no replacement characters");
         popup.Close();
     }
     private static async Task VerifyLoginWindowAsync()
     {
-        var window = new MetadataConnectionWindow(service, () => { }) { Owner = dashboard };
-        var loginBrowser = typeof(MetadataConnectionWindow).GetField("browser", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window) as WebView2;
+        var window = new MetadataConnectionPage(service, () => { });
+        var loginBrowser = typeof(MetadataConnectionPage).GetField("browser", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window) as WebView2;
         var blockedBefore = service.LoginDiagnostics.Snapshot().BlockedNavigations;
-        BrowserFixtures.BlockNetwork(loginBrowser!, includeCaptcha: true); window.Show();
+        BrowserFixtures.BlockNetwork(loginBrowser!, includeCaptcha: true); dashboard.ShowWorkspacePage("fixture-connection:" + Guid.NewGuid().ToString("N"), window);
         await WaitAsync(() => loginBrowser!.CoreWebView2 is not null);
         var captchaReady = false;
         for (var attempt = 0; attempt < 100; attempt++)
@@ -222,7 +236,7 @@ internal static class Program
         }
         Check(captchaReady && service.LoginDiagnostics.Snapshot().BlockedNavigations == blockedBefore,
             "official verifier iframe completes in actual login browser using local responses");
-        Check(window.Title.Contains("PTA", StringComparison.Ordinal) && Visuals<TextBlock>(window).Any(text => text.Text.Contains("下方 PTA 官网", StringComparison.Ordinal)), "PTA-specific login instruction");
+        Check(window.Title.Contains("PTA", StringComparison.Ordinal) && Visuals<TextBlock>(window).Any(text => text.Text.Contains("右侧 PTA 官网", StringComparison.Ordinal)), "PTA-specific login instruction");
         Check(!Visuals<TextBlock>(window).Any(text => text.Text.Contains("旧版 U 校园", StringComparison.Ordinal) || text.Text.Contains("???", StringComparison.Ordinal)), "login page has correct platform and Chinese text");
         loginBrowser!.CoreWebView2.Navigate("https://turing.captcha.qcloud.com/template/drag_ele.html?aid=synthetic-captcha");
         await WaitAsync(() => service.LoginDiagnostics.Snapshot().BlockedNavigations > blockedBefore);
@@ -232,6 +246,8 @@ internal static class Program
     }
     private static async Task VerifyTaskActionsAsync()
     {
+        // A StaysOpen=False popup closes when its window deactivates; background harness runs activate first.
+        if (!dashboard.IsActive) { dashboard.Topmost = true; dashboard.Activate(); await Task.Delay(60); dashboard.Topmost = false; }
         var table = (DataGrid)dashboard.FindName("TaskTable");
         var row = table.Items.Cast<TaskDashboardWindow.TaskDisplayRow>().Single(item => item.Task.Source == TaskSource.Manual);
         table.SelectedItem = row;

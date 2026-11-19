@@ -1,4 +1,4 @@
-﻿param([string]$Serial = 'emulator-5560', [string]$ExpectedAvd = 'aggregator-install-test', [string]$Version = '1.1.2')
+﻿param([string]$Serial = 'emulator-5560', [string]$ExpectedAvd = 'aggregator-install-test', [string]$Version = '1.1.2', [string]$ArtifactDirectory)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
@@ -8,8 +8,9 @@ $env:ANDROID_USER_HOME = Join-Path $taskRoot '.local\android-build-home'
 $taskAdb = Join-Path $taskSdk 'platform-tools\adb.exe'
 $taskPackage = 'cn.yuki.learningaggregator'
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid package version.' }
-$taskApk = Join-Path $taskRoot ('artifacts\android\聚合平台-' + $Version + '-android.apk')
-$taskEvidence = Join-Path $taskRoot 'artifacts\android\verification'
+$taskArtifacts = if ($ArtifactDirectory) { [IO.Path]::GetFullPath($ArtifactDirectory) } else { Join-Path $taskRoot 'artifacts\android' }
+$taskApk = Join-Path $taskArtifacts ('聚合平台-' + $Version + '-android.apk')
+$taskEvidence = Join-Path $taskArtifacts 'verification'
 $taskRun = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
 $taskProgressRoot = Join-Path $taskRoot '.local\android-installation-runs'
 New-Item -ItemType Directory -Force -Path $taskProgressRoot | Out-Null
@@ -83,6 +84,27 @@ try {
     $null = Invoke-TaskAdb @('shell','am','start','-W','-n',$taskComponent,'--ez','synthetic_self_test','true')
     $taskSynthetic = Read-TaskReport 'synthetic-checks'
     if ($taskSynthetic.Checks -ne 47 -or $taskSynthetic.Tasks -ne 2) { throw 'Native synthetic checks are incomplete.' }
+    if ([version]$Version -ge [version]'1.1.3') {
+        $taskImprovementRemote = '/data/user/0/' + $taskPackage + '/files/synthetic-installation-test/improvement-checks.json'
+        $taskImprovementRaw = Invoke-TaskAdb @('shell','cat',$taskImprovementRemote)
+        $taskImprovements = $taskImprovementRaw | ConvertFrom-Json
+        if ($taskImprovements.Outcome -ne 'passed' -or $taskImprovements.Checks -lt 74 -or $taskImprovements.OfficialNetworkAccessed -or $taskImprovements.ProductionDataAccessed) { throw 'Native mobile improvement checks are incomplete.' }
+        [IO.File]::WriteAllText((Join-Path $taskRunRoot 'improvement-checks.json'),$taskImprovementRaw,[Text.UTF8Encoding]::new($false))
+    }
+    if ([version]$Version -ge [version]'1.1.4') {
+        $taskLoginRemote = '/data/user/0/' + $taskPackage + '/files/synthetic-installation-test/login-recovery-checks.json'
+        $taskLoginRaw = Invoke-TaskAdb @('shell','cat',$taskLoginRemote)
+        $taskLoginChecks = $taskLoginRaw | ConvertFrom-Json
+        if ($taskLoginChecks.Outcome -ne 'passed' -or $taskLoginChecks.Checks -lt 61 -or $taskLoginChecks.OfficialNetworkAccessed -or $taskLoginChecks.ProductionDataAccessed) { throw 'Native login recovery checks are incomplete.' }
+        [IO.File]::WriteAllText((Join-Path $taskRunRoot 'login-recovery-checks.json'),$taskLoginRaw,[Text.UTF8Encoding]::new($false))
+    }
+    if ([version]$Version -ge [version]'1.1.5') {
+        $taskConnectionRemote = '/data/user/0/' + $taskPackage + '/files/synthetic-installation-test/connection-checks.json'
+        $taskConnectionRaw = Invoke-TaskAdb @('shell','cat',$taskConnectionRemote)
+        $taskConnectionChecks = $taskConnectionRaw | ConvertFrom-Json
+        if ($taskConnectionChecks.Outcome -ne 'passed' -or $taskConnectionChecks.Checks -lt 39 -or $taskConnectionChecks.OfficialNetworkAccessed -or $taskConnectionChecks.ProductionDataAccessed) { throw 'Native connection feedback checks are incomplete.' }
+        [IO.File]::WriteAllText((Join-Path $taskRunRoot 'connection-checks.json'),$taskConnectionRaw,[Text.UTF8Encoding]::new($false))
+    }
     $null = Invoke-TaskAdb @('shell','am','force-stop',$taskPackage)
     $null = Invoke-TaskAdb @('shell','rm','-f',($taskPrevious + '/self-test.json'))
     $null = Invoke-TaskAdb @('shell','am','start','-W','-n',$taskComponent,'--ez','synthetic_self_test','true','--ez','synthetic_restart_check','true')
@@ -125,9 +147,12 @@ try {
     try { $taskHash = [BitConverter]::ToString($taskHasher.ComputeHash($taskStream)).Replace('-','').ToLowerInvariant() }
     finally { $taskStream.Dispose(); $taskHasher.Dispose() }
     $taskResult = @{schema=1;outcome='passed';serial=$Serial;avd=$ExpectedAvd;api=35;apkSha256=$taskHash;nativeSyntheticChecks=$taskSynthetic.Checks;restartChecks=$taskRestart.Checks;upgradeChecks=$taskUpgrade.Checks;tasks=2;installation=$true;upgradePreservesData=$true;keystore=$true;dashboardStartup=$true;systemInsets=$true;coldReminderReceiver=$true;bootReceiver=$true;chineseAccessibilityText=$true;officialNetworkAccessed=$false;productionDataAccessed=$false;realAccountAcceptance='pending';visualAcceptance='pending';evidence=$taskRun;finishedAtUtc=[DateTimeOffset]::UtcNow.ToString('o')}
+    if ($taskImprovements) { $taskResult.improvementChecks = $taskImprovements.Checks }
+    if ($taskLoginChecks) { $taskResult.loginRecoveryChecks = $taskLoginChecks.Checks }
+    if ($taskConnectionChecks) { $taskResult.connectionFeedbackChecks = $taskConnectionChecks.Checks }
     [IO.File]::WriteAllText((Join-Path $taskRunRoot 'installation-checks.json'),($taskResult | ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
     Copy-Item -LiteralPath (Join-Path $taskRunRoot 'installation-checks.json') -Destination (Join-Path $taskEvidence 'installation-checks.json') -Force
-    $taskManifestPath = Join-Path $taskRoot 'artifacts\android\package.json'
+    $taskManifestPath = Join-Path $taskArtifacts 'package.json'
     if (Test-Path -LiteralPath $taskManifestPath) {
         $taskManifest = Get-Content -LiteralPath $taskManifestPath -Encoding UTF8 -Raw | ConvertFrom-Json
         $taskManifestApk = [IO.Path]::GetFullPath($taskManifest.package)

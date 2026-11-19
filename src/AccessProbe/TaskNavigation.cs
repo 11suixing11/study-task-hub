@@ -133,7 +133,9 @@ public sealed class TaskNavigationService
             cancellation.ThrowIfCancellationRequested();
             var latest = await Task.Run(() => store.Get(taskId), cancellation);
             if (latest is null) throw new TaskValidationException("TASK004", "任务已不存在，未打开作业。");
-            if (latest.Link != task.Link || latest.Overrides.HasFlag(TaskOverrides.Link) != task.Overrides.HasFlag(TaskOverrides.Link))
+            if (latest.Link != task.Link || latest.PlatformId != task.PlatformId || latest.Source != task.Source || latest.SourceKey != task.SourceKey
+                || latest.RecordingCourseKey != task.RecordingCourseKey || latest.CollectedNavigationKey != task.CollectedNavigationKey
+                || latest.Overrides.HasFlag(TaskOverrides.Link) != task.Overrides.HasFlag(TaskOverrides.Link))
                 continue;
             cancellation.ThrowIfCancellationRequested();
             openExternal(result.Address!);

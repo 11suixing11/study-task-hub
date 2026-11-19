@@ -44,8 +44,14 @@ public static class MoocParser
             { issues.Add("course_identity_unrecognized"); continue; }
             if (mode is not (0 or 10 or 15 or 20)) { issues.Add("course_mode_unrecognized"); continue; }
             if (!MoocPlatform.IsSchool(shortName)) issues.Add("course_route_unrecognized");
-            var course = new MoocCourse(name, cid, tid, shortName, mode.Value);
-            if (!courses.TryAdd(cid + ":" + tid, course)) duplicates++;
+            var course = new MoocCourse(name, cid, tid, shortName, mode.Value)
+                { EndUtc = CourseEnd(Get(term, "endTime")) };
+            var key = cid + ":" + tid;
+            if (!courses.TryAdd(key, course))
+            {
+                duplicates++;
+                if (courses[key].EndUtc != course.EndUtc) courses[key] = courses[key] with { EndUtc = null };
+            }
         }
         var paging = Has(result, "query") ? Get(result, "query") : Get(result, "pagination");
         if (paging.ValueKind != JsonValueKind.Object) paging = Get(document.RootElement, "pagination");
@@ -291,6 +297,20 @@ public static class MoocParser
         {
             var result = timestamp >= 100_000_000_000 ? DateTimeOffset.FromUnixTimeMilliseconds(timestamp) : DateTimeOffset.FromUnixTimeSeconds(timestamp);
             return result.Year is >= 2000 and <= 2100 ? result : null;
+        }
+        catch (ArgumentOutOfRangeException) { return null; }
+    }
+
+    private static DateTimeOffset? CourseEnd(JsonElement value)
+    {
+        // termPanel.endTime is the official course-term timestamp, expressed in milliseconds.
+        // Task/exam dates, learned counts and course names are not course-expiry evidence.
+        if (!long.TryParse(Text(value), NumberStyles.Integer, CultureInfo.InvariantCulture, out var milliseconds)
+            || milliseconds <= 0) return null;
+        try
+        {
+            var result = DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
+            return result.UtcDateTime.Year is >= 2000 and <= 2100 ? result : null;
         }
         catch (ArgumentOutOfRangeException) { return null; }
     }

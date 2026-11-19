@@ -46,17 +46,14 @@ public partial class TaskDashboardWindow : Window
                 : sync is null ? Task.FromResult(new TaskLinkResolution("session_unavailable", "none")) : sync.ResolveTaskAddressAsync(address, token),
             openExternal ?? (address => Process.Start(new ProcessStartInfo(address) { UseShellExecute = true })));
         InitializeComponent();
+        detailsVisibleBeforePage = true;
+        ConfigureWorkspaceNavigation();
         Width = Math.Max(MinWidth, Math.Min(Width, SystemParameters.WorkArea.Width));
         Height = Math.Max(MinHeight, Math.Min(Height, SystemParameters.WorkArea.Height));
         ConfigureShortcuts();
         SizeChanged += (_, _) => UpdateCompactLayout();
         Loaded += (_, _) => UpdateCompactLayout();
-        StateFilter.ItemsSource = new[] { "待办（含待核对）", "全部状态", "未完成", "已完成", "已忽略", "被打回", "已逾期", "24 小时内到期", "待核对" };
-        StateFilter.SelectedIndex = 1;
-        PlatformFilter.ItemsSource = new[] { "全部平台" }.Concat(PlatformCatalog.Sites.Select(site => site.Name)).ToArray();
-        PlatformFilter.SelectedIndex = 0;
-        SortFilter.ItemsSource = new[] { "优先级排序", "截止时间排序", "最近更新" };
-        SortFilter.SelectedIndex = 0;
+        ConfigureTaskFilters();
         store.Changed += StoreChanged;
         refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         refreshTimer.Tick += (_, _) => RefreshTasks(); refreshTimer.Start();
@@ -69,21 +66,24 @@ public partial class TaskDashboardWindow : Window
     private void UpdateCompactLayout()
     {
         var compact = ActualHeight < 880;
-        PlatformSyncScroller.MaxHeight = compact ? 72 : 96;
+        var shortWindow = ActualHeight < 760;
+        PlatformSyncScroller.MaxHeight = shortWindow ? 36 : compact ? 72 : 96;
+        OnboardingBanner.Padding = shortWindow ? new Thickness(10, 4, 10, 4) : new Thickness(12, 8, 12, 8);
+        OnboardingBanner.Margin = new Thickness(0, 0, 0, shortWindow ? 6 : 10);
         SidebarColumn.Width = new GridLength(SidebarPanel.Visibility == Visibility.Visible ? 220 : 0);
-        DetailsColumn.Width = new GridLength(TaskDetailPanel.Visibility != Visibility.Visible ? 0 : ActualWidth < 1180 ? 256 : ActualWidth < 1280 ? 280 : 300);
+        DetailsColumn.Width = new GridLength(activeRoute is not null || TaskDetailPanel.Visibility != Visibility.Visible ? 0 : ActualWidth < 1180 ? 256 : ActualWidth < 1280 ? 280 : 300);
         TaskWorkspacePanel.Margin = compact ? new Thickness(18, 14, 18, 14) : new Thickness(22, 18, 22, 16);
-        TaskHeadingRow.Margin = new Thickness(0, 0, 0, compact ? 10 : 12);
+        TaskHeadingRow.Margin = new Thickness(0, 0, 0, shortWindow ? 6 : compact ? 10 : 12);
         TaskMetricsRow.Margin = new Thickness(0, 0, 0, compact ? 18 : 24);
         PlatformSyncExpander.Margin = new Thickness(0, 0, 0, 8);
-        TaskSearchRow.Margin = new Thickness(0, 0, 0, 10);
+        TaskSearchRow.Margin = new Thickness(0, 0, 0, shortWindow ? 6 : 10);
         TaskFiltersRow.Margin = new Thickness(0, 0, 0, 8);
-        FilterCountText.Margin = new Thickness(0, 0, 0, 10);
+        FilterCountText.Margin = new Thickness(0, 0, 0, shortWindow ? 6 : 10);
     }
 
     private void ConfigureShortcuts()
     {
-        AddShortcut(System.Windows.Input.Key.F, System.Windows.Input.ModifierKeys.Control, () => { SearchBox.Focus(); SearchBox.SelectAll(); });
+        AddShortcut(System.Windows.Input.Key.F, System.Windows.Input.ModifierKeys.Control, () => { SearchBox.Focus(); SearchBox.SelectAll(); }, () => activeRoute is null);
         AddShortcut(System.Windows.Input.Key.N, System.Windows.Input.ModifierKeys.Control, () => AddTask(AddTaskButton, new RoutedEventArgs()));
         AddShortcut(System.Windows.Input.Key.F5, System.Windows.Input.ModifierKeys.None, () => SyncNow(SyncButton, new RoutedEventArgs()), () => SyncButton.IsEnabled);
         AddShortcut(System.Windows.Input.Key.L, System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift,
@@ -112,9 +112,11 @@ public partial class TaskDashboardWindow : Window
 
     private void ToggleDetails(object sender, RoutedEventArgs args)
     {
+        if (activeRoute is not null) return;
         TaskActionsPopup.IsOpen = false;
         if (TaskDetailPanel.IsKeyboardFocusWithin) DetailsToggleButton.Focus();
         TaskDetailPanel.Visibility = TaskDetailPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        detailsVisibleBeforePage = TaskDetailPanel.Visibility == Visibility.Visible;
         var label = TaskDetailPanel.Visibility == Visibility.Visible ? "隐藏详情" : "显示详情";
         DetailsToggleButton.ToolTip = label + " (Ctrl+Shift+I)";
         System.Windows.Automation.AutomationProperties.SetName(DetailsToggleButton, label);
@@ -160,7 +162,8 @@ public partial class TaskDashboardWindow : Window
             UpdateSyncControls();
         };
         service.Completed += summary => { latestSync = summary; RefreshTasks(); };
-        service.CourseSelectionRequired += () => PromptCourseSelection("chaoxing");
+        service.CourseSelectionRequested += () => ShowPlatformManager("chaoxing");
+        service.ConnectionChanged += ObserveConnectionReport;
     }
 
     public void AttachRainSync(RainSyncService service)
@@ -181,7 +184,8 @@ public partial class TaskDashboardWindow : Window
             UpdateSyncControls();
         };
         service.Completed += _ => RefreshTasks();
-        service.CourseSelectionRequired += () => PromptCourseSelection(service.Platform.Id);
+        service.CourseSelectionRequested += () => ShowPlatformManager(service.Platform.Id);
+        service.ConnectionChanged += ObserveConnectionReport;
     }
 
     private void UpdateSyncControls()
@@ -213,18 +217,21 @@ public partial class TaskDashboardWindow : Window
             UpdateSyncControls();
         };
         service.Completed += _ => RefreshTasks();
-        service.CourseSelectionRequired += () => PromptCourseSelection("mooc");
+        service.CourseSelectionRequested += () => ShowPlatformManager("mooc");
+        service.ConnectionChanged += ObserveConnectionReport;
     }
 
     public void ShowDashboard()
     {
-        Show(); WindowState = WindowState.Normal; Activate(); ShowTasks(1);
+        ShowTaskWorkspace();
+        Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); ShowTasks(1);
     }
 
     public void CloseForExit() { if (permitClose) return; permitClose = true; Close(); }
 
     private void OnClosing(object? sender, CancelEventArgs args)
     {
+        if (!permitClose && workspaceExiting) { args.Cancel = true; activeRoute?.Page.Dispose(); return; }
         if (permitClose || reminders is null) return;
         args.Cancel = true; Hide();
     }
@@ -271,8 +278,9 @@ public partial class TaskDashboardWindow : Window
                 AggregationSummaryText.Text = string.Join(" · ", sources.Select(platformId =>
                     $"{PlatformCatalog.Name(platformId)} {tasks.Count(task => task.PlatformId == platformId)} 条"))
                     + (retainedCourseTaskCount > 0 ? $" · 未选课程 {retainedCourseTaskCount} 条已隐藏并保留" : "");
+                foreach (var site in DesktopAccessPlatforms) UpdatePlatformCard(site.Id);
+                UpdateOnboardingSummary();
                 ApplyFilters();
-                foreach (var site in PlatformCatalog.Sites.Where(site => CourseRecordingRules.SupportsAutomatic(site.Id))) UpdatePlatformCard(site.Id);
                 RuntimeText.Text = reminders is null ? "数据库已加载 · 此窗口未运行提醒服务。" : snapshot.Settings.NotificationsEnabled
                     ? "数据库已加载 · 提醒运行中。关闭窗口后保留托盘；退出程序后停止，重启会检查待发提醒。"
                     : "数据库已加载 · 通知已关闭。任务仍会保存，可在设置中开启提醒。";
@@ -285,36 +293,30 @@ public partial class TaskDashboardWindow : Window
         finally { refreshingTasks = false; }
     }
 
-    private void FilterChanged(object sender, RoutedEventArgs args) { if (ready) ApplyFilters(); }
+    private void FilterChanged(object sender, RoutedEventArgs args)
+    {
+        if (!ready || updatingFilterCourses) return;
+        NormalizeTaskFilterShortcut(sender);
+        if (sender == TimeFilter || sender == CourseFilter) additionalTaskFiltersOpen = true;
+        ApplyFilters();
+    }
 
     private void ApplyFilters()
     {
         if (!ready) return;
         var selectedId = (TaskTable.SelectedItem as TaskDisplayRow)?.Task.Id;
         var now = DateTimeOffset.UtcNow;
-        IEnumerable<TaskItem> filtered = tasks;
-        filtered = StateFilter.SelectedIndex switch
-        {
-            0 => filtered.Where(TaskRules.IsActive), 2 => filtered.Where(task => task.State == TaskState.Pending),
-            3 => filtered.Where(task => task.State == TaskState.Completed), 4 => filtered.Where(task => task.State == TaskState.Ignored),
-            5 => filtered.Where(task => task.State == TaskState.Returned),
-            6 => filtered.Where(task => TaskRules.IsActive(task) && TaskRules.HasUsableDeadline(task) && task.DeadlineUtc < now),
-            7 => filtered.Where(task => TaskRules.IsActive(task) && TaskRules.HasUsableDeadline(task) && task.DeadlineUtc >= now && task.DeadlineUtc <= now.AddHours(24)),
-            8 => filtered.Where(task => task.State == TaskState.NeedsReview),
-            _ => filtered
-        };
-        if (PlatformFilter.SelectedIndex > 0) filtered = filtered.Where(task => task.PlatformId == PlatformCatalog.Sites[PlatformFilter.SelectedIndex - 1].Id);
+        RefreshFilterCourses();
+        var options = CurrentTaskFilters();
+        AdditionalTaskFiltersPanel.Visibility = additionalTaskFiltersOpen ? Visibility.Visible : Visibility.Collapsed;
+        MoreTaskFiltersButton.Content = AdditionalTaskFiltersPanel.Visibility == Visibility.Visible ? "收起" : "更多";
+        TaskDateRangePanel.Visibility = options.Time == TaskFilterTime.Custom ? Visibility.Visible : Visibility.Collapsed;
+        var filterError = options.Time == TaskFilterTime.Custom && (invalidFilterFromDate || invalidFilterToDate)
+            ? "日期格式无效，请通过日历选择日期或清空后重填。" : TaskFiltering.Validate(options);
+        TaskFilterError.Text = filterError ?? "";
+        TaskFilterError.Visibility = filterError is null ? Visibility.Collapsed : Visibility.Visible;
+        var filtered = filterError is null ? TaskFiltering.Apply(tasks, options, now) : [];
         var search = SearchBox.Text.Trim();
-        if (search.Length > 0)
-            filtered = filtered.Where(task => new[] { task.Title, task.CourseName, PlatformCatalog.Name(task.PlatformId), task.Notes }
-                .Any(text => text.Contains(search, StringComparison.OrdinalIgnoreCase)));
-        filtered = SortFilter.SelectedIndex switch
-        {
-            1 => filtered.OrderBy(task => task.DeadlineUtc ?? DateTimeOffset.MaxValue).ThenBy(task => task.Title),
-            2 => filtered.OrderByDescending(task => task.UpdatedAtUtc).ThenBy(task => task.Id),
-            _ => filtered.OrderBy(task => TaskRules.IsActive(task) ? 0 : 1).ThenBy(task => TaskRules.Priority(task, now))
-                .ThenBy(task => task.DeadlineUtc ?? DateTimeOffset.MaxValue).ThenBy(task => task.Title)
-        };
         var rows = filtered.Select(task => new TaskDisplayRow(task, now)).ToArray();
         var selectedPlatform = PlatformFilter.SelectedIndex > 0 ? PlatformCatalog.Sites[PlatformFilter.SelectedIndex - 1] : null;
         var platformTasks = selectedPlatform is null ? tasks : tasks.Where(task => task.PlatformId == selectedPlatform.Id).ToArray();
@@ -322,6 +324,8 @@ public partial class TaskDashboardWindow : Window
             - rows.Count(row => row.Task.State == TaskState.Completed);
         var hiddenOtherPlatforms = tasks.Count - platformTasks.Count;
         FilterCountText.Text = $"当前显示 {rows.Length}/{tasks.Count} 条 · {selectedPlatform?.Name ?? "全部平台"} · {StateFilter.SelectedItem}"
+            + (TimeFilter.SelectedIndex > 0 ? " · " + TimeFilter.SelectedItem : "")
+            + (CourseFilter.SelectedIndex > 0 ? " · " + (CourseFilter.SelectedItem as TaskCourseFilterOption)?.Label : "")
             + (search.Length > 0 ? " · 搜索已启用" : "")
             + (hiddenOtherPlatforms > 0 ? $"；有 {hiddenOtherPlatforms} 条其他平台任务被当前筛选隐藏。" : "")
             + (hiddenCompleted > 0 ? $"；有 {hiddenCompleted} 条已完成任务被当前筛选隐藏。" : "")
@@ -331,8 +335,10 @@ public partial class TaskDashboardWindow : Window
         UpdateTaskNavigation();
         TaskTable.SelectedItem = rows.FirstOrDefault(row => row.Task.Id == selectedId);
         if (TaskTable.SelectedItem is null && rows.Length > 0) TaskTable.SelectedIndex = 0;
-        EmptyText.Text = tasks.Count == 0 && retainedCourseTaskCount > 0 ? "当前没有记录中的任务。未选课程的历史任务已保留，可在“选择记录课程”重新勾选恢复。"
-            : tasks.Count == 0 ? "清单暂未记录任务。连接平台后可同步已覆盖的任务；覆盖范围见同步详情，也可新增任务。"
+        var emptyAccessTitle = EmptyAccessTitle();
+        EmptyText.Text = filterError is not null ? filterError + " 调整日期或点击“查看全部任务”清除筛选。"
+            : tasks.Count == 0 && retainedCourseTaskCount > 0 ? "当前没有记录中的任务。未选课程的历史任务已保留，可在“选择记录课程”重新勾选恢复。"
+            : tasks.Count == 0 ? EmptyAccessDescription(emptyAccessTitle)
             : platformTasks.Count == 0 && selectedPlatform is not null && retainedCourseTasksByPlatform.GetValueOrDefault(selectedPlatform.Id) > 0
                 ? selectedPlatform.Name + "未选课程的历史任务已隐藏并保留，可在“选择记录课程”重新勾选恢复。"
             : platformTasks.Count == 0 && selectedPlatform is not null ? selectedPlatform.Name + "尚未采集到任务，请查看该平台同步结果。"
@@ -343,9 +349,9 @@ public partial class TaskDashboardWindow : Window
         var missingPlatformTasks = platformTasks.Count == 0 && selectedPlatform is not null;
         var coursesHidden = tasks.Count == 0 && retainedCourseTaskCount > 0
             || missingPlatformTasks && retainedCourseTasksByPlatform.GetValueOrDefault(selectedPlatform!.Id) > 0;
-        var canManageCourses = tasks.Count == 0 || missingPlatformTasks;
-        EmptyStateTitle.Text = coursesHidden ? "历史任务已保留"
-            : tasks.Count == 0 ? "从一门课程开始"
+        var canManageCourses = coursesHidden || missingPlatformTasks || tasks.Count == 0 && emptyAccessTitle == "暂时没有任务";
+        EmptyStateTitle.Text = filterError is not null ? "请核对筛选日期" : coursesHidden ? "历史任务已保留"
+            : tasks.Count == 0 ? emptyAccessTitle
             : missingPlatformTasks ? "暂未采集到任务"
             : search.Length > 0 ? "没有匹配的任务" : "当前分类没有任务";
         EmptyStateIcon.Key = coursesHidden ? "courses" : missingPlatformTasks ? selectedPlatform!.Id
@@ -353,7 +359,7 @@ public partial class TaskDashboardWindow : Window
         EmptyStateIcon.Tile = EmptyStateIcon.Key != "search" && EmptyStateIcon.Key != "courses";
         EmptyAddTaskButton.Visibility = canManageCourses && !coursesHidden ? Visibility.Visible : Visibility.Collapsed;
         EmptyCoursesButton.Visibility = canManageCourses ? Visibility.Visible : Visibility.Collapsed;
-        EmptyResetFiltersButton.Visibility = canManageCourses ? Visibility.Collapsed : Visibility.Visible;
+        EmptyResetFiltersButton.Visibility = filterError is not null || tasks.Count > 0 && !canManageCourses ? Visibility.Visible : Visibility.Collapsed;
         UpdateSelection();
     }
 
@@ -444,6 +450,7 @@ public partial class TaskDashboardWindow : Window
     private void ViewAllTasks(object sender, RoutedEventArgs args) => ShowTasks(1);
     private void ShowTasks(int stateIndex)
     {
+        ShowTaskWorkspace();
         // Change filters together so the selected task survives intermediate empty views.
         var wasReady = ready;
         ready = false;
@@ -452,6 +459,7 @@ public partial class TaskDashboardWindow : Window
             SearchBox.Clear();
             StateFilter.SelectedIndex = stateIndex;
             PlatformFilter.SelectedIndex = 0;
+            ResetAdditionalTaskFilters();
         }
         finally { ready = wasReady; }
         ApplyFilters();
@@ -487,6 +495,10 @@ public partial class TaskDashboardWindow : Window
         if ((latestSync ?? settings.LastSyncSummary) is { } summary)
         {
             stack.Children.Add(new TextBlock { Text = $"已读取 {summary.CoursesRead}/{summary.SelectedCourses ?? summary.Courses} 门已选课程（发现 {summary.Courses} 门），共 {summary.Tasks} 条任务；新增 {summary.Added}、更新 {summary.Updated}，读取时间原文 {summary.DetailsSaved} 条。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) });
+            if (summary.ExamsAdded + summary.ExamsUpdated + summary.ExamsUnresolved > 0)
+                stack.Children.Add(new TextBlock { Text = $"考试列表：新增 {summary.ExamsAdded} 条、更新 {summary.ExamsUpdated} 条"
+                    + (summary.ExamsUnresolved > 0 ? $"，{summary.ExamsUnresolved} 条名称或入口待核对。" : "。"),
+                    TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
             if (summary.DetailsUnavailable > 0)
                 stack.Children.Add(new TextBlock { Text = $"本轮 {summary.DetailsUnavailable} 条详情显示提交提示，平台未提供作答时间；已保留列表信息。",
                     TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 0, 0, 8) });
@@ -534,7 +546,7 @@ public partial class TaskDashboardWindow : Window
         AddXuetangSyncDetails(stack);
         AddMetadataSyncDetails(stack);
         stack.Children.Add(new TextBlock { Text = "课程列表刷新", FontSize = 21, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 22, 0, 10) });
-        foreach (var site in PlatformCatalog.Sites.Where(site => CourseRecordingRules.SupportsAutomatic(site.Id)))
+        foreach (var site in PlatformCatalog.Sites.Where(site => CourseRecordingRules.SupportsDesktopAutomatic(site.Id)))
         {
             var recording = store.LoadCourseRecording(site.Id);
             var warning = recording.LastCatalogRefresh is { Outcome: not "completed" };
@@ -544,23 +556,32 @@ public partial class TaskDashboardWindow : Window
                 Foreground = warning ? Brushes.Firebrick : Brushes.DimGray, Margin = new Thickness(0, 0, 0, 8)
             });
         }
-        new Window { Owner = this, Title = "各平台同步详情", Width = 820, Height = 680, Content = new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } }.Show();
+        ShowWorkspacePage("sync-details:" + Guid.NewGuid().ToString("N"), new WorkspaceContentPage("各平台同步详情",
+            new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }));
     }
     private void ExitApplication(object sender, RoutedEventArgs args) => exit();
 
     private void AddTask(object sender, RoutedEventArgs args)
     {
-        var editor = new TaskEditorWindow { Owner = this };
-        if (editor.ShowDialog() != true || editor.Result is null) return;
-        RunAction(() => { store.Create(editor.Result, DateTimeOffset.UtcNow); ShowSuccess("任务已保存，重启后仍可查看。"); });
+        var editor = new TaskEditorPage();
+        editor.Saved += draft => RunAction(() =>
+        {
+            store.Create(draft, DateTimeOffset.UtcNow);
+            NavigateBack(); ShowSuccess("任务已保存，重启后仍可查看。");
+        });
+        ShowWorkspacePage("task-editor:" + Guid.NewGuid().ToString("N"), editor);
     }
 
     private void EditTask(object sender, RoutedEventArgs args)
     {
         if (TaskTable.SelectedItem is not TaskDisplayRow row) return;
-        var editor = new TaskEditorWindow(row.Task) { Owner = this };
-        if (editor.ShowDialog() != true || editor.Result is null) return;
-        RunAction(() => { store.Edit(row.Task.Id, row.Task.Revision, editor.Result, DateTimeOffset.UtcNow); ShowSuccess("任务已更新，提醒计划已重新核对。"); });
+        var editor = new TaskEditorPage(row.Task);
+        editor.Saved += draft => RunAction(() =>
+        {
+            store.Edit(row.Task.Id, row.Task.Revision, draft, DateTimeOffset.UtcNow);
+            NavigateBack(); ShowSuccess("任务已更新，提醒计划已重新核对。");
+        });
+        ShowWorkspacePage("task-editor:" + Guid.NewGuid().ToString("N"), editor);
     }
 
     private async void GoTask(object sender, RoutedEventArgs args)
@@ -597,11 +618,10 @@ public partial class TaskDashboardWindow : Window
     private void IgnoreTask(object sender, RoutedEventArgs args) => SetState(TaskState.Ignored);
     private void RestoreTask(object sender, RoutedEventArgs args) => SetState(TaskState.Pending);
 
-    private void DeleteTask(object sender, RoutedEventArgs args)
+    private async void DeleteTask(object sender, RoutedEventArgs args)
     {
         if (TaskTable.SelectedItem is not TaskDisplayRow row) return;
-        if (MessageBox.Show(this, "删除“" + row.Task.Title + "”？删除后无法恢复，相关提醒也会取消。",
-            "删除任务", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        if (!await ConfirmAsync("删除任务", "删除“" + row.Task.Title + "”？删除后无法恢复，相关提醒也会取消。", "删除")) return;
         RunAction(() => { store.Delete(row.Task.Id, row.Task.Revision); ShowSuccess("任务已删除。"); });
     }
 
@@ -624,7 +644,6 @@ public partial class TaskDashboardWindow : Window
     {
         try
         {
-            var window = new Window { Owner = this, Title = "设置与平台状态", Width = 820, Height = 720, MinWidth = 660, WindowStartupLocation = WindowStartupLocation.CenterOwner };
             var stack = new StackPanel { Margin = new Thickness(24) };
             stack.Children.Add(new TextBlock { Text = "设置与平台", FontSize = 25, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 16) });
             var autoSync = new CheckBox { Content = "启动时及运行期间自动同步已连接平台（每 30 分钟）", IsChecked = store.LoadSettings().AutomaticSyncEnabled, Margin = new Thickness(0, 0, 0, 12) };
@@ -657,8 +676,8 @@ public partial class TaskDashboardWindow : Window
             var readme = new Button { Content = "打开使用与故障说明", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 16, 0, 0) };
             readme.Click += (_, _) => RunAction(() => Process.Start(new ProcessStartInfo(ApplicationPaths.HelpPath(projectRoot)) { UseShellExecute = true }));
             stack.Children.Add(readme);
-            window.Content = new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-            window.Show();
+            ShowWorkspacePage("settings:" + Guid.NewGuid().ToString("N"), new WorkspaceContentPage("设置与平台状态",
+                new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }));
         }
         catch { ShowError("DB001", "无法读取设置，请检查任务库。"); }
     }
@@ -677,7 +696,7 @@ public partial class TaskDashboardWindow : Window
             var grid = new DataGrid { ItemsSource = rows, AutoGenerateColumns = false, IsReadOnly = true, CanUserAddRows = false, Margin = new Thickness(16) };
             foreach (var (header, property) in new[] { ("任务", "Task"), ("提醒", "Kind"), ("计划时间", "Due"), ("状态", "State"), ("错误码", "Error"), ("尝试", "Attempts") })
                 grid.Columns.Add(new DataGridTextColumn { Header = header, Binding = new System.Windows.Data.Binding(property), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-            new Window { Owner = this, Title = "提醒记录 · 系统请求结果", Content = grid, Width = 980, Height = 440 }.Show();
+            ShowWorkspacePage("reminder-history:" + Guid.NewGuid().ToString("N"), new WorkspaceContentPage("提醒记录", grid));
         });
     }
 
@@ -702,7 +721,7 @@ public partial class TaskDashboardWindow : Window
             : Task.DeadlineEvidence == DeadlineEvidence.RemainingTime && !Task.Overrides.HasFlag(TaskOverrides.Deadline)
                 ? "剩余时长估算 · " + Priority : Priority;
         public string Priority => TaskRules.IsActive(Task) ? "P" + TaskRules.Priority(Task, Now) + " " + (TaskRules.Priority(Task, Now) switch { 0 => "逾期", 1 => "马上到期", 2 => "临期", 3 => "不慌", _ => "待确认" }) : "—";
-        public string State => TaskRules.StateName(Task.State);
+        public string State => TaskRules.StateName(Task);
         public string StateIconKey => Task.State switch
         {
             TaskState.Completed => "completed",
